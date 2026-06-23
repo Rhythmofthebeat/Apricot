@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}My Profile{% endblock %}
+
+{% block content %}
+<h1 class="h3 fw-bold mb-4">My Profile</h1>
+
+<ul class="nav nav-tabs mb-4" id="profileTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="build-tab" data-bs-toggle="tab" data-bs-target="#build-pane" type="button">
+            <i class="fas fa-id-card me-1"></i> Profile &amp; Resume
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="suggested-tab" data-bs-toggle="tab" data-bs-target="#suggested-pane" type="button">
+            <i class="fas fa-bullseye me-1"></i> Suggested for You
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- Profile & Resume -->
+    <div class="tab-pane fade show active" id="build-pane" role="tabpanel">
+        <div class="card mb-4">
+            <div class="card-body p-4">
+                <h2 class="h5 fw-bold mb-3">Basics</h2>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Headline</label>
+                        <input type="text" class="form-control" id="headline" placeholder="e.g. Senior Backend Engineer"
+                               value="{{ profile.headline if profile else '' }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">LinkedIn URL (optional)</label>
+                        <input type="url" class="form-control" id="linkedinUrl" placeholder="https://www.linkedin.com/in/your-name"
+                               value="{{ profile.linkedin_url if profile else '' }}">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold">Roles / industries you're interested in (optional)</label>
+                        <input type="text" class="form-control" id="targetRoles" placeholder="e.g. Series A startups, backend infra, fintech"
+                               value="{{ profile.target_roles if profile else '' }}">
+                        <p class="text-muted small mt-1 mb-0">Helps the AI sharpen its company suggestions beyond what's in your resume.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body p-4">
+                <h2 class="h5 fw-bold mb-2">Build your resume from LinkedIn</h2>
+                <p class="text-muted mb-3">No resume on hand? Paste your About, Experience, and Education sections from LinkedIn below — we'll intake the text and turn it into a structured resume you can edit and download.</p>
+                <textarea class="form-control mb-3" id="profileText" rows="8" placeholder="Paste your LinkedIn About / Experience / Education / Skills content here&#10;&#10;You can copy this directly from your LinkedIn profile page.">{{ '' }}</textarea>
+                <button class="btn btn-primary btn-rounded" id="generateBtn">
+                    <i class="fas fa-magic"></i> Generate Resume
+                </button>
+                <div id="generateError" class="alert alert-danger mt-3" style="display:none;"></div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h2 class="h5 fw-bold mb-0">Your resume</h2>
+                    <a class="btn btn-outline-primary btn-sm" id="downloadBtn" href="{{ url_for('candidate.download_profile_resume') }}" target="_blank">
+                        <i class="fas fa-download me-1"></i> Download PDF
+                    </a>
+                </div>
+                <textarea class="form-control mb-3" id="resumeText" rows="14" placeholder="Generate from LinkedIn above, or paste/edit your resume text directly.">{{ profile.resume_text if profile else '' }}</textarea>
+                <button class="btn btn-primary btn-rounded" id="saveBtn">
+                    <i class="fas fa-save"></i> Save Profile
+                </button>
+                <span id="saveStatus" class="text-success small ms-2"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Suggested for You -->
+    <div class="tab-pane fade" id="suggested-pane" role="tabpanel">
+        <div id="suggestedLoading" class="text-muted text-center p-5">
+            <i class="fas fa-spinner fa-spin me-2"></i> Finding companies that fit your profile...
+        </div>
+        <div id="suggestedEmpty" class="card" style="display:none;">
+            <div class="card-body text-center p-5">
+                <p class="text-muted mb-0">Save a resume on the "Profile &amp; Resume" tab first, and we'll suggest open roles that fit it.</p>
+            </div>
+        </div>
+        <div id="suggestedError" class="alert alert-danger" style="display:none;"></div>
+        <div id="suggestedList"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showAlert(id, message) {
+    const el = document.getElementById(id);
+    if (!message) { el.style.display = "none"; return; }
+    el.textContent = message;
+    el.style.display = "block";
+}
+
+document.getElementById("generateBtn").addEventListener("click", async () => {
+    const linkedinUrl = document.getElementById("linkedinUrl").value.trim();
+    const profileText = document.getElementById("profileText").value.trim();
+    const btn = document.getElementById("generateBtn");
+
+    showAlert("generateError", null);
+    if (!profileText) {
+        showAlert("generateError", "Paste your LinkedIn profile content first.");
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+
+    try {
+        const response = await fetch("{{ url_for('candidate.generate_profile_resume') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ linkedin_url: linkedinUrl, profile_text: profileText })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Failed to generate resume.");
+
+        document.getElementById("resumeText").value = result.resume_text;
+        btn.innerHTML = '<i class="fas fa-check"></i> Generated!';
+    } catch (e) {
+        showAlert("generateError", e.message);
+        btn.innerHTML = '<i class="fas fa-magic"></i> Generate Resume';
+    } finally {
+        btn.disabled = false;
+        setTimeout(() => { btn.innerHTML = '<i class="fas fa-magic"></i> Generate Resume'; }, 2000);
+    }
+});
+
+document.getElementById("saveBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("saveBtn");
+    const status = document.getElementById("saveStatus");
+    btn.disabled = true;
+    status.textContent = "";
+
+    try {
+        const response = await fetch("{{ url_for('candidate.save_profile') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                headline: document.getElementById("headline").value,
+                linkedin_url: document.getElementById("linkedinUrl").value,
+                target_roles: document.getElementById("targetRoles").value,
+                resume_text: document.getElementById("resumeText").value,
+            })
+        });
+        if (!response.ok) throw new Error("Failed to save.");
+        status.textContent = "Saved!";
+        setTimeout(() => { status.textContent = ""; }, 2000);
+    } catch (e) {
+        status.classList.remove("text-success");
+        status.classList.add("text-danger");
+        status.textContent = "Couldn't save. Please try again.";
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+let suggestionsLoaded = false;
+document.getElementById("suggested-tab").addEventListener("shown.bs.tab", () => {
+    if (suggestionsLoaded) return;
+    suggestionsLoaded = true;
+    loadSuggestions();
+});
+
+async function loadSuggestions() {
+    const loading = document.getElementById("suggestedLoading");
+    const empty = document.getElementById("suggestedEmpty");
+    const list = document.getElementById("suggestedList");
+
+    loading.style.display = "block";
+    empty.style.display = "none";
+    showAlert("suggestedError", null);
+    list.innerHTML = "";
+
+    try {
+        const response = await fetch("{{ url_for('candidate.suggested_jobs') }}");
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Failed to load suggestions.");
+
+        if (!result.suggestions || result.suggestions.length === 0) {
+            empty.style.display = "block";
+            return;
+        }
+
+        list.innerHTML = result.suggestions.map(s => `
+            <div class="job-card mb-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h3><a href="${s.url}" class="text-decoration-none">${s.title}</a></h3>
+                        <div class="job-card-meta text-muted mb-2">${s.company}</div>
+                        <p class="job-card-desc mb-0">${s.reason}</p>
+                    </div>
+                    <span class="score-pill ${s.score >= 70 ? 'high' : (s.score >= 40 ? 'mid' : 'low')}">${s.score}</span>
+                </div>
+            </div>
+        `).join("");
+    } catch (e) {
+        showAlert("suggestedError", e.message);
+    } finally {
+        loading.style.display = "none";
+    }
+}
+</script>
+{% endblock %}

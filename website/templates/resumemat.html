@@ -1,0 +1,1008 @@
+{% extends "base.html" %}
+{% block title %}Resume Job Match{% endblock %}
+
+{% block head %}
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-GLFDS8ZT1H"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-GLFDS8ZT1H');
+</script>
+
+<style>
+    .upload-area {
+        border: 2px dashed #ccc;
+        border-radius: 12px;
+        padding: 40px 20px;
+        text-align: center;
+        cursor: pointer;
+        background-color: #f8f9fa;
+        transition: all 0.3s ease;
+        margin: 20px 0;
+    }
+    
+    .upload-area:hover, .upload-area.dragover {
+        background-color: #e9f7fe;
+        border-color: var(--primary);
+    }
+    
+    .score-circle {
+        width: 100px;
+        height: 100px;
+        margin: 8px auto;
+    }
+    
+    .circular-chart {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    
+    .circle-bg {
+    fill: none;
+    stroke: #eee;
+    stroke-width: 3.8;
+}
+
+.circle {
+    fill: none;
+    stroke-width: 3.8;
+    stroke-linecap: round;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+    transition: stroke-dashoffset 1s ease-out, stroke 0.4s ease;
+}
+
+
+    
+    .percentage {
+        fill: var(--dark);
+        font-size: 0.4em;
+        text-anchor: middle;
+        dominant-baseline: middle;
+        font-weight: bold;
+    }
+    
+    .result-box {
+        min-height: 120px;
+        max-height: 220px;
+        overflow-y: auto;
+        padding: 15px;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+    }
+    
+    .spinner-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(255, 255, 255, 0.8);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        z-index: 10;
+    }
+    
+    .spinner {
+        width: 3rem;
+        height: 3rem;
+        border: 4px solid rgba(0, 0, 0, 0.1);
+        border-left-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 15px;
+    }
+    
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+    
+    .file-name {
+        display: inline-block;
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: middle;
+        margin-left: 10px;
+        font-style: italic;
+    }
+    
+    .error-message {
+        display: none;
+        background-color: #ffe0e0;
+        color: #a94442;
+        padding: 12px 20px;
+        border: 1px solid #f5c6cb;
+        border-radius: 8px;
+        font-weight: bold;
+        font-family: Arial, sans-serif;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+    
+    .fade-out {
+        opacity: 0;
+        transition: opacity 1s ease;
+    }
+    #history-list .history-item {
+    border: 1px solid #eee;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#history-list .history-item:hover {
+    background: #f4f8ff;
+}
+
+.history-score {
+    font-weight: bold;
+    color: var(--primary);
+}
+
+/* ── Chat Section ─────────────────────────────── */
+.chat-messages {
+    flex: 1;
+    min-height: 220px;
+    overflow-y: auto;
+    padding: 14px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scroll-behavior: smooth;
+}
+
+.chat-message {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.chat-message.user-msg {
+    flex-direction: row-reverse;
+}
+
+.chat-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.chat-avatar.ai { background: linear-gradient(to right, var(--primary), var(--secondary)); color: white; }
+.chat-avatar.user { background: #dee2e6; color: var(--dark); }
+
+.chat-bubble {
+    max-width: 74%;
+    padding: 9px 13px;
+    border-radius: 14px;
+    font-size: 0.88rem;
+    line-height: 1.55;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.ai-bubble {
+    background: white;
+    border: 1px solid #dee2e6;
+    color: #2e3c57;
+    border-bottom-left-radius: 4px;
+}
+
+.user-bubble {
+    background: var(--primary);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+/* Typing dots */
+.typing-bubble {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 10px 14px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 14px;
+    border-bottom-left-radius: 4px;
+}
+
+.dot {
+    width: 7px;
+    height: 7px;
+    background: #aab;
+    border-radius: 50%;
+    animation: blink 1.2s infinite;
+}
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes blink {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+    40%            { transform: translateY(-5px); opacity: 1; }
+}
+
+.chat-input-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.chat-input-row input {
+    flex: 1;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12 text-center mb-4">
+            <h1 class="display-5 fw-bold text-primary">Resume Job Matching</h1>
+            <p class="lead text-muted">Match your resume against job descriptions to see how well you fit</p>
+        </div>
+    </div>
+    
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h3 class="mb-0"><i class="fas fa-file-upload me-2"></i>Upload & Analyze</h3>
+                </div>
+                <div class="card-body position-relative">
+                    <div id="loading-overlay" class="spinner-overlay" style="display: none;">
+                        <div class="spinner"></div>
+                        <p class="fw-bold text-primary">Comparing resume ⏳ — please wait...</p>
+                        <p class="text-muted fst-italic">This may take 15–30 seconds...</p>
+                    </div>
+                    
+                    <div id="error-message" class="error-message"></div>
+                    
+                    <form method="POST" enctype="multipart/form-data" action="/resume-jobmatch">
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Job Description</label>
+                            <textarea class="form-control" name="job_req" placeholder="Paste the job description here..." rows="8">{{ job_text or '' }}</textarea>
+                            <div class="form-text">Enter the complete job description to match against your resume</div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Upload Resume</label>
+                            <div class="upload-area" id="upload-area">
+                                <i class="fas fa-cloud-upload-alt fa-2x text-primary mb-3"></i>
+                                <p class="mb-1">Drag & drop your resume here</p>
+                                <p class="text-muted small">or</p>
+                                <button type="button" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-folder-open me-1"></i>Browse Files
+                                </button>
+                            </div>
+                            <input id="file-upload" name="resume" type="file" class="d-none" accept=".pdf,.docx,.txt">
+                            <div class="mt-2">
+                                <span id="file-name" class="file-name">No file chosen</span>
+                            </div>
+                            <div class="form-text">Supported formats: PDF, DOCX, TXT (Max 5MB)</div>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-search me-2"></i>Analyze Match
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ── Match Results + Chat (stacked, centre column) ── -->
+        <div class="col-lg-4 d-flex flex-column gap-3">
+
+            <!-- Match Results -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Match Results</h3>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-2">
+                        <div class="score-circle mx-auto">
+                            <svg viewBox="0 0 36 36" class="circular-chart">
+                                <path class="circle-bg"
+                                      stroke="#eee"
+                                      d="M18 2.0845
+                                         a 15.9155 15.9155 0 0 1 0 31.831
+                                         a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                <path class="circle"
+                                      d="M18 2.0845
+                                         a 15.9155 15.9155 0 0 1 0 31.831
+                                         a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                <text x="18" y="18" class="percentage">{{ score_value or 0 }}%</text>
+                            </svg>
+                        </div>
+                        <h5 class="mt-1 mb-0">Match Score</h5>
+                        <small class="text-muted">0-30: Poor | 31-60: Fair | 61-80: Good | 81+: Excellent</small>
+                    </div>
+
+                    <div class="result-box">
+                        <h6 class="mb-2">Detailed Analysis</h6>
+                        {# .analysis-content is ALWAYS in the DOM so the View button can populate it #}
+                        <div class="analysis-content">
+                            {% if result %}
+                                {% set lines = result.split('\n') %}
+                                {% for line in lines %}
+                                    {% if line.strip() %}
+                                        {% if 'score' in line.lower() %}
+                                            <p class="fw-bold fs-6">{{ line }}</p>
+                                        {% elif line.startswith('+') %}
+                                            <p class="ms-2 mb-1">
+                                                <i class="fa-solid fa-circle-check text-success me-1"></i>
+                                                <span>{{ line[1:].strip() }}</span>
+                                            </p>
+                                        {% elif line.startswith('-') %}
+                                            <p class="ms-2 mb-1">
+                                                <i class="fa-solid fa-circle-xmark text-danger me-1"></i>
+                                                <span class="text-danger">{{ line[1:].strip() }}</span>
+                                            </p>
+                                        {% else %}
+                                            <p class="mb-1 fw-semibold">{{ line }}</p>
+                                        {% endif %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <div class="text-center py-5" id="analysis-empty-state">
+                                    <i class="fas fa-file-search fa-3x text-muted mb-3"></i>
+                                    <p class="text-muted">Submit a job description and resume to see the match analysis</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resume Coach Chat — directly below the analysis text -->
+            <div class="card" id="chat-card">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fas fa-robot fa-lg"></i>
+                        <h5 class="mb-0">Resume Coach</h5>
+                    </div>
+                </div>
+                <div class="card-body d-flex flex-column" style="padding:14px;">
+                    <div id="chat-messages" class="chat-messages" style="min-height:180px; max-height:320px;">
+                        <!-- Initial AI greeting -->
+                        <div class="chat-message ai-msg">
+                            <div class="chat-avatar ai"><i class="fas fa-robot"></i></div>
+                            <div class="chat-bubble ai-bubble">
+                                👋 Hi! I'm your Resume Coach. Ask me anything — how to improve your resume,
+                                what skills to add, how to rewrite bullet points, or how well you match this role.
+                                Run a job match above for personalised advice!
+                            </div>
+                        </div>
+                        <!-- Typing indicator -->
+                        <div id="chat-typing" class="chat-message ai-msg" style="display:none;">
+                            <div class="chat-avatar ai"><i class="fas fa-robot"></i></div>
+                            <div class="typing-bubble">
+                                <span class="dot"></span>
+                                <span class="dot"></span>
+                                <span class="dot"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="chat-input-row" style="margin-top:10px;">
+                        <input type="text" id="chat-input" class="form-control form-control-sm"
+                               placeholder="Ask anything about your resume…" />
+                        <button id="chat-send" class="btn btn-primary btn-sm px-3">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <div class="mt-2 d-flex flex-wrap gap-1" id="chat-suggestions">
+                        <button class="btn btn-outline-secondary btn-sm suggestion-btn" style="font-size:0.75rem;">What skills am I missing?</button>
+                        <button class="btn btn-outline-secondary btn-sm suggestion-btn" style="font-size:0.75rem;">Improve my bullet points</button>
+                        <button class="btn btn-outline-secondary btn-sm suggestion-btn" style="font-size:0.75rem;">Is my resume too long?</button>
+                        <button class="btn btn-outline-secondary btn-sm suggestion-btn" style="font-size:0.75rem;">What goes in my summary?</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ── Saved Results ── -->
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history me-2"></i>Saved Results
+                    </h5>
+                </div>
+                <div class="card-body" style="max-height:700px; overflow-y:auto;">
+                    <div id="history-list"></div>
+                    <div id="empty-history" class="text-center text-muted">
+                        No saved analyses yet
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /row g-4 -->
+
+    {# Always present — provides initial context; JS can override via updateChatContext() #}
+    <script type="application/json" id="resume-chat-data">{{ {"jobText": job_text or "", "analysis": result or ""} | tojson }}</script>
+
+</div><!-- /container-fluid -->
+
+
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+    
+        // Get score value from data attribute
+     // Get score value from data attribute
+     const score = parseInt(document.querySelector('.percentage').textContent) || 0;
+    const circle = document.querySelector('.circle');
+    const text = document.querySelector('.percentage');
+    
+    if (circle) {
+        const radius = 15.9155;
+        const circumference = 2 * Math.PI * radius;
+        
+        circle.setAttribute('stroke-dasharray', circumference + ' ' + circumference);
+        circle.setAttribute('stroke-dashoffset', circumference);
+        
+        setTimeout(() => {
+            const offset = circumference * (1 - score / 100);
+            circle.setAttribute('stroke-dashoffset', offset);
+            
+            // Color based on score
+            if (score < 30) {
+                circle.setAttribute("stroke", "#dc3545");
+                circle.style.stroke = "#dc3545";
+            }   
+            else if (score < 61) {
+                circle.setAttribute("stroke", "#ffc107");
+                circle.style.stroke = "#ffc107";
+                    } 
+            else if (score < 81) {
+                circle.setAttribute("stroke", "#4a90e2");
+                circle.style.stroke = "#4a90e2";
+            } else {
+                circle.setAttribute("stroke", "#28a745");
+                circle.style.stroke = "#28a745";
+            }
+
+        }, 100);
+    }
+    
+    // Update percentage text with animation
+    let current = 0;
+    const interval = setInterval(() => {
+        if (current >= score) {
+            clearInterval(interval);
+        } else {
+            current++;
+            if (text) text.textContent = current + "%";
+        }
+    }, 15);
+    
+    // File upload handling
+    const uploadArea = document.getElementById('upload-area');
+    const fileInput = document.getElementById('file-upload');
+    const fileNameDisplay = document.getElementById('file-name');
+    const errorMessage = document.getElementById('error-message');
+    const overlay = document.getElementById('loading-overlay');
+    const form = document.querySelector('form');
+    
+    // Click on upload area to trigger file input
+    uploadArea.addEventListener('click', () => fileInput.click());
+    
+    // Drag and drop events
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            fileNameDisplay.textContent = e.dataTransfer.files[0].name;
+        }
+    });
+    
+    // File selection change
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) {
+            fileNameDisplay.textContent = fileInput.files[0].name;
+        } else {
+            fileNameDisplay.textContent = 'No file chosen';
+        }
+    });
+    
+    // Form submission
+    form.addEventListener('submit', function (e) {
+        const jobText = document.querySelector('textarea[name="job_req"]').value;
+        const fileSelected = fileInput.files.length > 0;
+        
+        if (!jobText.trim() || !fileSelected) {
+            e.preventDefault();
+            
+            errorMessage.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Please provide both a <strong>job description</strong> and a <strong>resume</strong> before submitting.';
+            errorMessage.style.display = 'block';
+            errorMessage.classList.remove('fade-out');
+            
+            setTimeout(() => {
+                errorMessage.classList.add('fade-out');
+            }, 4000);
+            
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+                errorMessage.classList.remove('fade-out');
+            }, 5000);
+            
+            return;
+        }
+        
+        errorMessage.style.display = 'none';
+        overlay.style.display = 'flex';
+        form.querySelector('button').disabled = true;
+
+       
+    });
+    // Safely remove junk entries — wrapped so an error here can't block restore
+    try {
+        let h = JSON.parse(localStorage.getItem("analysisNotes")) || [];
+        const before = h.length;
+        h = h.filter(item => item.score > 0 || (item.jobText && item.jobText.trim().length > 0));
+        if (h.length !== before) localStorage.setItem("analysisNotes", JSON.stringify(h));
+    } catch(e) { /* ignore */ }
+
+    // Load saved-results list — wrapped so an error here can't block restore
+    try { loadHistory(); } catch(e) { /* ignore */ }
+
+    // AUTO SAVE — only when the server actually returned a result.
+    try {
+        const _d = document.getElementById('resume-chat-data');
+        if (_d) {
+            const _ctx = JSON.parse(_d.textContent);
+            if (_ctx.analysis && _ctx.analysis.trim().length > 10) autoSaveResult();
+        }
+    } catch(e) { /* ignore */ }
+
+    // AUTO RESTORE — runs last, independently of everything above.
+    // If the server sent no results (refresh / direct navigation) restore the
+    // most recent saved analysis from localStorage.
+    try {
+        const _d = document.getElementById('resume-chat-data');
+        const _ctx = _d ? JSON.parse(_d.textContent) : {};
+        const _hasServer = !!(_ctx.analysis && _ctx.analysis.trim().length > 10);
+
+        if (!_hasServer) {
+            const _saved = JSON.parse(localStorage.getItem("analysisNotes") || "[]");
+            const _item  = _saved[0];
+
+            if (_item && _item.analysis && _item.analysis.trim().length > 20) {
+
+                // Restore analysis HTML
+                const _box = document.querySelector(".analysis-content");
+                if (_box) {
+                    _box.innerHTML = _item.analysis;
+                    const _es = _box.querySelector('#analysis-empty-state');
+                    if (_es) _es.remove();
+                }
+
+                // Restore job description textarea
+                const _ta = document.querySelector('textarea[name="job_req"]');
+                if (_ta && _item.jobText) _ta.value = _item.jobText;
+
+                // Restore score text (override the "0%" from the template)
+                const _pct = document.querySelector(".percentage");
+                if (_pct) _pct.textContent = (_item.score || 0) + "%";
+
+                // Restore score circle colour + arc
+                const _circ = document.querySelector(".circle");
+                if (_circ) {
+                    const _R = 15.9155, _C = 2 * Math.PI * _R;
+                    const _col = _item.score >= 81 ? "#28a745"
+                               : _item.score >= 61 ? "#4a90e2"
+                               : _item.score >= 31 ? "#ffc107"
+                               : "#dc3545";
+                    _circ.style.stroke = _col;
+                    _circ.setAttribute("stroke", _col);
+                    _circ.setAttribute("stroke-dasharray", _C);
+                    setTimeout(() => {
+                        _circ.setAttribute("stroke-dashoffset", _C * (1 - _item.score / 100));
+                    }, 250);
+                }
+
+                // Update chat context (best-effort — won't break restore if it fails)
+                try {
+                    if (typeof window.updateChatContext === 'function') {
+                        const _tmp = document.createElement('div');
+                        _tmp.innerHTML = _item.analysis;
+                        window.updateChatContext(_item.jobText || '', (_tmp.textContent || '').trim());
+                    }
+                } catch(_e) { /* ignore chat context errors */ }
+            }
+        }
+    } catch(e) { /* ignore entire restore block */ }
+
+    });
+
+
+/* =====================================
+LOAD HISTORY
+===================================== */
+
+function loadHistory() {
+
+const historyList =
+    document.getElementById("history-list");
+
+const empty =
+    document.getElementById("empty-history");
+
+if (!historyList) return;
+
+historyList.innerHTML = "";
+
+let history =
+    JSON.parse(localStorage.getItem("analysisNotes")) || [];
+
+if (history.length === 0) {
+    if (empty) empty.style.display = "block";
+    return;
+}
+
+if (empty) empty.style.display = "none";
+
+history.forEach(item => {
+
+    const div = document.createElement("div");
+    div.className = "border rounded p-2 mb-2";
+
+    // Extract plain-text preview from stored HTML analysis
+    const _tmp = document.createElement('div');
+    _tmp.innerHTML = item.analysis || '';
+    const _rawText = (_tmp.textContent || _tmp.innerText || '').replace(/\s+/g, ' ').trim();
+    const _preview = _rawText.length > 0
+        ? _rawText.substring(0, 140) + (_rawText.length > 140 ? '…' : '')
+        : '';
+
+    // Safely escape the title for use inside an HTML attribute
+    const _safeTitle = (item.title || 'Resume Match')
+        .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+    div.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <input type="text"
+               class="form-control form-control-sm title-input"
+               value="${_safeTitle}"
+               style="width:60%;">
+        <span class="badge bg-primary">${item.score}%</span>
+    </div>
+    <div style="font-size:12px;color:#666;">${item.time}</div>
+    ${_preview ? `<div style="font-size:11px;color:#555;margin-top:5px;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${_preview}</div>` : ''}
+    <div class="mt-2">
+        <button class="btn btn-sm btn-outline-primary view-btn">View</button>
+        <button class="btn btn-sm btn-outline-danger delete-btn">Delete</button>
+    </div>
+`;
+const titleInput = div.querySelector(".title-input");
+
+titleInput.addEventListener("change", () => {
+
+    let history = JSON.parse(localStorage.getItem("analysisNotes")) || [];
+
+    const index = history.findIndex(h => h.id === item.id);
+
+    if (index !== -1) {
+        history[index].title = titleInput.value;
+
+        localStorage.setItem("analysisNotes", JSON.stringify(history));
+    }
+});
+    // VIEW
+    div.querySelector(".view-btn").addEventListener("click", () => {
+
+        const jobTextarea =
+            document.querySelector('textarea[name="job_req"]');
+
+        const analysisBox =
+            document.querySelector(".analysis-content");
+
+        const percentBox =
+            document.querySelector(".percentage");
+
+        const circle =
+            document.querySelector(".circle");
+
+            if (jobTextarea) {
+    jobTextarea.value = item.jobText ?? "";
+}
+        if (analysisBox) {
+            analysisBox.innerHTML = item.analysis;
+            // Remove empty-state placeholder if it's still there
+            const emptyState = analysisBox.querySelector('#analysis-empty-state');
+            if (emptyState) emptyState.remove();
+        }
+        if (percentBox) percentBox.textContent = item.score + "%";
+        if (circle) {
+    const radius = 15.9155;
+    const circumference = 2 * Math.PI * radius;
+
+    // Reset dash
+    circle.setAttribute("stroke-dasharray", circumference);
+    circle.setAttribute("stroke-dashoffset", circumference);
+
+    // Set color
+    let color;
+
+if (item.score < 30) color = "#dc3545";
+else if (item.score < 61) color = "#ffc107";
+else if (item.score < 81) color = "#4a90e2";
+else color = "#28a745";
+
+circle.style.stroke = color;
+circle.setAttribute("stroke", color);
+
+    // Re-animate to correct score
+    const offset = circumference * (1 - item.score / 100);
+    setTimeout(() => {
+        circle.setAttribute("stroke-dashoffset", offset);
+    }, 100);
+}
+
+        // ── Update chat with this saved result (pass plain text, not HTML) ──
+        if (typeof window.updateChatContext === 'function') {
+            const _chatTmp = document.createElement('div');
+            _chatTmp.innerHTML = item.analysis || '';
+            const _plainAnalysis = (_chatTmp.textContent || _chatTmp.innerText || '').trim();
+            window.updateChatContext(item.jobText || '', _plainAnalysis);
+        }
+        // Scroll to chat so user notices it updated
+        const chatCard = document.getElementById('chat-card');
+        if (chatCard) {
+            setTimeout(() => chatCard.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+        }
+
+    });
+
+    // DELETE
+    div.querySelector(".delete-btn").addEventListener("click", () => {
+
+        let history =
+            JSON.parse(localStorage.getItem("analysisNotes")) || [];
+
+        history =
+            history.filter(h => h.id !== item.id);
+
+        localStorage.setItem(
+            "analysisNotes",
+            JSON.stringify(history)
+        );
+
+        loadHistory();
+    });
+
+    historyList.appendChild(div);
+});
+}
+function autoSaveResult() {
+
+const analysisBox = document.querySelector(".analysis-content");
+const jobTextarea = document.querySelector('textarea[name="job_req"]');
+const percentEl = document.querySelector(".percentage");
+const circle = document.querySelector(".circle");
+
+// Only run if results exist
+if (!analysisBox || !percentEl || !jobTextarea || !circle) return;
+
+const analysis = analysisBox.innerHTML.trim();
+if (analysis.length < 20) return;
+
+const jobText = jobTextarea.value;
+const score = parseInt(percentEl.textContent) || 0;
+const circleColor = circle.getAttribute("stroke");
+
+let history =
+    JSON.parse(localStorage.getItem("analysisNotes")) || [];
+
+const exists = history.some(item =>
+    item.analysis === analysis &&
+    item.jobText === jobText
+);
+
+if (!exists) {
+
+    history.unshift({
+        id: Date.now(),
+        title: "Resume Match",
+        jobText: jobText,
+        score: score,
+        analysis: analysis,
+        circleColor: circleColor,
+        time: new Date().toLocaleString()
+    });
+
+    history = history.slice(0, 20);
+
+    localStorage.setItem(
+        "analysisNotes",
+        JSON.stringify(history)
+    );
+
+    loadHistory();
+}
+}
+
+
+/* ============================================================
+   RESUME CHAT
+   ============================================================ */
+(function () {
+    // resume-chat-data is always rendered in the template; read context if available
+    const dataEl = document.getElementById('resume-chat-data');
+    let chatCtx = { jobText: '', analysis: '' };
+    if (dataEl) {
+        try { chatCtx = JSON.parse(dataEl.textContent); }
+        catch (e) { /* keep defaults */ }
+    }
+
+    let chatJobText  = chatCtx.jobText  || '';
+    let chatAnalysis = chatCtx.analysis || '';
+
+    const messagesEl = document.getElementById('chat-messages');
+    const typingEl   = document.getElementById('chat-typing');
+    const inputEl    = document.getElementById('chat-input');
+    const sendBtn    = document.getElementById('chat-send');
+
+    // Bail out only if the chat UI elements are genuinely missing
+    if (!messagesEl || !typingEl || !inputEl || !sendBtn) return;
+
+    const conversationHistory = [];   // [{role, content}, …]
+
+    // ── context switch (called by "View" in history panel) ────
+    window.updateChatContext = function (jobText, analysis) {
+        chatJobText  = jobText;
+        chatAnalysis = analysis;
+
+        // Clear conversation history
+        conversationHistory.length = 0;
+
+        // Remove all bubbles except the typing indicator
+        while (messagesEl.firstChild && messagesEl.firstChild !== typingEl) {
+            messagesEl.removeChild(messagesEl.firstChild);
+        }
+
+        // New greeting
+        appendMessage('ai',
+            "I've loaded a saved analysis. What would you like to improve on your resume for this role? " +
+            "Ask me about missing skills, experience gaps, formatting, or anything else."
+        );
+    };
+
+    // ── helpers ───────────────────────────────────────────────
+    function escapeHtml(str) {
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function appendMessage(role, text) {
+        // move the typing indicator back to the very end after adding a bubble
+        const div = document.createElement('div');
+        div.className = 'chat-message ' + (role === 'ai' ? 'ai-msg' : 'user-msg');
+
+        const avatarDiv = document.createElement('div');
+        avatarDiv.className = 'chat-avatar ' + (role === 'ai' ? 'ai' : 'user');
+        avatarDiv.innerHTML = role === 'ai'
+            ? '<i class="fas fa-robot"></i>'
+            : '<i class="fas fa-user"></i>';
+
+        const bubbleDiv = document.createElement('div');
+        bubbleDiv.className = 'chat-bubble ' + (role === 'ai' ? 'ai-bubble' : 'user-bubble');
+        bubbleDiv.innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
+
+        div.appendChild(avatarDiv);
+        div.appendChild(bubbleDiv);
+
+        // Insert before the typing indicator so typing always stays last
+        messagesEl.insertBefore(div, typingEl);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function setTyping(visible) {
+        typingEl.style.display = visible ? 'flex' : 'none';
+        if (visible) messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function setInputLocked(locked) {
+        inputEl.disabled = locked;
+        sendBtn.disabled = locked;
+    }
+
+    // ── send ─────────────────────────────────────────────────
+    async function sendMessage() {
+        const message = inputEl.value.trim();
+        if (!message) return;
+
+        inputEl.value = '';
+        setInputLocked(true);
+
+        appendMessage('user', message);
+        conversationHistory.push({ role: 'user', content: message });
+        setTyping(true);
+
+        try {
+            const resp = await fetch('/resume-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message:          message,
+                    job_description:  chatJobText,
+                    resume_analysis:  chatAnalysis,
+                    history:          conversationHistory.slice(-20)
+                })
+            });
+
+            const data = await resp.json();
+            setTyping(false);
+
+            const reply = data.reply || 'Sorry, something went wrong. Please try again.';
+            appendMessage('ai', reply);
+            conversationHistory.push({ role: 'assistant', content: reply });
+
+        } catch (err) {
+            setTyping(false);
+            appendMessage('ai', 'Connection error — please try again.');
+        }
+
+        setInputLocked(false);
+        inputEl.focus();
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    inputEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    // ── Quick suggestion chips ────────────────────────────
+    document.querySelectorAll('.suggestion-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            inputEl.value = btn.textContent.trim();
+            inputEl.focus();
+            sendMessage();
+        });
+    });
+})();
+
+
+    </script>
+{% endblock %}

@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block title %}AI Interview &mdash; {{ job.title }}{% endblock %}
+
+{% block head %}
+<style>
+    .interview-card {
+        background: #fff;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        padding: 48px 32px;
+        text-align: center;
+    }
+
+    .interview-progress {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        margin-bottom: 18px;
+    }
+
+    .interview-avatar {
+        width: 84px; height: 84px;
+        margin: 0 auto 24px;
+        border-radius: 50%;
+        background: var(--primary-soft);
+        color: var(--primary);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 2rem;
+        transition: box-shadow 0.2s;
+    }
+    .interview-avatar.speaking {
+        animation: speakPulse 1s infinite;
+    }
+    @keyframes speakPulse {
+        0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); }
+        70% { box-shadow: 0 0 0 18px rgba(79, 70, 229, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+    }
+
+    .interview-question {
+        font-size: 1.3rem;
+        font-weight: 600;
+        max-width: 560px;
+        margin: 0 auto 36px;
+        line-height: 1.5;
+    }
+
+    .record-btn {
+        width: 84px; height: 84px;
+        border-radius: 50%;
+        border: none;
+        background: var(--primary);
+        color: white;
+        font-size: 1.6rem;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .record-btn.recording {
+        background: var(--danger);
+        animation: pulse 1.2s infinite;
+    }
+    .record-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
+        70% { box-shadow: 0 0 0 18px rgba(220, 38, 38, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    }
+    .record-status { margin-top: 14px; font-size: 0.9rem; color: var(--text-muted); }
+
+    .verdict-badge {
+        display: inline-block;
+        font-size: 1.3rem;
+        font-weight: 700;
+        padding: 8px 24px;
+        border-radius: 999px;
+        margin-bottom: 20px;
+    }
+    .verdict-badge.positive { background: var(--success-soft); color: var(--success); }
+    .verdict-badge.negative { background: var(--danger-soft); color: var(--danger); }
+    .verdict-reasons { text-align: left; max-width: 480px; margin: 0 auto 28px; }
+    .verdict-reasons .match-line { padding: 5px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <h1 class="h3 fw-bold mb-1 text-center">AI Interview</h1>
+        <p class="text-muted mb-4 text-center">{{ job.title }} at {{ job.company.name }}</p>
+
+        <div class="interview-card">
+            <!-- Live interview stage -->
+            <div id="interviewStage">
+                <p class="interview-progress" id="progressLabel">Connecting...</p>
+                <div class="interview-avatar" id="avatar"><i class="fas fa-robot"></i></div>
+                <h2 class="interview-question" id="questionText">One moment...</h2>
+
+                <div id="recordSection" style="display:none;">
+                    <button id="recordBtn" class="record-btn"><i class="fas fa-microphone"></i></button>
+                    <p class="record-status" id="recordStatus">Tap to record your answer</p>
+                    <button id="wrapUpBtn" class="btn btn-outline-secondary btn-sm mt-3">Wrap Up Interview</button>
+                </div>
+            </div>
+
+            <!-- Results screen -->
+            <div id="resultsStage" style="display:none;">
+                <p class="interview-progress">Interview Complete</p>
+                <div id="verdictBadge"></div>
+                <div class="verdict-reasons" id="verdictReasons"></div>
+                <a href="{{ url_for('candidate.dashboard') }}" class="btn btn-primary">Back to My Applications</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const chatUrl = "{{ url_for('candidate.interview_chat', job_id=job.id, application_id=application.id) }}";
+let history = [];
+let concluded = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+let questionNum = 0;
+
+const avatar = document.getElementById("avatar");
+const questionText = document.getElementById("questionText");
+const progressLabel = document.getElementById("progressLabel");
+const recordSection = document.getElementById("recordSection");
+const recordBtn = document.getElementById("recordBtn");
+const recordStatus = document.getElementById("recordStatus");
+
+function setQuestion(text, audioUrl) {
+    questionNum++;
+    progressLabel.textContent = `Question ${questionNum}`;
+    questionText.textContent = text;
+
+    if (audioUrl) {
+        const audio = new Audio(audioUrl);
+        avatar.classList.add("speaking");
+        audio.addEventListener("ended", () => avatar.classList.remove("speaking"));
+        audio.play().catch(() => avatar.classList.remove("speaking"));
+    }
+}
+
+function showVerdict(replyText) {
+    document.getElementById("interviewStage").style.display = "none";
+    const resultsStage = document.getElementById("resultsStage");
+    resultsStage.style.display = "block";
+
+    const verdictMatch = replyText.match(/Verdict:\s*(Strong Yes|Yes|No|Strong No)/i);
+    const verdict = verdictMatch ? verdictMatch[1] : "Reviewed";
+    const isPositive = /yes/i.test(verdict);
+
+    const badge = document.getElementById("verdictBadge");
+    badge.innerHTML = `<span class="verdict-badge ${isPositive ? 'positive' : 'negative'}">${verdict}</span>`;
+
+    const reasonsEl = document.getElementById("verdictReasons");
+    reasonsEl.innerHTML = "";
+    replyText.split("\n").forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("Verdict:") || trimmed === "Why:") return;
+        const div = document.createElement("div");
+        div.className = "match-line";
+        if (trimmed.startsWith("+")) {
+            div.innerHTML = `<i class="fa-solid fa-circle-check text-success me-2"></i>${trimmed.slice(1).trim()}`;
+        } else if (trimmed.startsWith("-")) {
+            div.innerHTML = `<i class="fa-solid fa-circle-xmark text-danger me-2"></i>${trimmed.slice(1).trim()}`;
+        } else {
+            return;
+        }
+        reasonsEl.appendChild(div);
+    });
+}
+
+async function sendTurn(audioBlob, wrapUp = false) {
+    const formData = new FormData();
+    formData.append("history", JSON.stringify(history));
+    formData.append("wrap_up", wrapUp ? "true" : "false");
+    if (audioBlob) formData.append("answer_audio", audioBlob, "answer.webm");
+
+    const response = await fetch(chatUrl, { method: "POST", body: formData });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Interview failed.");
+    return result;
+}
+
+async function startInterview() {
+    try {
+        const result = await sendTurn(null, false);
+        setQuestion(result.reply, result.reply_audio_url);
+        history.push({ role: "assistant", content: result.reply });
+        recordSection.style.display = "block";
+    } catch (e) {
+        questionText.textContent = e.message;
+    }
+}
+
+async function setupRecorder() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
+        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+
+        mediaRecorder.addEventListener("dataavailable", (e) => audioChunks.push(e.data));
+        mediaRecorder.addEventListener("stop", onRecordingStop);
+        return true;
+    } catch (e) {
+        recordStatus.textContent = "Microphone access denied. Enable it to continue.";
+        recordBtn.disabled = true;
+        return false;
+    }
+}
+
+async function onRecordingStop() {
+    const blob = new Blob(audioChunks, { type: "audio/webm" });
+    audioChunks = [];
+    recordBtn.disabled = true;
+    recordStatus.textContent = "Transcribing your answer...";
+
+    try {
+        const result = await sendTurn(blob, false);
+        history.push({ role: "user", content: result.transcribed_answer });
+        history.push({ role: "assistant", content: result.reply });
+
+        if (result.concluded) {
+            concluded = true;
+            showVerdict(result.reply);
+        } else {
+            setQuestion(result.reply, result.reply_audio_url);
+            recordStatus.textContent = "Tap to record your answer";
+        }
+    } catch (e) {
+        recordStatus.textContent = e.message;
+    } finally {
+        recordBtn.disabled = false;
+    }
+}
+
+recordBtn.addEventListener("click", async () => {
+    if (concluded) return;
+
+    if (!isRecording) {
+        if (!mediaRecorder) {
+            const ok = await setupRecorder();
+            if (!ok) return;
+        }
+        audioChunks = [];
+        mediaRecorder.start();
+        isRecording = true;
+        recordBtn.classList.add("recording");
+        recordBtn.innerHTML = '<i class="fas fa-stop"></i>';
+        recordStatus.textContent = "Recording... tap to stop";
+    } else {
+        mediaRecorder.stop();
+        isRecording = false;
+        recordBtn.classList.remove("recording");
+        recordBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+    }
+});
+
+document.getElementById("wrapUpBtn").addEventListener("click", async () => {
+    if (concluded) return;
+    if (isRecording) mediaRecorder.stop();
+    recordBtn.disabled = true;
+    recordStatus.textContent = "Wrapping up...";
+
+    try {
+        const result = await sendTurn(null, true);
+        history.push({ role: "assistant", content: result.reply });
+        concluded = true;
+        showVerdict(result.reply);
+    } catch (e) {
+        recordStatus.textContent = e.message;
+        recordBtn.disabled = false;
+    }
+});
+
+startInterview();
+</script>
+{% endblock %}

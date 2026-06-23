@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}FAQ{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <h1 class="h3 fw-bold mb-1">Frequently Asked Questions</h1>
+        <p class="text-muted mb-4">Common questions from candidates and employers.</p>
+
+        <h6 class="text-muted text-uppercase small fw-bold mb-3" style="letter-spacing: 0.04em;">For Candidates</h6>
+        <div class="accordion mb-5" id="faqCandidates">
+            {% set candidate_faqs = [
+                ("I don't have a resume — can I still apply?", "Yes. During the apply flow, choose \"No Resume — Use LinkedIn\" and paste your About, Experience, and Education sections from your LinkedIn profile. We'll generate a structured resume for you automatically."),
+                ("How is my match score calculated?", "An AI compares your resume directly against the specific job's requirements and produces a 0-100 score along with a breakdown of what matches and what's missing. You can revise your resume and re-check your score as many times as you want before submitting."),
+                ("Is the AI interview really an interview, or just a form?", "It's a real spoken interview. The AI asks you questions out loud, you respond by recording your voice, and your answers are transcribed and evaluated. There's no typing involved."),
+                ("Who can listen to my interview recording?", "Only you and the employer for that specific job can access your interview audio. It's not public and isn't shared with any other employer."),
+                ("How many questions will the AI ask?", "There's no fixed number — the AI decides for itself when it has enough information to make a confident assessment. You can also end the interview early at any time using \"Wrap Up Interview.\""),
+                ("What does the verdict at the end mean?", "After the interview, the AI gives a Strong Yes / Yes / No / Strong No verdict with specific reasoning. This is shown to the employer alongside your application, but it's a signal to help them prioritize review — not an automatic rejection."),
+                ("Why do I need to fill out Work Authorization?", "Employers need to confirm you're legally able to work from your location before extending an offer. This information is only visible to the employer you're applying to."),
+            ] %}
+            {% for question, answer in candidate_faqs %}
+                <div class="card mb-2">
+                    <div class="card-header p-0">
+                        <button class="btn w-100 text-start fw-bold py-3 px-4" type="button" data-bs-toggle="collapse" data-bs-target="#cfaq{{ loop.index }}">
+                            {{ question }}
+                        </button>
+                    </div>
+                    <div class="collapse" id="cfaq{{ loop.index }}">
+                        <div class="card-body text-muted">{{ answer }}</div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <h6 class="text-muted text-uppercase small fw-bold mb-3" style="letter-spacing: 0.04em;">For Employers</h6>
+        <div class="accordion mb-5" id="faqEmployers">
+            {% set employer_faqs = [
+                ("Why do I need a company email to sign up?", "We require a company email (not gmail/yahoo/etc.) for employer accounts so candidates and the platform can trust that job postings come from real companies."),
+                ("Why is my account showing as unverified?", "After signing up, check your company email for a verification link. Job posting is locked until you verify — you can resend the email from your dashboard if you didn't receive it."),
+                ("How are applicants ranked?", "Applicants are automatically sorted by their AI-generated match score against your job's specific requirements, highest first, so you see your strongest candidates without manually screening every resume."),
+                ("Can I listen to a candidate's interview?", "Yes. Open any applicant's \"View Details\" on your applicants page — the full interview, including audio for each question and answer, is available alongside the AI's verdict and reasoning."),
+                ("Can I change an applicant's status?", "Yes, use the status dropdown on each applicant card to move them between Applied, Interviewing, Hired, or Rejected."),
+                ("What categories can I post jobs under?", "Software, Healthcare, Finance, Marketing, Sales, Design, Operations, or Other — candidates can filter by these when browsing."),
+            ] %}
+            {% for question, answer in employer_faqs %}
+                <div class="card mb-2">
+                    <div class="card-header p-0">
+                        <button class="btn w-100 text-start fw-bold py-3 px-4" type="button" data-bs-toggle="collapse" data-bs-target="#efaq{{ loop.index }}">
+                            {{ question }}
+                        </button>
+                    </div>
+                    <div class="collapse" id="efaq{{ loop.index }}">
+                        <div class="card-body text-muted">{{ answer }}</div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="card">
+            <div class="card-body p-4 text-center">
+                <p class="mb-3">Still have a question?</p>
+                <a href="{{ url_for('contact') }}" class="btn btn-primary">Contact Support</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

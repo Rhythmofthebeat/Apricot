@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Hire and get hired, AI-vetted{% endblock %}
+
+{% block content %}
+<div class="container pt-3 pb-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-9 text-center mb-5">
+            <h1 class="display-4 fw-bold mb-3">Hiring, vetted by AI</h1>
+            <p class="lead text-muted mb-4">Post a role and get a ranked, AI-scored pipeline. Apply to a role and get matched and interviewed by AI &mdash; no resume required.</p>
+            <div class="d-flex flex-wrap justify-content-center gap-3">
+                <a href="/sign-up" class="btn btn-primary btn-lg btn-rounded">
+                    <i class="fas fa-user-plus me-2"></i>I'm looking for work
+                </a>
+                <a href="/sign-up" class="btn btn-outline-primary btn-lg btn-rounded">
+                    <i class="fas fa-briefcase me-2"></i>I'm hiring
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 justify-content-center">
+        <div class="col-md-5">
+            <div class="card h-100">
+                <div class="card-body text-center p-4">
+                    <div class="feature-icon"><i class="fas fa-bullseye"></i></div>
+                    <h3 class="card-title">AI Match Scoring</h3>
+                    <p class="card-text text-muted">Every application is scored 0-100 against the job description &mdash; employers see a ranked list, not a pile of resumes.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-5">
+            <div class="card h-100">
+                <div class="card-body text-center p-4">
+                    <div class="feature-icon"><i class="fas fa-comments"></i></div>
+                    <h3 class="card-title">AI Interview</h3>
+                    <p class="card-text text-muted">A focused, structured AI screening interview &mdash; like a real recruiter call &mdash; produces a clear verdict before a human ever has to screen.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

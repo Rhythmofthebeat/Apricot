@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}My Applications{% endblock %}
+
+{% block content %}
+<h1 class="h3 fw-bold mb-4">My Applications</h1>
+
+{% if not applications %}
+    <div class="card">
+        <div class="card-body text-center p-5">
+            <p class="text-muted mb-3">You haven't applied to any jobs yet.</p>
+            <a href="{{ url_for('candidate.browse_jobs') }}" class="btn btn-primary">Browse Jobs</a>
+        </div>
+    </div>
+{% else %}
+    {% for app in applications %}
+        <div class="applicant-row">
+            <div class="flex-grow-1">
+                <strong>{{ app.job.title }}</strong>
+                <p class="text-muted small mb-0">{{ app.job.company.name }} &middot; Applied {{ app.created_at.strftime('%b %d, %Y') if app.created_at else '' }}</p>
+                {% set meeting = meetings.get(app.id) %}
+                {% if meeting %}
+                    <p class="small text-primary mb-0 mt-1">
+                        <i class="fas fa-calendar-check me-1"></i>
+                        {{ 'Video call' if meeting.type == 'virtual' else 'In-person meeting' }} on {{ meeting.date }} at {{ meeting.time }}
+                        {% if meeting.type == 'virtual' %} &mdash; <a href="{{ meeting.location_or_url }}" target="_blank">Join Link</a>{% else %} &mdash; {{ meeting.location_or_url }}{% endif %}
+                    </p>
+                {% endif %}
+            </div>
+            <div class="text-center">
+                {% set score = app.match_score or 0 %}
+                <span class="score-pill {{ 'high' if score >= 70 else ('mid' if score >= 40 else 'low') }}">{{ score }}</span>
+            </div>
+            <span class="badge-status {{ app.status }}">{{ app.status }}</span>
+            {% if app.interview_verdict %}
+                <span class="badge-status {{ 'hired' if 'Yes' in app.interview_verdict else 'rejected' }}">{{ app.interview_verdict }}</span>
+            {% elif app.status == 'applied' %}
+                <span class="badge-status rejected"><i class="fas fa-circle-exclamation me-1"></i> Interview Required</span>
+                <a href="{{ url_for('candidate.interview', job_id=app.job_id, application_id=app.id) }}" class="btn btn-primary btn-sm">Start Interview</a>
+            {% endif %}
+        </div>
+    {% endfor %}
+{% endif %}
+{% endblock %}

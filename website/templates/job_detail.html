@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ job.title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <a href="{{ url_for('candidate.browse_jobs') }}" class="text-decoration-none text-muted small"><i class="fas fa-arrow-left me-1"></i> Back to jobs</a>
+
+        <div class="card mt-3">
+            <div class="card-body p-4">
+                <h1 class="h3 fw-bold mb-1">{{ job.title }}</h1>
+                <p class="text-muted mb-4">{{ job.company.name }} &middot; {{ job.location or "Remote" }} &middot; {{ job.employment_type or "Full-time" }}</p>
+
+                <h6 class="fw-bold">Description</h6>
+                <p style="white-space: pre-wrap;">{{ job.description }}</p>
+
+                {% if existing %}
+                    <div class="alert alert-info mt-4">
+                        You've already applied. Status: <span class="badge-status {{ existing.status }}">{{ existing.status }}</span>
+                        {% if existing.match_score is not none %}
+                            &middot; Match score: {{ existing.match_score }}
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <a href="{{ url_for('candidate.apply', job_id=job.id) }}" class="btn btn-primary btn-lg mt-3">Apply Now</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

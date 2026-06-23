@@ -1,0 +1,103 @@
+{% extends "base.html" %} 
+{% block title %}Login{% endblock %}
+
+{% block head %}
+<style>
+    .login-container {
+        min-height: calc(100vh - 120px); /* ensures footer is below */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 40px 0;
+    }
+
+    .card {
+        min-height: 450px; /* makes the card longer */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  width: 100%;
+  padding: 10px 14px;
+
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+
+  background: white;
+  color: #3c4043;
+
+  font-size: 14px;
+  font-weight: 500;
+
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.google-btn:hover {
+  background: #f7f8f8;
+}
+
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-GLFDS8ZT1H"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-GLFDS8ZT1H');
+</script>
+
+<div class="container login-container">
+    <div class="row justify-content-center w-100">
+        <div class="col-md-6 col-lg-5">
+            <div class="card">
+                <div class="card-header text-center">
+                    <h3><i class="fas fa-sign-in-alt me-2"></i>Login</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email Address</label>
+                            <input type="email" class="form-control" id="email" name="email" placeholder="Enter your email" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="password" name="password" placeholder="Enter your password" required>
+                        </div>
+                        <div class="d-grid mb-3">
+                            <button type="submit" class="btn btn-primary">Login</button>
+                            <a href="{{ url_for('auth.login_google') }}" class="google-btn">
+                                <img src="https://developers.google.com/identity/images/g-logo.png"
+                                     alt="Google logo"
+                                     style="width:18px;height:18px;margin-right:10px;">
+                                Continue with Google
+                              </a>
+                              
+                        </div>
+                        <div class="text-center">
+                            <p class="mb-0">Don't have an account? <a href="{{ url_for('auth.sign_up') }}">Sign up now</a></p>
+                            <a href="{{ url_for('auth.forgot_password') }}">Forgot Password or New Password?</a>
+
+
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-GLFDS8ZT1H"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-GLFDS8ZT1H');
+</script>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Dashboard{% endblock %} | Avants</title>
+
+    <!-- Bootstrap 5 CSS (grid/utilities only — visuals overridden below) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #f7f7f8;
+            --surface: #ffffff;
+            --text: #15161a;
+            --text-muted: #6b7280;
+            --border: #e6e7eb;
+            --primary: #4f46e5;
+            --primary-dark: #4338ca;
+            --primary-soft: #eef2ff;
+            --success: #059669;
+            --success-soft: #d1fae5;
+            --warning: #b45309;
+            --warning-soft: #fef3c7;
+            --danger: #dc2626;
+            --danger-soft: #fee2e2;
+            --radius: 10px;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            padding-top: 64px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .navbar {
+            background: var(--surface) !important;
+            border-bottom: 1px solid var(--border);
+            box-shadow: none;
+            min-height: 64px;
+        }
+
+        .navbar-brand { font-weight: 700; color: var(--text) !important; letter-spacing: -0.02em; margin-right: 0; }
+
+        .logo { height: 30px; width: auto; display: block; }
+
+        h1, h2, h3, h4, h5, h6 { letter-spacing: -0.01em; }
+
+        .nav-link {
+            font-weight: 500;
+            font-size: 0.92rem;
+            color: var(--text-muted) !important;
+            border-radius: 8px;
+            padding: 8px 14px !important;
+            transition: color 0.15s, background 0.15s;
+        }
+
+        .nav-link:hover, .nav-link.active { color: var(--text) !important; background: var(--bg); }
+
+        .btn {
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.92rem;
+            padding: 9px 18px;
+            transition: all 0.15s;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            border-color: var(--primary-dark);
+        }
+
+        .btn-outline-primary {
+            color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .btn-outline-primary:hover {
+            background-color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .alert {
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: none;
+        }
+
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 28px 20px;
+        }
+
+        .main-container.wide {
+            max-width: 1600px;
+        }
+
+        .card {
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: none;
+            background: var(--surface);
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            background: var(--surface);
+            color: var(--text);
+            border-bottom: 1px solid var(--border);
+            border-radius: var(--radius) var(--radius) 0 0 !important;
+            font-weight: 600;
+            padding: 16px 20px;
+        }
+
+        footer {
+            background: transparent;
+            color: var(--text-muted);
+            padding: 28px 0;
+            margin-top: 40px;
+            border-top: 1px solid var(--border);
+            font-size: 0.85rem;
+        }
+
+        .feature-icon { font-size: 2rem; color: var(--primary); margin-bottom: 12px; }
+
+        .section-title { position: relative; padding-bottom: 12px; margin-bottom: 24px; font-weight: 700; }
+
+        .section-title:after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0;
+            width: 48px; height: 3px;
+            background: var(--primary);
+            border-radius: 3px;
+        }
+
+        .btn-rounded { border-radius: 50px; padding: 10px 25px; }
+
+        .text-primary { color: var(--primary) !important; }
+
+        /* ---- Marketplace components ---- */
+
+        .job-card {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            padding: 20px;
+            margin-bottom: 16px;
+            transition: border-color 0.15s;
+        }
+
+        .job-card:hover { border-color: var(--primary); }
+
+        .job-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+
+        .job-card.compact {
+            padding: 14px 16px;
+            margin-bottom: 0;
+            height: 100%;
+        }
+
+        .job-card.compact h3 { font-size: 0.95rem; margin-bottom: 2px; }
+
+        .job-card.compact .job-card-meta { font-size: 0.78rem; }
+
+        .job-card.compact .job-card-desc {
+            font-size: 0.82rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .category-pill {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            background: var(--surface);
+            text-decoration: none;
+            margin: 0 6px 8px 0;
+            transition: all 0.15s;
+        }
+
+        .category-pill:hover { border-color: var(--primary); color: var(--primary); }
+
+        .category-pill.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #fff;
+        }
+
+        .applicant-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 16px 20px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            margin-bottom: 12px;
+        }
+
+        .applicant-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            padding: 14px 18px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            margin-bottom: 10px;
+        }
+
+        .applicant-card .rank-badge {
+            flex-shrink: 0;
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .applicant-card .summary-text {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin: 4px 0 8px 0;
+        }
+
+        .score-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 48px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+
+        .score-pill.high { background: var(--success-soft); color: var(--success); }
+        .score-pill.mid { background: var(--warning-soft); color: var(--warning); }
+        .score-pill.low { background: var(--danger-soft); color: var(--danger); }
+
+        .badge-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: capitalize;
+        }
+
+        .badge-status.applied { background: var(--primary-soft); color: var(--primary); }
+        .badge-status.interviewing { background: var(--warning-soft); color: var(--warning); }
+        .badge-status.rejected { background: var(--danger-soft); color: var(--danger); }
+        .badge-status.hired { background: var(--success-soft); color: var(--success); }
+
+        @media (max-width: 768px) {
+            body { padding-top: 60px; }
+            .main-container { padding: 16px; }
+            .applicant-row { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg fixed-top">
+        <div class="container-fluid px-4 px-lg-5">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <img src="{{ url_for('static', filename='Avants.png') }}" alt="Avants AI Logo" class="logo" />
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbar">
+                <div class="navbar-nav ms-auto">
+                    {% if current_user.is_authenticated %}
+                        {% if current_user.role == 'employer' %}
+                            <a class="nav-link" href="{{ url_for('employer.dashboard') }}"><i class="fas fa-briefcase me-1"></i> Dashboard</a>
+                            <a class="nav-link" href="{{ url_for('employer.post_job') }}"><i class="fas fa-plus me-1"></i> Post a Job</a>
+                        {% else %}
+                            <a class="nav-link" href="{{ url_for('candidate.browse_jobs') }}"><i class="fas fa-search me-1"></i> Browse Jobs</a>
+                            <a class="nav-link" href="{{ url_for('candidate.dashboard') }}"><i class="fas fa-list-check me-1"></i> My Applications</a>
+                            <a class="nav-link" href="{{ url_for('candidate.profile') }}"><i class="fas fa-id-card me-1"></i> My Profile</a>
+                        {% endif %}
+                        <a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt me-1"></i> Logout</a>
+                    {% else %}
+                        <a class="nav-link" href="/login"><i class="fas fa-sign-in-alt me-1"></i> Login</a>
+                        <a class="nav-link" href="/sign-up"><i class="fas fa-user-plus me-1"></i> Sign Up</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-container {% block container_class %}{% endblock %}">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}
+        {% endblock %}
+    </div>
+
+    <footer>
+        <div class="container text-center">
+            <p class="mb-0">&copy; 2026 Avants. All rights reserved. &middot; <a href="{{ url_for('faq') }}" class="text-muted">FAQ</a> &middot; <a href="{{ url_for('contact') }}" class="text-muted">Contact Us</a></p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='index.js') }}"></script>
+
+    <script>
+        // Wait 3 seconds, then fade out and remove alerts
+        setTimeout(() => {
+          document.querySelectorAll('.alert').forEach(alert => {
+            alert.classList.remove('show');
+            alert.classList.add('hide');
+            setTimeout(() => alert.remove(), 200);
+          });
+        },3000);
+      </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

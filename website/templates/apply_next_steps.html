@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Application Submitted{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7 text-center">
+        <div class="card">
+            <div class="card-body p-5">
+                <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                <h1 class="h3 fw-bold mb-2">Application submitted</h1>
+                <p class="text-muted mb-4">You applied to <strong>{{ job.title }}</strong> at {{ job.company.name }}.</p>
+
+                {% set score = application.match_score or 0 %}
+                <p class="mb-4">
+                    Your AI match score:
+                    <span class="score-pill {{ 'high' if score >= 70 else ('mid' if score >= 40 else 'low') }}">{{ score }}</span>
+                </p>
+
+                <p class="text-muted mb-4"><i class="fas fa-circle-exclamation text-warning me-1"></i> A short AI interview is required to complete your application. {{ job.company.name }} won't fully review your application until it's done.</p>
+
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="{{ url_for('candidate.interview', job_id=job.id, application_id=application.id) }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-comments me-1"></i> Start Required AI Interview
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

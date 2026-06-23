@@ -1,0 +1,751 @@
+{% extends "base.html" %}
+{% block title %}Resume Summary{% endblock %}
+
+{% block head %}
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-GLFDS8ZT1H"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-GLFDS8ZT1H');
+</script>
+
+<style>
+    :root {
+        --primary: #384d7a;
+        --primary-dark: #2f4266;
+        --secondary: #315e83;
+        --light: #e9e9ff;
+        --white: #ffffff;
+        --error: #d32f2f;
+        --text-dark: #2e3c57;
+        --text-light: #6c757d;
+        --border: #e0e0e0;
+        --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        --transition: all 0.3s ease;
+    }
+
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+
+    .panel {
+        background-color: var(--white);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 24px;
+        transition: var(--transition);
+        width: 100%;
+        max-width: none;
+        height: 100%;
+    }
+
+    .left-panel {
+        flex: 7;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        overflow-y: auto;
+        height: 100%;
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .current-summary {
+        flex: 2;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .upload-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+    }
+
+    .right-panel {
+        flex: 3;
+        overflow-y: auto;
+        max-height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    h2, h3 {
+        color: var(--primary);
+        margin-bottom: 16px;
+        font-weight: 600;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+        border-bottom: 2px solid var(--border);
+        padding-bottom: 12px;
+    }
+
+    h3 {
+        font-size: 1.3rem;
+    }
+
+    #summaryText {
+        min-height: 200px;
+        padding: 16px;
+        background-color: rgba(240, 242, 245, 0.5);
+        border-radius: 8px;
+        line-height: 1.6;
+        overflow-y: auto;
+        flex-grow: 1;
+        position: relative;
+    }
+
+    .upload-section label {
+        font-size: 1rem;
+        font-weight: 500;
+        margin-bottom: 8px;
+        align-self: flex-start;
+    }
+
+    .upload-section input[type="file"] {
+        width: 100%;
+        padding: 12px;
+        border: 2px dashed var(--border);
+        border-radius: 8px;
+        margin: 12px 0;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+
+    .upload-section input[type="file"]:hover {
+        border-color: var(--primary);
+        background-color: rgba(56, 77, 122, 0.05);
+    }
+
+    .upload-section button {
+        padding: 12px 24px;
+        border: none;
+        background-color: var(--primary);
+        color: white;
+        font-size: 1rem;
+        font-weight: 500;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: var(--transition);
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .upload-section button:hover {
+        background-color: var(--primary-dark);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .upload-section button:disabled {
+        background-color: var(--primary-dark);
+        opacity: 0.7;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .resume-entry {
+        position: relative; 
+        padding: 16px 48px 16px 16px; 
+        border-radius: 8px;
+        margin-bottom: 12px;
+        background-color: var(--white);
+        border-left: 4px solid var(--primary);
+        transition: var(--transition);
+        cursor: pointer;
+    }
+
+    .resume-entry:hover {
+        transform: translateX(4px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .resume-entry .filename {
+        font-weight: 600;
+        color: var(--primary);
+        margin-bottom: 4px;
+        display: block;
+    }
+
+    .resume-entry .summary {
+        color: var(--text-light);
+        font-size: 0.9rem;
+        display: -webkit-box;
+        display: box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        box-orient: vertical;
+        overflow: hidden;
+        margin-bottom: 8px;
+    }
+
+    .view-details {
+        background: none;
+        border: none;
+        color: var(--primary);
+        cursor: pointer;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0;
+        transition: var(--transition);
+    }
+
+    .view-details:hover {
+        color: var(--primary-dark);
+        text-decoration: underline;
+    }
+
+    .fa-spinner {
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .error-message {
+        color: var(--error);
+        background-color: rgba(211, 47, 47, 0.1);
+        padding: 12px;
+        border-radius: 8px;
+        margin: 8px 0;
+        border-left: 4px solid var(--error);
+    }
+
+    .retry-btn {
+        margin-top: 12px;
+        padding: 8px 16px;
+        background-color: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: var(--transition);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.9rem;
+    }
+
+    .retry-btn:hover {
+        background-color: var(--primary-dark);
+        transform: translateY(-1px);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--text-light);
+    }
+
+    .empty-state i {
+        font-size: 2rem;
+        margin-bottom: 12px;
+        color: var(--border);
+    }
+
+    .close-btn {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: #ccc; 
+        border: none;
+        font-size: 1.1rem;
+        color: #333; 
+        cursor: pointer;
+        padding: 4px 8px;
+        line-height: 1;
+        z-index: 999;
+        display: block;
+        border-radius: 4px;
+        box-shadow: var(--shadow);
+        transition: var(--transition);
+    }
+
+    .close-btn:hover {
+        background-color: #999;
+        color: white;
+        transform: scale(1.1);
+    }
+
+    #jobmatch-wrapper {
+        display: flex;
+        width: 100%;
+        height: calc(100vh - 200px);
+        padding: 10px;
+        margin: 0;
+        gap: 12px;
+        box-sizing: border-box;
+    }
+
+    .left-panel, .right-panel {
+        margin: 0;
+    }
+
+    @media (max-width: 768px) {
+        #jobmatch-wrapper {
+            flex-direction: column;
+            height: auto;
+            padding: 16px;
+            gap: 16px;
+        }
+
+        .panel {
+            width: 100%;
+            max-height: none;
+        }
+
+        .right-panel {
+            order: -1;
+            max-height: 300px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12 text-center mb-4">
+            <h1 class="display-5 fw-bold text-primary">Resume Summary</h1>
+            <p class="lead text-muted">Upload your resume to get an AI-powered summary of your qualifications</p>
+        </div>
+    </div>
+    
+    <div id="jobmatch-wrapper">
+        <div class="left-panel panel">
+            <div class="current-summary">
+                <h2>Current Resume Summary</h2>
+                <div id="summaryText">
+                    Upload a resume to generate an AI-powered summary.
+                </div>
+                <div class="text-end mt-3">
+                    <button id="downloadSummaryPdf" class="btn btn-outline-primary">
+                        <i class="fas fa-file-pdf"></i> Download Summary PDF
+                    </button>
+                </div>
+            </div>
+            <div class="upload-section">
+                <h2>Upload Resume</h2>
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <label for="file">Choose a file or drag and drop</label>
+                    <input id="file" name="file" type="file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.bmp,.tiff" required />
+                    <button type="submit" id="uploadBtn">
+                        <i class="fas fa-upload"></i> Upload & Analyze
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="right-panel panel">
+            <h3>Previous Summaries</h3>
+            <div id="historyContainer">
+                <div class="empty-state" id="emptyHistory">
+                    <i class="fas fa-file-alt"></i>
+                    <p>No previous summaries yet</p>
+                </div>
+                <div class="resume-entry template" hidden>
+                    <button class="close-btn" title="Delete">&times;</button>
+                    <strong class="filename">Template</strong>
+                    <div class="summary">Sample summary text...</div>
+                    <button class="view-details">
+                        <i class="fas fa-eye"></i> View Details
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    loadHistoryFromStorage();
+    updateEmptyState();
+});
+
+function loadHistoryFromStorage() {
+    try {
+        const history = JSON.parse(localStorage.getItem("resumeHistory")) || [];
+        history.forEach((item) => {
+            if (item.filename && item.summary) {
+                addHistoryEntry(item.filename, item.summary, false);
+            }
+        });
+        updateEmptyState();
+    } catch (e) {
+        console.error("Error loading history:", e);
+        localStorage.removeItem("resumeHistory");
+    }
+}
+
+function updateEmptyState() {
+    const historyItems = document.querySelectorAll(".resume-entry:not(.template)");
+    const emptyState = document.getElementById("emptyHistory");
+    emptyState.style.display = historyItems.length > 0 ? "none" : "flex";
+}
+
+function addHistoryEntry(filename, summary, saveToStorage = true) {
+    const historyContainer = document.getElementById("historyContainer");
+    const template = document.querySelector(".resume-entry.template");
+    const emptyState = document.getElementById("emptyHistory");
+
+    const cleanName = filename.replace(/\.[^/.]+$/, "");
+    const preview = (summary || "").substring(0, 100) + (summary?.length > 100 ? "..." : "");
+
+    const newEntry = template.cloneNode(true);
+    newEntry.removeAttribute("hidden");
+    newEntry.style.display = "block";
+    newEntry.classList.remove("template");
+
+    const currentHistory = JSON.parse(localStorage.getItem("resumeHistory")) || [];
+    const existing = currentHistory.find(entry => entry.filename === filename);
+    const customName = existing?.customName || cleanName;
+  
+const filenameElem = newEntry.querySelector(".filename");
+filenameElem.textContent = customName;
+filenameElem.contentEditable = true;
+filenameElem.title = filename;
+filenameElem.style.cursor = "text";
+
+/* Save name while typing */
+filenameElem.addEventListener("input", () => {
+    const newName = filenameElem.textContent.trim();
+
+    if (newName.length === 0) {
+        filenameElem.textContent = cleanName;
+        return;
+    }
+
+    updateNameInStorage(filename, newName);
+});
+
+    newEntry.querySelector(".summary").textContent = preview;
+    newEntry.dataset.fullSummary = summary;
+
+    const closeBtn = newEntry.querySelector(".close-btn");
+    if (closeBtn) {
+        closeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            newEntry.remove();
+            removeHistoryEntry(filename);
+            updateEmptyState();
+        });
+    }
+
+   newEntry.addEventListener("click", () => {
+    const currentName = filenameElem.textContent.trim();
+    showFullSummary(currentName, summary);
+});
+
+newEntry.querySelector(".view-details").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const currentName = filenameElem.textContent.trim();
+    showFullSummary(currentName, summary);
+});
+
+    if (emptyState.nextSibling) {
+        historyContainer.insertBefore(newEntry, emptyState.nextSibling);
+    } else {
+        historyContainer.appendChild(newEntry);
+    }
+
+    if (saveToStorage) {
+        saveHistoryToStorage(filename, summary);
+    }
+
+    updateEmptyState();
+}
+
+function saveHistoryToStorage(filename, summary) {
+    try {
+        const currentHistory = JSON.parse(localStorage.getItem("resumeHistory")) || [];
+        const newEntry = { filename, summary, timestamp: Date.now() };
+        const updatedHistory = [newEntry, ...currentHistory].slice(0, 10);
+        localStorage.setItem("resumeHistory", JSON.stringify(updatedHistory));
+    } catch (e) {
+        console.error("Error saving history:", e);
+    }
+}
+
+function updateNameInStorage(filename, newName) {
+    const history = JSON.parse(localStorage.getItem("resumeHistory")) || [];
+    const updated = history.map((entry) => {
+        if (entry.filename === filename) {
+            return { ...entry, customName: newName };
+        }
+        return entry;
+    });
+    localStorage.setItem("resumeHistory", JSON.stringify(updated));
+}
+
+function removeHistoryEntry(filename) {
+    const currentHistory = JSON.parse(localStorage.getItem("resumeHistory")) || [];
+
+    const updatedHistory = currentHistory.filter(
+        (entry) => entry.filename !== filename
+    );
+
+    localStorage.setItem("resumeHistory", JSON.stringify(updatedHistory));
+}
+
+function showFullSummary(title, content) {
+    const summaryElement = document.getElementById("summaryText");
+
+    summaryElement.innerHTML = `
+    <div style="line-height: 1.6; margin-top: 8px;">${content}</div>
+    <div style="display: flex; align-items: center; gap: 8px; margin-top: 12px; margin-left: auto; width: fit-content;">
+        <select id="voiceSelect" style="padding: 6px 10px; font-size: 0.95rem; border-radius: 6px; border: 1px solid #ccc;">
+            <option value="en-US-Wavenet-D">Alex</option>
+            <option value="en-US-Wavenet-G">Rose</option>
+            <option value="en-US-Wavenet-F">Linda</option>
+            <option value="en-US-Wavenet-B">Tom</option>
+        </select>
+        <button id="playAudioBtn" title="Play Audio" style="background: none; border: none; color: var(--primary); font-size: 1.3rem; cursor: pointer; display: flex; align-items: center; padding: 4px;">
+            <i class="fas fa-volume-up"></i>
+        </button>
+    </div>
+    `;
+    summaryElement.scrollTo({ top: 0, behavior: "smooth" });
+
+    const playAudioBtn = document.getElementById("playAudioBtn");
+    
+    let isPlaying = false;
+    let isPaused = false;
+    let audio = null;
+
+    playAudioBtn.addEventListener("click", async () => {
+        try {
+            if (audio && isPlaying && !audio.paused) {
+                audio.pause();
+                isPaused = true;
+                isPlaying = false;
+                playAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
+                return;
+            }
+
+            if (audio && isPaused) {
+                audio.play();
+                isPaused = false;
+                isPlaying = true;
+                playAudioBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                return;
+            }
+
+            playAudioBtn.disabled = true;
+            playAudioBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            const selectedVoice = document.getElementById("voiceSelect").value || "en-US-Wavenet-D";
+
+            const response = await fetch("/speak", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text: content, voice: selectedVoice }),
+            });
+
+            const result = await response.json();
+
+            if (result.audio_url) {
+                audio = new Audio(result.audio_url);
+                audio.play();
+                isPlaying = true;
+                isPaused = false;
+                playAudioBtn.disabled = false;
+                playAudioBtn.innerHTML = '<i class="fas fa-pause"></i>';
+
+                audio.addEventListener("ended", () => {
+                    isPlaying = false;
+                    playAudioBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
+                });
+
+                audio.addEventListener("pause", () => {
+                    if (isPlaying) {
+                        isPlaying = false;
+                        playAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
+                    }
+                });
+            } else {
+                playAudioBtn.disabled = false;
+                playAudioBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
+                alert("Audio not available");
+            }
+        } catch (error) {
+            playAudioBtn.disabled = false;
+            playAudioBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
+            console.error("Failed to play audio:", error);
+        }
+    });
+}
+
+async function uploadWithRetry(formData, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const response = await fetch("/uploads", {
+    method: "POST",
+    body: formData
+});
+
+if (response.status === 403) {
+    const data = await response.json();
+
+    if (data.error === "trial_expired") {
+    showPricingModal();
+
+    setTimeout(() => {
+        window.location.href = "/pricing";
+    }, 2000); // 2 second delay
+
+    throw new Error("trial_expired");
+}
+
+}
+
+
+            if (response.status === 429) {
+                const retryAfter = parseInt(response.headers.get("Retry-After")) || Math.pow(2, i);
+                await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+                continue;
+            }
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Server error: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            if (i === retries - 1) throw error;
+            await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, i)));
+        }
+    }
+}
+
+document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const fileInput = document.getElementById("file");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const summaryText = document.getElementById("summaryText");
+    const file = fileInput.files[0];
+
+    if (!file) {
+        showError("Please select a file first");
+        return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+        showError("File size exceeds 5MB limit");
+        return;
+    }
+
+    setLoadingState(true);
+    summaryText.innerHTML = '<i class="fas fa-spinner"></i> Analyzing resume content...';
+
+    try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const result = await uploadWithRetry(formData);
+
+        showFullSummary("AI Summary", result.text_summary);
+        addHistoryEntry(file.name, result.text_summary);
+    } catch (error) {
+        console.error("Upload failed:", error);
+        handleUploadError(error);
+    } finally {
+        setLoadingState(false);
+    }
+});
+
+function setLoadingState(isLoading) {
+    const uploadBtn = document.getElementById("uploadBtn");
+    uploadBtn.disabled = isLoading;
+    uploadBtn.innerHTML = isLoading
+        ? '<i class="fas fa-spinner"></i> Processing...'
+        : '<i class="fas fa-upload"></i> Upload & Analyze';
+}
+
+function showError(message) {
+    document.getElementById("summaryText").innerHTML = `
+        <div class="error-message">${message}</div>
+    `;
+}
+
+function handleUploadError(error) {
+    let message = error.message || "Failed to process resume";
+
+    if (message.includes("429"))
+        message = "Server busy. Please wait and try again.";
+    if (message.includes("quota"))
+        message = "API quota exceeded. Check your OpenAI billing.";
+    if (message.includes("authentication"))
+        message = "API configuration error.";
+    if (error.message === "trial_expired") return;
+
+
+    document.getElementById("summaryText").innerHTML = `
+        <div class="error-message">
+            <strong>Error:</strong><br>
+            ${message}
+            <button id="retryBtn" class="retry-btn">
+                <i class="fas fa-redo"></i> Try Again
+            </button>
+        </div>
+    `;
+
+    document.getElementById("retryBtn").addEventListener("click", (e) => {
+        e.preventDefault();
+        document.getElementById("uploadForm").dispatchEvent(new Event("submit"));
+    });
+}
+document.getElementById("downloadSummaryPdf")?.addEventListener("click", async () => {
+    const summaryElement = document.getElementById("summaryText");
+    const text = summaryElement.innerText.trim();
+
+    if (!text || text.includes("Upload a resume")) {
+        alert("No summary available to export.");
+        return;
+    }
+
+    const response = await fetch("/export/summary-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ summary: text })
+    });
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "resume_summary.pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+});
+
+</script>
+
+
+{% endblock %}

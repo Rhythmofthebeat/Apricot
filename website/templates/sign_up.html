@@ -1,0 +1,100 @@
+{% extends "base.html" %} 
+{% block title %}Sign Up{% endblock %}
+
+{% block content %}
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-GLFDS8ZT1H"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-GLFDS8ZT1H');
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const employerRadio = document.getElementById("roleEmployer");
+    const candidateRadio = document.getElementById("roleCandidate");
+    const companyGroup = document.getElementById("companyNameGroup");
+    const companyInput = document.getElementById("companyName");
+    const googleLink = document.getElementById("googleSignupLink");
+
+    function toggleCompanyField() {
+        const isEmployer = employerRadio.checked;
+        companyGroup.style.display = isEmployer ? "block" : "none";
+        companyInput.required = isEmployer;
+        if (googleLink) {
+            googleLink.href = "/login/google?role=" + (isEmployer ? "employer" : "candidate");
+        }
+    }
+
+    employerRadio.addEventListener("change", toggleCompanyField);
+    candidateRadio.addEventListener("change", toggleCompanyField);
+    toggleCompanyField();
+});
+</script>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card">
+                <div class="card-header text-center">
+                    <h3><i class="fas fa-user-plus me-2"></i>Sign Up</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label class="form-label d-block">I'm signing up as a...</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="role" id="roleCandidate" value="candidate" checked>
+                                <label class="btn btn-outline-primary" for="roleCandidate">Candidate &mdash; looking for work</label>
+
+                                <input type="radio" class="btn-check" name="role" id="roleEmployer" value="employer">
+                                <label class="btn btn-outline-primary" for="roleEmployer">Employer &mdash; hiring</label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email Address</label>
+                            <input type="email" class="form-control" id="email" name="email" placeholder="Enter your email" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="firstName" class="form-label">First Name</label>
+                            <input type="text" class="form-control" id="firstName" name="firstName" placeholder="Enter your first name" required>
+                        </div>
+
+                        <div class="mb-3" id="companyNameGroup" style="display:none;">
+                            <label for="companyName" class="form-label">Company Name</label>
+                            <input type="text" class="form-control" id="companyName" name="companyName" placeholder="Enter your company name">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="password1" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="password1" name="password1" placeholder="Create a password" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="password2" class="form-label">Confirm Password</label>
+                            <input type="password" class="form-control" id="password2" name="password2" placeholder="Confirm your password" required>
+                        </div>
+
+                        <div class="d-grid mb-3">
+                            <button type="submit" class="btn btn-primary">Create Account</button>
+                            <a id="googleSignupLink" href="/login/google?role=candidate" class="btn btn-outline-secondary mt-2 d-flex align-items-center justify-content-center gap-2">
+                                <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google logo" style="width:18px;height:18px;">
+                                Continue with Google
+                            </a>
+                        </div>
+
+                        <div class="text-center">
+                            <p class="mb-0">Already have an account? <a href="{{ url_for('auth.login') }}">Login here</a></p>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Browse Jobs{% endblock %}
+
+{% block container_class %}wide{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <h1 class="h3 fw-bold mb-3">Browse Jobs</h1>
+        <form method="GET" class="d-flex gap-2 mb-3">
+            <input type="hidden" name="category" value="{{ category }}">
+            <input type="text" name="q" class="form-control" placeholder="Search by title or keyword..." value="{{ query }}">
+            <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+
+        <div>
+            <a href="{{ url_for('candidate.browse_jobs', q=query) }}" class="category-pill {{ 'active' if not category }}">All</a>
+            {% for cat in categories %}
+                <a href="{{ url_for('candidate.browse_jobs', q=query, category=cat) }}" class="category-pill {{ 'active' if category == cat }}">{{ cat }}</a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{% if not jobs %}
+    <div class="card">
+        <div class="card-body text-center p-5 text-muted">No open roles match your filters yet.</div>
+    </div>
+{% else %}
+    <div class="row g-3">
+        {% for job in jobs %}
+            <div class="col-md-6 col-lg-4 col-xl-3">
+                <a href="{{ url_for('candidate.job_detail', job_id=job.id) }}" class="text-decoration-none text-reset">
+                    <div class="job-card compact">
+                        <span class="badge-status applied mb-2">{{ job.category }}</span>
+                        <h3>{{ job.title }}</h3>
+                        <p class="text-muted job-card-meta mb-2">{{ job.company.name }} &middot; {{ job.location or "Remote" }} &middot; {{ job.employment_type or "Full-time" }}</p>
+                        <p class="job-card-desc mb-0">{{ job.description[:110] }}{{ '...' if job.description|length > 110 else '' }}</p>
+                    </div>
+                </a>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+{% endblock %}

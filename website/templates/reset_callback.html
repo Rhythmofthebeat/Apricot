@@ -1,0 +1,25 @@
+<h2>Verifying reset link...</h2>
+
+<script>
+const fragment = window.location.hash.substring(1);
+const params = new URLSearchParams(fragment);
+
+const recovery_token = params.get("access_token");
+const email = params.get("email");
+
+if (!recovery_token) {
+  alert("Invalid or expired reset link.");
+  window.location = "/login";
+}
+
+fetch("/auth/reset-verify", {
+  method: "POST",
+  headers: {"Content-Type": "application/json"},
+  body: JSON.stringify({ email: email, token: recovery_token })
+}).then(resp => {
+  if (!resp.ok) throw new Error("Failed");
+  window.location = "/auth/reset-password/form";
+}).catch(() => {
+  window.location = "/login";
+});
+</script>

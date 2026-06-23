@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Post a Job{% endblock %}
+
+{% block head %}
+<style>
+    .preview-questions {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px 16px;
+        margin-top: 10px;
+    }
+    .preview-note { font-size: 0.78rem; color: var(--text-muted); }
+    .question-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .question-row input { flex: 1; }
+    .question-row .remove-question-btn { color: var(--text-muted); background: none; border: none; cursor: pointer; }
+    .question-row .remove-question-btn:hover { color: var(--danger); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header"><i class="fas {{ 'fa-pen' if job else 'fa-plus' }} me-2"></i>{{ 'Edit Job' if job else 'Post a Job' }}</div>
+            <div class="card-body p-4">
+                <form method="POST" id="postJobForm" action="{{ url_for('employer.edit_job', job_id=job.id) if job else url_for('employer.post_job') }}">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Job Title</label>
+                        <input type="text" class="form-control" name="title" id="jobTitle" value="{{ job.title if job else '' }}" placeholder="e.g. Senior Backend Engineer" required>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">Location</label>
+                            <input type="text" class="form-control" name="location" value="{{ job.location if job else '' }}" placeholder="e.g. Remote, San Francisco">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">Employment Type</label>
+                            <select class="form-control" name="employment_type">
+                                {% for opt in ['Full-time', 'Part-time', 'Contract', 'Internship'] %}
+                                    <option value="{{ opt }}" {{ 'selected' if job and job.employment_type == opt }}>{{ opt }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">Category</label>
+                            <select class="form-control" name="category">
+                                {% for cat in categories %}
+                                    <option value="{{ cat }}" {{ 'selected' if job and job.category == cat }}>{{ cat }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    {% if job %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Status</label>
+                            <select class="form-control" name="status">
+                                <option value="open" {{ 'selected' if job.status == 'open' }}>Open</option>
+                                <option value="closed" {{ 'selected' if job.status == 'closed' }}>Closed</option>
+                            </select>
+                        </div>
+                    {% endif %}
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Job Description</label>
+                        <textarea class="form-control" name="description" id="jobDescription" rows="8" placeholder="Responsibilities, requirements, what success looks like..." required>{{ job.description if job else '' }}</textarea>
+                    </div>
+
+                    <h6 class="fw-bold">AI Interview Settings</h6>
+                    <p class="text-muted small">Every applicant takes this AI interview before you review them. Adjust how long it runs and what it should make sure to ask.</p>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Interview Length</label>
+                        <select class="form-control" name="interview_length" id="interviewLength">
+                            {% for length in interview_lengths %}
+                                <option value="{{ length }}" {{ 'selected' if (job.interview_length if job else 'standard') == length }}>{{ length|capitalize }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="preview-note mt-1">Short: ~3-4 questions &middot; Standard: ~5-8 &middot; Thorough: ~8-12</p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Guidance for the AI Interviewer (optional)</label>
+                        <textarea class="form-control" name="interview_focus" id="interviewFocus" rows="3" placeholder="e.g. I want to know if they've shipped to production solo, not just contributed to a team effort. If they mention managing people, find out how many reports and how they handled a tough performance conversation.">{{ job.interview_focus if job else '' }}</textarea>
+                        <p class="preview-note mt-1">Topics to make sure get covered, things to listen for, or what to do if a candidate brings up something specific.</p>
+                    </div>
+
+                    <button type="button" class="btn btn-outline-primary btn-sm mb-3" id="previewQuestionsBtn">
+                        <i class="fas fa-magic"></i> {{ 'Regenerate' if job and job.interview_questions else 'Generate' }} Interview Questions
+                    </button>
+                    <div id="previewError"></div>
+                    <div class="preview-questions" id="previewQuestionsBox" style="display:{{ 'block' if job and job.interview_questions else 'none' }};">
+                        <p class="preview-note mb-2"><i class="fas fa-circle-info me-1"></i> Edit, remove, or add questions as needed &mdash; the AI will make sure to ask these, plus natural follow-ups based on each candidate's answers.</p>
+                        <div id="questionsList"></div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="addQuestionBtn"><i class="fas fa-plus"></i> Add Question</button>
+                    </div>
+                    <input type="hidden" name="interview_questions" id="interviewQuestionsField">
+
+                    <button type="submit" class="btn btn-primary w-100 mt-4">{{ 'Save Changes' if job else 'Post Job' }}</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const existingQuestions = {{ interview_questions|tojson }};
+const questionsList = document.getElementById("questionsList");
+
+function addQuestionRow(text) {
+    const row = document.createElement("div");
+    row.className = "question-row";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "form-control question-input";
+    input.placeholder = "Interview question";
+    input.value = text;
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "remove-question-btn";
+    removeBtn.title = "Remove";
+    removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+    removeBtn.addEventListener("click", () => row.remove());
+
+    row.appendChild(input);
+    row.appendChild(removeBtn);
+    questionsList.appendChild(row);
+}
+
+existingQuestions.forEach(addQuestionRow);
+
+document.getElementById("addQuestionBtn").addEventListener("click", () => addQuestionRow(""));
+
+document.getElementById("previewQuestionsBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("previewQuestionsBtn");
+    const title = document.getElementById("jobTitle").value.trim();
+    const description = document.getElementById("jobDescription").value.trim();
+    const interviewLength = document.getElementById("interviewLength").value;
+    const interviewFocus = document.getElementById("interviewFocus").value.trim();
+    const errorEl = document.getElementById("previewError");
+
+    errorEl.innerHTML = "";
+    if (!title || !description) {
+        errorEl.innerHTML = '<div class="error-message" style="color: var(--danger); background: var(--danger-soft); padding: 10px 14px; border-radius: var(--radius);">Fill in the job title and description first.</div>';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+
+    try {
+        const response = await fetch("/employer/preview-interview-questions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, description, interview_length: interviewLength, interview_focus: interviewFocus })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Failed to generate questions.");
+
+        questionsList.innerHTML = "";
+        result.questions.forEach(addQuestionRow);
+        document.getElementById("previewQuestionsBox").style.display = "block";
+    } catch (e) {
+        errorEl.innerHTML = `<div class="error-message" style="color: var(--danger); background: var(--danger-soft); padding: 10px 14px; border-radius: var(--radius);">${e.message}</div>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-magic"></i> Regenerate Interview Questions';
+    }
+});
+
+document.getElementById("postJobForm").addEventListener("submit", () => {
+    const questions = Array.from(document.querySelectorAll(".question-input"))
+        .map(input => input.value.trim())
+        .filter(text => text);
+    document.getElementById("interviewQuestionsField").value = JSON.stringify(questions);
+});
+</script>
+{% endblock %}

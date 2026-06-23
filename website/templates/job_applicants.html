@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Applicants &mdash; {{ job.title }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('employer.dashboard') }}" class="text-decoration-none text-muted small"><i class="fas fa-arrow-left me-1"></i> Back to dashboard</a>
+    <h1 class="h3 fw-bold mt-2 mb-0">{{ job.title }}</h1>
+    <p class="text-muted">{{ applications|length }} applicant{{ 's' if applications|length != 1 else '' }}, ranked by match score</p>
+</div>
+
+{% if not applications %}
+    <div class="card">
+        <div class="card-body text-center p-5 text-muted">No applicants yet.</div>
+    </div>
+{% else %}
+    {% for app in applications %}
+        <div class="applicant-card">
+            <div class="rank-badge">#{{ loop.index }}</div>
+
+            <div class="flex-grow-1">
+                <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                    <strong>{{ app.candidate.first_name or app.candidate.email }}</strong>
+                    <span class="badge-status {{ app.status }}">{{ app.status }}</span>
+                    {% if app.interview_verdict %}
+                        <span class="badge-status {{ 'hired' if 'Yes' in app.interview_verdict else 'rejected' }}">{{ app.interview_verdict }}</span>
+                    {% else %}
+                        <span class="badge-status interviewing"><i class="fas fa-hourglass-half me-1"></i> Interview Pending</span>
+                    {% endif %}
+                </div>
+                <p class="text-muted small mb-0">{{ app.candidate.email }} &middot; Applied {{ app.created_at.strftime('%b %d, %Y') if app.created_at else '' }}</p>
+                <p class="summary-text">{{ summaries.get(app.id, '') }}</p>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#detail-{{ app.id }}">
+                        View Details
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#meeting-{{ app.id }}" onclick="setMeetingType({{ app.id }}, 'virtual')">
+                        <i class="fas fa-video me-1"></i> Schedule Meeting
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#meeting-{{ app.id }}" onclick="setMeetingType({{ app.id }}, 'in_person')">
+                        <i class="fas fa-people-arrows me-1"></i> Schedule In-Person Meeting
+                    </button>
+                    <form method="POST" action="{{ url_for('employer.update_status', application_id=app.id) }}" class="d-flex gap-1">
+                        <select name="status" class="form-select form-select-sm">
+                            <option value="applied" {{ 'selected' if app.status == 'applied' }}>Applied</option>
+                            <option value="interviewing" {{ 'selected' if app.status == 'interviewing' }}>Interviewing</option>
+                            <option value="hired" {{ 'selected' if app.status == 'hired' }}>Hired</option>
+                            <option value="rejected" {{ 'selected' if app.status == 'rejected' }}>Rejected</option>
+                        </select>
+                        <button type="submit" class="btn btn-primary btn-sm">Update</button>
+                    </form>
+                </div>
+
+                {% set meeting = meetings.get(app.id) %}
+                {% if meeting %}
+                    <p class="small text-muted mt-2 mb-0">
+                        <i class="fas fa-calendar-check me-1"></i>
+                        {{ 'Video call' if meeting.type == 'virtual' else 'In-person meeting' }} scheduled for {{ meeting.date }} at {{ meeting.time }}
+                        &mdash; {{ meeting.location_or_url }}
+                    </p>
+                {% endif %}
+
+                <div class="collapse mt-3" id="meeting-{{ app.id }}">
+                    <div class="card card-body">
+                        <h6 class="fw-bold" id="meetingFormTitle-{{ app.id }}">Schedule Meeting</h6>
+                        <form method="POST" action="{{ url_for('employer.schedule_meeting', application_id=app.id) }}">
+                            <input type="hidden" name="meeting_type" id="meetingType-{{ app.id }}" value="virtual">
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Date</label>
+                                    <input type="date" class="form-control form-control-sm" name="date" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Time</label>
+                                    <input type="time" class="form-control form-control-sm" name="time" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold" id="meetingLocationLabel-{{ app.id }}">Meeting Link</label>
+                                    <input type="text" class="form-control form-control-sm" name="location_or_url" id="meetingLocationInput-{{ app.id }}" placeholder="https://zoom.us/j/..." required>
+                                </div>
+                            </div>
+                            <label class="form-label small fw-bold">Notes (optional)</label>
+                            <textarea class="form-control form-control-sm mb-2" name="notes" rows="2"></textarea>
+                            <button type="submit" class="btn btn-primary btn-sm">Send Invite</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="collapse mt-3" id="detail-{{ app.id }}">
+                    <div class="card card-body">
+                        {% set wa = work_auths.get(app.id) %}
+                        {% if wa %}
+                            <h6 class="fw-bold">Work Authorization</h6>
+                            <p class="small mb-1"><strong>Residence:</strong> {{ wa.city }}, {{ wa.state }}, {{ wa.country }} {{ wa.postal_code }}</p>
+                            <p class="small mb-1"><strong>Date of Birth:</strong> {{ wa.date_of_birth }}</p>
+                            <p class="small mb-1"><strong>Working from a different country:</strong> {{ 'Yes' if wa.working_from_different_country else 'No' }}</p>
+                            <p class="small mb-1"><strong>Authorized to work from {{ wa.country }}:</strong> {{ 'Confirmed' if wa.work_authorization_confirmed else 'Not confirmed' }}</p>
+                            <p class="small mb-1"><strong>Agrees to remain working from {{ wa.country }}:</strong> {{ 'Confirmed' if wa.remain_working_confirmed else 'Not confirmed' }}</p>
+                            <p class="small mb-3"><strong>Signed:</strong> {{ wa.signature_full_name }} ({{ wa.signature_text }}) on {{ wa.signature_date }}</p>
+                        {% endif %}
+
+                        <h6 class="fw-bold">Match Analysis</h6>
+                        <pre class="small" style="white-space: pre-wrap; font-family: inherit;">{{ app.match_explanation }}</pre>
+
+                        {% set log = audio_logs.get(app.id, []) %}
+                        {% if log %}
+                            <h6 class="fw-bold mt-3">Listen to Interview</h6>
+                            {% for turn in log %}
+                                <div class="mb-2">
+                                    <p class="small mb-1"><strong>{{ 'AI' if turn.role == 'assistant' else (app.candidate.first_name or 'Candidate') }}:</strong> {{ turn.text }}</p>
+                                    {% if turn.audio_filename %}
+                                        <audio controls style="width: 100%; height: 32px;" src="{{ url_for('candidate.application_audio', application_id=app.id, filename=turn.audio_filename) }}"></audio>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        {% elif app.interview_transcript %}
+                            <h6 class="fw-bold mt-3">Interview Transcript</h6>
+                            <pre class="small" style="white-space: pre-wrap; font-family: inherit;">{{ app.interview_transcript }}</pre>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center flex-shrink-0">
+                {% set score = app.match_score or 0 %}
+                <span class="score-pill {{ 'high' if score >= 70 else ('mid' if score >= 40 else 'low') }}">{{ score }}</span>
+                <p class="text-muted small mb-0 mt-1">match score</p>
+            </div>
+        </div>
+    {% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setMeetingType(appId, type) {
+    document.getElementById(`meetingType-${appId}`).value = type;
+    const titleEl = document.getElementById(`meetingFormTitle-${appId}`);
+    const labelEl = document.getElementById(`meetingLocationLabel-${appId}`);
+    const inputEl = document.getElementById(`meetingLocationInput-${appId}`);
+    if (type === 'virtual') {
+        titleEl.textContent = 'Schedule Meeting';
+        labelEl.textContent = 'Meeting Link';
+        inputEl.placeholder = 'https://zoom.us/j/...';
+    } else {
+        titleEl.textContent = 'Schedule In-Person Meeting';
+        labelEl.textContent = 'Address';
+        inputEl.placeholder = '123 Main St, City, State';
+    }
+}
+</script>
+{% endblock %}

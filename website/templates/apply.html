@@ -1,0 +1,817 @@
+{% extends "base.html" %}
+{% block title %}Apply &mdash; {{ job.title }}{% endblock %}
+
+{% block container_class %}wide{% endblock %}
+
+{% block head %}
+<style>
+    .wizard-sidebar {
+        border-right: 1px solid var(--border);
+        padding-right: 24px;
+    }
+    .wizard-step {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 10px;
+        border-radius: var(--radius);
+        cursor: pointer;
+        color: var(--text-muted);
+        transition: background 0.15s;
+    }
+    .wizard-step:hover { background: var(--bg); }
+    .wizard-step.disabled { cursor: not-allowed; opacity: 0.5; pointer-events: none; }
+    .wizard-step .step-num {
+        flex-shrink: 0;
+        width: 30px; height: 30px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 0.85rem;
+        border: 2px solid var(--border);
+        color: var(--text-muted);
+        transition: all 0.15s;
+    }
+    .wizard-step.active { color: var(--text); }
+    .wizard-step.active .step-num { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+    .wizard-step.done .step-num { border-color: var(--success); color: #fff; background: var(--success); }
+    .wizard-step .step-title { font-weight: 600; font-size: 0.95rem; }
+    .wizard-step .step-desc { font-size: 0.8rem; color: var(--text-muted); }
+
+    .step-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+    }
+    .step-header .step-pill {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--primary);
+        background: var(--primary-soft);
+        padding: 3px 10px;
+        border-radius: 999px;
+    }
+    .step-header h2 { font-size: 1.3rem; font-weight: 700; margin: 0; }
+
+    .resume-toggle .btn { flex: 1; padding: 12px; }
+    .error-message {
+        color: var(--danger);
+        background: var(--danger-soft);
+        padding: 10px 14px;
+        border-radius: var(--radius);
+        margin-top: 10px;
+        font-size: 0.9rem;
+    }
+
+    .requirements-box {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        max-height: 460px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+    .requirements-box-header {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 18px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+    }
+    .requirements-box-header i { color: var(--primary); font-size: 0.9rem; }
+    .requirements-box-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 18px;
+        background: var(--bg);
+        font-size: 0.9rem;
+        line-height: 1.7;
+        white-space: pre-wrap;
+    }
+
+    .match-line { padding: 5px 0; font-size: 0.92rem; }
+
+    .score-circle { width: 100px; height: 100px; margin: 8px auto; }
+    .circular-chart { display: block; width: 100%; height: 100%; }
+    .circle-bg { fill: none; stroke: var(--border); stroke-width: 3.8; }
+    .circle {
+        fill: none;
+        stroke-width: 3.8;
+        stroke-linecap: round;
+        transform: rotate(-90deg);
+        transform-origin: 50% 50%;
+        transition: stroke-dashoffset 1s ease-out, stroke 0.4s ease;
+    }
+    .percentage {
+        fill: var(--text);
+        font-size: 0.4em;
+        text-anchor: middle;
+        dominant-baseline: middle;
+        font-weight: bold;
+    }
+    .score-circle-wrap { text-align: center; margin: 8px 0 20px; }
+    .score-circle-wrap p { font-weight: 600; color: var(--text-muted); font-size: 0.85rem; }
+
+    .result-box {
+        min-height: 120px;
+        max-height: 240px;
+        overflow-y: auto;
+        padding: 15px;
+        border-radius: var(--radius);
+        background: var(--bg);
+        border: 1px solid var(--border);
+    }
+
+    .chat-box {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: var(--surface);
+    }
+    .chat-box-header {
+        padding: 10px 14px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+    }
+    .chat-box-header i { color: var(--primary); }
+    .chat-box-messages {
+        max-height: 220px;
+        overflow-y: auto;
+        padding: 12px 14px;
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .chat-msg {
+        font-size: 0.86rem;
+        line-height: 1.5;
+        padding: 8px 12px;
+        border-radius: 10px;
+        max-width: 90%;
+        white-space: pre-wrap;
+    }
+    .chat-msg.assistant { background: var(--primary-soft); align-self: flex-start; }
+    .chat-msg.user { background: var(--primary); color: white; align-self: flex-end; }
+    .chat-box-input {
+        display: flex;
+        gap: 8px;
+        padding: 10px;
+        border-top: 1px solid var(--border);
+        background: var(--surface);
+    }
+
+    .disclaimer-box {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        background: var(--bg);
+        border-radius: var(--radius);
+        padding: 12px 14px;
+        margin-top: 8px;
+        line-height: 1.5;
+    }
+    .attestation-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px;
+        margin-bottom: 14px;
+    }
+    .attestation-check input[type="checkbox"] { margin-top: 4px; flex-shrink: 0; }
+
+    @media (max-width: 991px) {
+        .wizard-sidebar { border-right: none; border-bottom: 1px solid var(--border); padding-right: 0; padding-bottom: 16px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="h3 fw-bold mb-1">Apply to {{ job.title }}</h1>
+<p class="text-muted mb-4">{{ job.company.name }} &middot; {{ job.location or "Remote" }} &middot; {{ job.employment_type or "Full-time" }}</p>
+
+<div class="row">
+    <div class="col-lg-3 wizard-sidebar mb-4">
+        <div class="wizard-step active" data-step="1" id="navStep1">
+            <div class="step-num">1</div>
+            <div>
+                <div class="step-title">Resume</div>
+                <div class="step-desc">Upload or build from LinkedIn</div>
+            </div>
+        </div>
+        <div class="wizard-step disabled" data-step="2" id="navStep2">
+            <div class="step-num">2</div>
+            <div>
+                <div class="step-title">Work Authorization</div>
+                <div class="step-desc">Eligibility &amp; signature</div>
+            </div>
+        </div>
+        <div class="wizard-step disabled" data-step="3" id="navStep3">
+            <div class="step-num">3</div>
+            <div>
+                <div class="step-title">Check Match &amp; Revise</div>
+                <div class="step-desc">Compare against the requirements</div>
+            </div>
+        </div>
+        <div class="wizard-step disabled" data-step="4" id="navStep4">
+            <div class="step-num">4</div>
+            <div>
+                <div class="step-title">Submit</div>
+                <div class="step-desc">Send your application</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-9">
+        <div class="card">
+            <div class="card-body p-4 p-md-5">
+
+                <!-- Step 1: Resume -->
+                <div class="wizard-panel" id="panel1">
+                    <div class="step-header"><span class="step-pill">Step 1 of 4</span></div>
+                    <h2 class="mb-3">Add your resume</h2>
+
+                    <div class="btn-group resume-toggle w-100 mb-4" role="group">
+                        <input type="radio" class="btn-check" name="resumeMode" id="modeUpload" value="upload" checked>
+                        <label class="btn btn-outline-primary" for="modeUpload"><i class="fas fa-file-arrow-up me-1"></i> Upload Resume</label>
+
+                        <input type="radio" class="btn-check" name="resumeMode" id="modeLinkedin" value="linkedin">
+                        <label class="btn btn-outline-primary" for="modeLinkedin"><i class="fa-brands fa-linkedin me-1"></i> No Resume &mdash; Use LinkedIn</label>
+                    </div>
+
+                    <div id="uploadSection">
+                        <label class="form-label fw-bold">Resume (PDF, DOCX, or TXT)</label>
+                        <input type="file" class="form-control" id="resumeFile" accept=".pdf,.docx,.txt">
+                    </div>
+
+                    <div id="linkedinSection" style="display:none;">
+                        <label class="form-label fw-bold">LinkedIn Profile URL (optional)</label>
+                        <input type="url" class="form-control mb-3" id="linkedinUrl" placeholder="https://www.linkedin.com/in/your-name">
+
+                        <label class="form-label fw-bold">Pasted Profile Content</label>
+                        <p class="text-muted small">LinkedIn doesn't let us pull this automatically &mdash; paste your About, Experience, and Education sections here.</p>
+                        <textarea class="form-control mb-2" id="profileText" rows="8" placeholder="Paste your About, Experience, and Education sections here..."></textarea>
+
+                        <button type="button" id="generateBtn" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-magic"></i> Generate Resume
+                        </button>
+                    </div>
+
+                    <div id="step1Error"></div>
+
+                    <button type="button" id="toStep2Btn" class="btn btn-primary w-100 mt-4">Continue</button>
+                </div>
+
+                <!-- Step 2: Work Authorization -->
+                <div class="wizard-panel" id="panel2" style="display:none;">
+                    <div class="step-header"><span class="step-pill">Step 2 of 4</span></div>
+                    <h2 class="mb-3">Work authorization</h2>
+                    <p class="text-muted">Please ensure you meet local employment requirements for work authorization. Accurate information helps {{ job.company.name }} process your application smoothly.</p>
+
+                    <label class="form-label fw-bold">Date of Birth (MM/DD/YYYY)</label>
+                    <input type="text" class="form-control mb-3" id="dob" placeholder="MM/DD/YYYY">
+
+                    <h6 class="fw-bold mt-4">Location of Residence</h6>
+                    <p class="text-muted small">Where you're based for most of the year &mdash; this might be different from your citizenship.</p>
+
+                    <div class="row g-3 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Country</label>
+                            <select class="form-control" id="residenceCountry">
+                                {% for c in countries %}
+                                    <option value="{{ c }}" {{ 'selected' if c == 'United States' }}>{{ c }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">State / Province / Region</label>
+                            <input type="text" class="form-control" id="residenceState" placeholder="Select state/province">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">City</label>
+                            <input type="text" class="form-control" id="residenceCity">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Postal Code</label>
+                            <input type="text" class="form-control" id="residencePostal" placeholder="Enter postal code">
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-4 mt-2">
+                        <input class="form-check-input" type="checkbox" id="differentCountryCheck">
+                        <label class="form-check-label small" for="differentCountryCheck">
+                            I will be physically working from a different country than <span id="countryLabel1">United States</span> while performing services through {{ job.company.name }}.
+                        </label>
+                    </div>
+
+                    <div class="attestation-check">
+                        <input type="checkbox" id="authConfirmCheck">
+                        <div>
+                            <label class="form-label fw-bold mb-1" for="authConfirmCheck">I confirm that I am legally authorized to work from <span id="countryLabel2">United States</span>.</label>
+                            <div class="disclaimer-box">
+                                By checking this box, you represent and warrant that:<br>
+                                1. You have all necessary visas, permits, and/or legal rights to work from the country you have indicated.<br>
+                                2. You will defend, indemnify, and hold harmless {{ job.company.name }} from any claims, losses, or liabilities arising from your failure to maintain proper work authorization.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="attestation-check">
+                        <input type="checkbox" id="remainWorkingCheck">
+                        <div>
+                            <label class="form-label fw-bold mb-1" for="remainWorkingCheck">I agree to remain working from <span id="countryLabel3">United States</span>, and to notify {{ job.company.name }} in writing prior to any change.</label>
+                            <div class="disclaimer-box">
+                                By checking this box, you agree to:<br>
+                                1. Continue working only from the country specified above unless you have provided {{ job.company.name }} with prior written notice of your intended change of work location.<br>
+                                2. Obtain and maintain proper work authorization for any future country from which you intend to work before beginning work from that country.
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6 class="fw-bold mt-4">Digital Signature</h6>
+                    <p class="text-muted small">Please provide your digital signature to confirm your agreement.</p>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Full Legal Name</label>
+                            <input type="text" class="form-control" id="signatureFullName">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Signature</label>
+                            <input type="text" class="form-control" id="signatureText" placeholder="Ex: John Doe">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Date</label>
+                            <input type="text" class="form-control" id="signatureDate" readonly>
+                        </div>
+                    </div>
+
+                    <div id="step2Error"></div>
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="button" id="backTo1Btn" class="btn btn-outline-secondary">Back</button>
+                        <button type="button" id="saveWorkAuthBtn" class="btn btn-primary flex-grow-1">Save Work Authorization</button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Check Match & Revise -->
+                <div class="wizard-panel" id="panel3" style="display:none;">
+                    <div class="step-header"><span class="step-pill">Step 3 of 4</span></div>
+                    <h2 class="mb-3">Check your match</h2>
+                    <p class="text-muted">Compare your resume against the job requirements below. Edit it and re-check your score as many times as you'd like before submitting.</p>
+
+                    <div class="row g-4 mt-2">
+                        <div class="col-lg-4">
+                            <div class="requirements-box">
+                                <div class="requirements-box-header">
+                                    <i class="fas fa-clipboard-list"></i> Job Requirements
+                                </div>
+                                <div class="requirements-box-body">{{ job.description }}</div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4">
+                            <label class="form-label fw-bold">Your Resume</label>
+                            <textarea class="form-control mb-3" id="resumeTextArea" rows="14"></textarea>
+
+                            <button type="button" id="checkScoreBtn" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-bullseye"></i> Check Match Score
+                            </button>
+                            <div id="step3Error"></div>
+                        </div>
+
+                        <div class="col-lg-4">
+                            <div id="scoreResult" style="display:none;">
+                                <div class="score-circle-wrap">
+                                    <div class="score-circle mx-auto">
+                                        <svg viewBox="0 0 36 36" class="circular-chart">
+                                            <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                            <path class="circle" id="scoreArc" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                            <text x="18" y="18" class="percentage" id="scoreText">0%</text>
+                                        </svg>
+                                    </div>
+                                    <p>match score &middot; 0-30 Poor &middot; 31-60 Fair &middot; 61-80 Good &middot; 81+ Excellent</p>
+                                </div>
+                                <div class="result-box">
+                                    <div id="explanationLines"></div>
+                                </div>
+                            </div>
+                            <div id="scorePlaceholder" class="text-center text-muted small p-4">
+                                <i class="fas fa-bullseye fa-2x mb-2" style="opacity:0.3;"></i><br>
+                                Your match score will appear here once checked.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="chat-box mt-4" id="chatBoxWrap" style="display:none;">
+                        <div class="chat-box-header"><i class="fas fa-wand-magic-sparkles"></i> Get Help Improving Your Resume</div>
+                        <div class="chat-box-messages" id="chatMessages">
+                            <div class="chat-msg assistant">Ask me anything about improving your resume for this role &mdash; I can see your match score and analysis above.</div>
+                        </div>
+                        <div class="chat-box-input">
+                            <input type="text" class="form-control form-control-sm" id="chatInput" placeholder="e.g. How can I improve my Skills section?">
+                            <button type="button" class="btn btn-primary btn-sm" id="chatSendBtn"><i class="fas fa-paper-plane"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="button" id="backTo2Btn" class="btn btn-outline-secondary">Back</button>
+                        <button type="button" id="toStep4Btn" class="btn btn-primary flex-grow-1" disabled>Continue to Submit</button>
+                    </div>
+                </div>
+
+                <!-- Step 4: Submit -->
+                <div class="wizard-panel" id="panel4" style="display:none;">
+                    <div class="step-header"><span class="step-pill">Step 4 of 4</span></div>
+                    <h2 class="mb-3">Review &amp; submit</h2>
+                    <p class="text-muted">Your latest checked score: <span id="finalScorePreview" class="score-pill"></span></p>
+                    <p class="text-muted small">Submitting will lock in your resume and work authorization for this application. You can still take the AI interview afterward to strengthen your case.</p>
+
+                    <div id="step4Error"></div>
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="button" id="backTo3Btn" class="btn btn-outline-secondary">Back</button>
+                        <button type="button" id="submitBtn" class="btn btn-primary flex-grow-1">Submit Application</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const jobId = {{ job.id }};
+const jobDescription = {{ job.description|tojson }};
+let resumeText = "";
+let workAuthorization = null;
+let lastCheckedScore = null;
+let lastExplanation = "";
+let chatHistory = [];
+let unlockedStep = 1;
+
+const modeUpload = document.getElementById("modeUpload");
+const modeLinkedin = document.getElementById("modeLinkedin");
+const uploadSection = document.getElementById("uploadSection");
+const linkedinSection = document.getElementById("linkedinSection");
+
+function syncMode() {
+    const isLinkedin = modeLinkedin.checked;
+    uploadSection.style.display = isLinkedin ? "none" : "block";
+    linkedinSection.style.display = isLinkedin ? "block" : "none";
+}
+modeUpload.addEventListener("change", syncMode);
+modeLinkedin.addEventListener("change", syncMode);
+
+function showError(elId, message) {
+    document.getElementById(elId).innerHTML = message
+        ? `<div class="error-message">${message}</div>`
+        : "";
+}
+
+function goToStep(step) {
+    for (let i = 1; i <= 4; i++) {
+        document.getElementById(`panel${i}`).style.display = (i === step) ? "block" : "none";
+        const nav = document.getElementById(`navStep${i}`);
+        nav.classList.remove("active", "done", "disabled");
+        if (i < step) nav.classList.add("done");
+        else if (i === step) nav.classList.add("active");
+        else if (i > unlockedStep) nav.classList.add("disabled");
+    }
+}
+
+document.querySelectorAll(".wizard-step").forEach(navEl => {
+    navEl.addEventListener("click", () => {
+        const step = parseInt(navEl.dataset.step, 10);
+        if (step <= unlockedStep) goToStep(step);
+    });
+});
+
+document.getElementById("generateBtn").addEventListener("click", async () => {
+    const linkedinUrl = document.getElementById("linkedinUrl").value.trim();
+    const profileText = document.getElementById("profileText").value.trim();
+    const btn = document.getElementById("generateBtn");
+
+    showError("step1Error", null);
+    if (!profileText) {
+        showError("step1Error", "Paste your LinkedIn profile content first.");
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+
+    try {
+        const response = await fetch("/generate-profile-resume", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ linkedin_url: linkedinUrl, profile_text: profileText })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Failed to generate resume.");
+
+        resumeText = result.resume_text;
+        showError("step1Error", null);
+        btn.innerHTML = '<i class="fas fa-check"></i> Generated!';
+    } catch (e) {
+        showError("step1Error", e.message);
+        btn.innerHTML = '<i class="fas fa-magic"></i> Generate Resume';
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+document.getElementById("toStep2Btn").addEventListener("click", async () => {
+    const btn = document.getElementById("toStep2Btn");
+    showError("step1Error", null);
+
+    if (modeUpload.checked) {
+        const file = document.getElementById("resumeFile").files[0];
+        if (!file) {
+            showError("step1Error", "Choose a resume file first.");
+            return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reading file...';
+        try {
+            const formData = new FormData();
+            formData.append("resume", file);
+            const response = await fetch("/extract-resume-text", { method: "POST", body: formData });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || "Failed to read file.");
+            resumeText = result.resume_text;
+        } catch (e) {
+            showError("step1Error", e.message);
+            btn.disabled = false;
+            btn.innerHTML = "Continue";
+            return;
+        }
+        btn.disabled = false;
+        btn.innerHTML = "Continue";
+    } else {
+        if (!resumeText) {
+            showError("step1Error", "Generate your resume from LinkedIn first.");
+            return;
+        }
+    }
+
+    unlockedStep = Math.max(unlockedStep, 2);
+    goToStep(2);
+});
+
+// --- Step 2: Work Authorization ---
+const residenceCountry = document.getElementById("residenceCountry");
+const signatureDate = document.getElementById("signatureDate");
+
+function syncCountryLabels() {
+    const country = residenceCountry.value;
+    document.getElementById("countryLabel1").textContent = country;
+    document.getElementById("countryLabel2").textContent = country;
+    document.getElementById("countryLabel3").textContent = country;
+}
+residenceCountry.addEventListener("change", syncCountryLabels);
+syncCountryLabels();
+
+(function setToday() {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    signatureDate.value = `${mm}/${dd}/${d.getFullYear()}`;
+})();
+
+document.getElementById("saveWorkAuthBtn").addEventListener("click", () => {
+    showError("step2Error", null);
+
+    const dob = document.getElementById("dob").value.trim();
+    const state = document.getElementById("residenceState").value.trim();
+    const city = document.getElementById("residenceCity").value.trim();
+    const postal = document.getElementById("residencePostal").value.trim();
+    const authConfirm = document.getElementById("authConfirmCheck").checked;
+    const remainWorking = document.getElementById("remainWorkingCheck").checked;
+    const fullName = document.getElementById("signatureFullName").value.trim();
+    const signature = document.getElementById("signatureText").value.trim();
+
+    if (!dob || !state || !city || !postal) {
+        showError("step2Error", "Fill in your date of birth and full residence address first.");
+        return;
+    }
+    if (!authConfirm || !remainWorking) {
+        showError("step2Error", "Both work authorization confirmations are required to continue.");
+        return;
+    }
+    if (!fullName || !signature) {
+        showError("step2Error", "Provide your full legal name and signature to continue.");
+        return;
+    }
+
+    workAuthorization = {
+        date_of_birth: dob,
+        country: residenceCountry.value,
+        state, city, postal_code: postal,
+        working_from_different_country: document.getElementById("differentCountryCheck").checked,
+        work_authorization_confirmed: authConfirm,
+        remain_working_confirmed: remainWorking,
+        signature_full_name: fullName,
+        signature_text: signature,
+        signature_date: signatureDate.value,
+    };
+
+    document.getElementById("resumeTextArea").value = resumeText;
+    unlockedStep = Math.max(unlockedStep, 3);
+    goToStep(3);
+});
+
+document.getElementById("backTo1Btn").addEventListener("click", () => goToStep(1));
+
+// --- Step 3: Check Match & Revise ---
+function animateScoreCircle(score) {
+    const circle = document.getElementById("scoreArc");
+    const text = document.getElementById("scoreText");
+    const radius = 15.9155;
+    const circumference = 2 * Math.PI * radius;
+
+    circle.setAttribute("stroke-dasharray", circumference + " " + circumference);
+    circle.setAttribute("stroke-dashoffset", circumference);
+
+    setTimeout(() => {
+        const offset = circumference * (1 - score / 100);
+        circle.setAttribute("stroke-dashoffset", offset);
+
+        if (score < 30) circle.style.stroke = "#dc3545";
+        else if (score < 61) circle.style.stroke = "#ffc107";
+        else if (score < 81) circle.style.stroke = "#4a90e2";
+        else circle.style.stroke = "#28a745";
+    }, 100);
+
+    let current = 0;
+    const interval = setInterval(() => {
+        if (current >= score) {
+            clearInterval(interval);
+        } else {
+            current++;
+            text.textContent = current + "%";
+        }
+    }, 12);
+}
+
+document.getElementById("checkScoreBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("checkScoreBtn");
+    const text = document.getElementById("resumeTextArea").value.trim();
+    showError("step3Error", null);
+
+    if (!text) {
+        showError("step3Error", "Your resume content is empty.");
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+
+    try {
+        const response = await fetch(`/jobs/${jobId}/preview-match`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ resume_text: text })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Failed to check match score.");
+
+        resumeText = text;
+        lastCheckedScore = result.score;
+        lastExplanation = result.explanation;
+        animateScoreCircle(result.score);
+
+        const linesEl = document.getElementById("explanationLines");
+        linesEl.innerHTML = "";
+        result.explanation.split("\n").forEach(line => {
+            const trimmed = line.trim();
+            if (!trimmed) return;
+            const div = document.createElement("div");
+            div.className = "match-line";
+            if (trimmed.startsWith("+")) {
+                div.innerHTML = `<i class="fa-solid fa-circle-check text-success me-2"></i>${trimmed.slice(1).trim()}`;
+            } else if (trimmed.startsWith("-")) {
+                div.innerHTML = `<i class="fa-solid fa-circle-xmark text-danger me-2"></i>${trimmed.slice(1).trim()}`;
+            } else {
+                div.textContent = trimmed;
+            }
+            linesEl.appendChild(div);
+        });
+
+        document.getElementById("scoreResult").style.display = "block";
+        document.getElementById("scorePlaceholder").style.display = "none";
+        document.getElementById("chatBoxWrap").style.display = "block";
+        document.getElementById("toStep4Btn").disabled = false;
+    } catch (e) {
+        showError("step3Error", e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-bullseye"></i> Check Match Score';
+    }
+});
+
+// --- Resume coaching chat (reuses /resume-chat) ---
+function appendChatMessage(role, text) {
+    const messagesEl = document.getElementById("chatMessages");
+    const div = document.createElement("div");
+    div.className = `chat-msg ${role}`;
+    div.textContent = text;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+async function sendChatMessage() {
+    const input = document.getElementById("chatInput");
+    const sendBtn = document.getElementById("chatSendBtn");
+    const message = input.value.trim();
+    if (!message) return;
+
+    appendChatMessage("user", message);
+    input.value = "";
+    sendBtn.disabled = true;
+
+    try {
+        const response = await fetch("/resume-chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                message,
+                job_description: jobDescription,
+                resume_analysis: lastExplanation,
+                history: chatHistory,
+            })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Failed to get a response.");
+
+        appendChatMessage("assistant", result.reply);
+        chatHistory.push({ role: "user", content: message });
+        chatHistory.push({ role: "assistant", content: result.reply });
+    } catch (e) {
+        appendChatMessage("assistant", e.message);
+    } finally {
+        sendBtn.disabled = false;
+    }
+}
+
+document.getElementById("chatSendBtn").addEventListener("click", sendChatMessage);
+document.getElementById("chatInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendChatMessage();
+});
+
+document.getElementById("backTo2Btn").addEventListener("click", () => goToStep(2));
+document.getElementById("backTo3Btn").addEventListener("click", () => goToStep(3));
+
+document.getElementById("toStep4Btn").addEventListener("click", () => {
+    const pill = document.getElementById("finalScorePreview");
+    pill.textContent = lastCheckedScore;
+    pill.className = "score-pill " + (lastCheckedScore >= 70 ? "high" : (lastCheckedScore >= 40 ? "mid" : "low"));
+    unlockedStep = Math.max(unlockedStep, 4);
+    goToStep(4);
+});
+
+document.getElementById("submitBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("submitBtn");
+    showError("step4Error", null);
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+
+    try {
+        const response = await fetch(`/jobs/${jobId}/apply`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                resume_text: document.getElementById("resumeTextArea").value,
+                work_authorization: workAuthorization,
+            })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Failed to submit application.");
+        window.location = result.redirect_url;
+    } catch (e) {
+        showError("step4Error", e.message);
+        btn.disabled = false;
+        btn.innerHTML = "Submit Application";
+    }
+});
+</script>
+{% endblock %}

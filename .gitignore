@@ -1,0 +1,24 @@
+# secrets — never commit
+.env
+secrets/
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+
+# local data / generated
+instance/
+uploads/
+cache_results/
+website/audio/
+audio/
+resumemat.txt
+
+# node
+node_modules/
+
+# os / editor
+.DS_Store
+.vscode/
+.claude/
