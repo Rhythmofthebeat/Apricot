@@ -14,9 +14,8 @@ VERIFICATION_SALT = "employer-email-verification"
 VERIFICATION_MAX_AGE = 60 * 60 * 24  # 24 hours
 
 
-def render_branded_email(heading, body_html, cta_label=None, cta_url=None, accent="#4f46e5"):
-    """Shared HTML shell for every transactional email this app sends —
-    inline styles only, since most email clients strip <style> blocks."""
+def render_branded_email(heading, body_html, cta_label=None, cta_url=None, accent="#4f46e5", app_base_url=""):
+    """Shared HTML shell for every transactional email — inline styles only."""
     cta_block = ""
     if cta_label and cta_url:
         cta_block = f"""
@@ -28,6 +27,14 @@ def render_branded_email(heading, body_html, cta_label=None, cta_url=None, accen
             </td>
         </tr>
         """
+    if app_base_url:
+        logo_html = (
+            f'<img src="{app_base_url}/static/Avants.png" alt="Avants AI" '
+            f'style="height:32px; display:block;" />'
+        )
+    else:
+        logo_html = '<span style="color:#ffffff; font-size:18px; font-weight:700; letter-spacing:-0.02em;">Avants AI</span>'
+
     return f"""
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f7f8; padding:32px 0;">
         <tr>
@@ -37,7 +44,7 @@ def render_branded_email(heading, body_html, cta_label=None, cta_url=None, accen
                     font-family:Arial,Helvetica,sans-serif;">
                     <tr>
                         <td style="background:{accent}; padding:20px 40px;">
-                            <span style="color:#ffffff; font-size:18px; font-weight:700; letter-spacing:-0.02em;">Avants</span>
+                            {logo_html}
                         </td>
                     </tr>
                     <tr>
@@ -49,7 +56,7 @@ def render_branded_email(heading, body_html, cta_label=None, cta_url=None, accen
                     {cta_block}
                     <tr>
                         <td style="padding:20px 40px; border-top:1px solid #e6e7eb; font-size:12px; color:#6b7280;">
-                            Sent by Avants &mdash; the AI-vetted hiring marketplace.
+                            Sent by Avants AI &mdash; the AI-vetted hiring marketplace.
                         </td>
                     </tr>
                 </table>
@@ -60,13 +67,13 @@ def render_branded_email(heading, body_html, cta_label=None, cta_url=None, accen
 
 
 def send_branded_email(to_email, subject, heading, body_html, plain_text, cta_label=None, cta_url=None):
-    """Sends a styled HTML email with a plain-text fallback for clients that
-    don't render HTML. Raises on failure — callers must handle it explicitly."""
+    """Sends a styled HTML email with a plain-text fallback. Raises on failure."""
+    app_base_url = current_app.config.get("APP_BASE_URL", "")
     msg = Message(
         subject=subject,
         recipients=[to_email],
         body=plain_text,
-        html=render_branded_email(heading, body_html, cta_label, cta_url),
+        html=render_branded_email(heading, body_html, cta_label, cta_url, app_base_url=app_base_url),
     )
     mail.send(msg)
 

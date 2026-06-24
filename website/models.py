@@ -57,6 +57,7 @@ class User(db.Model, UserMixin):
     first_name = db.Column(db.String(150))
     role = db.Column(db.String(20), nullable=False, default="candidate")  # "candidate" | "employer"
     email_verified = db.Column(db.Boolean, nullable=False, default=True)  # employers start False
+    notifications_enabled = db.Column(db.Boolean, nullable=False, default=True)
 
 
 class Company(db.Model):
@@ -110,3 +111,12 @@ class Application(db.Model):
 
     job = db.relationship("Job", backref="applications")
     candidate = db.relationship("User", backref="applications")
+
+
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    message = db.Column(db.String(300), nullable=False)
+    link = db.Column(db.String(300))
+    read = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())

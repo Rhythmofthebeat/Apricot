@@ -328,6 +328,24 @@
                             <a class="nav-link" href="{{ url_for('candidate.browse_jobs') }}"><i class="fas fa-search me-1"></i> Browse Jobs</a>
                             <a class="nav-link" href="{{ url_for('candidate.dashboard') }}"><i class="fas fa-list-check me-1"></i> My Applications</a>
                             <a class="nav-link" href="{{ url_for('candidate.profile') }}"><i class="fas fa-id-card me-1"></i> My Profile</a>
+                            <div class="nav-item dropdown" id="notifDropdownWrap" style="display:none;">
+                                <a class="nav-link position-relative" href="#" id="notifBell" data-bs-toggle="dropdown">
+                                    <i class="fas fa-bell"></i>
+                                    <span id="notifBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:0.6rem; display:none;"></span>
+                                </a>
+                                <div class="dropdown-menu dropdown-menu-end p-0" style="width:340px; max-height:400px; overflow-y:auto;" id="notifMenu">
+                                    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                                        <strong class="small">Notifications</strong>
+                                        <div class="d-flex gap-2 align-items-center">
+                                            <button class="btn btn-link btn-sm p-0 text-muted small" id="markAllRead">Mark all read</button>
+                                            <div class="form-check form-switch mb-0 ms-2" title="Toggle notifications">
+                                                <input class="form-check-input" type="checkbox" id="notifToggle" checked>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="notifList"><div class="text-muted small px-3 py-3">Loading…</div></div>
+                                </div>
+                            </div>
                         {% endif %}
                         <a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt me-1"></i> Logout</a>
                     {% else %}
@@ -379,5 +397,70 @@
       </script>
 
     {% block scripts %}{% endblock %}
+
+    {% if current_user.is_authenticated and current_user.role == 'candidate' %}
+    <script>
+    (function() {
+        const wrap = document.getElementById("notifDropdownWrap");
+        const badge = document.getElementById("notifBadge");
+        const list  = document.getElementById("notifList");
+        const toggle = document.getElementById("notifToggle");
+
+        async function loadNotifications() {
+            try {
+                const r = await fetch("{{ url_for('candidate.notifications') }}");
+                const data = await r.json();
+
+                toggle.checked = data.notifications_enabled;
+                wrap.style.display = "";
+
+                if (data.unread_count > 0) {
+                    badge.textContent = data.unread_count > 9 ? "9+" : data.unread_count;
+                    badge.style.display = "";
+                } else {
+                    badge.style.display = "none";
+                }
+
+                if (!data.notifications || data.notifications.length === 0) {
+                    list.innerHTML = '<div class="text-muted small px-3 py-3">No notifications yet.</div>';
+                    return;
+                }
+
+                list.innerHTML = data.notifications.map(n => `
+                    <a href="${n.link || '#'}" class="d-block px-3 py-2 border-bottom text-decoration-none ${n.read ? 'text-muted' : 'fw-semibold'}"
+                       style="font-size:0.82rem; background:${n.read ? '#fff' : '#eef2ff'};">
+                        ${n.message}
+                        <div class="text-muted" style="font-size:0.72rem;">${n.created_at ? new Date(n.created_at).toLocaleString() : ''}</div>
+                    </a>
+                `).join("");
+            } catch (_) {}
+        }
+
+        document.getElementById("notifBell").addEventListener("click", async () => {
+            await loadNotifications();
+            await fetch("{{ url_for('candidate.mark_notifications_read') }}", { method: "POST" });
+            badge.style.display = "none";
+        });
+
+        document.getElementById("markAllRead").addEventListener("click", async (e) => {
+            e.preventDefault();
+            await fetch("{{ url_for('candidate.mark_notifications_read') }}", { method: "POST" });
+            badge.style.display = "none";
+            await loadNotifications();
+        });
+
+        toggle.addEventListener("change", async () => {
+            await fetch("{{ url_for('candidate.notification_preferences') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enabled: toggle.checked })
+            });
+        });
+
+        // Load unread count silently on page load
+        loadNotifications();
+    })();
+    </script>
+    {% endif %}
 </body>
 </html>

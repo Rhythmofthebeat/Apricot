@@ -60,12 +60,18 @@
                         {% set score = app.match_score or 0 %}
                         <span class="score-pill {{ 'high' if score >= 70 else ('mid' if score >= 40 else 'low') }}">{{ score }}</span>
                     </div>
-                    <span class="badge-status {{ app.status }}">{{ app.status }}</span>
-                    {% if app.interview_verdict %}
-                        <span class="badge-status {{ 'hired' if 'Yes' in app.interview_verdict else 'rejected' }}">{{ app.interview_verdict }}</span>
-                    {% elif app.status == 'applied' %}
-                        <span class="badge-status rejected"><i class="fas fa-circle-exclamation me-1"></i> Interview Required</span>
-                        <a href="{{ url_for('candidate.interview', job_id=app.job_id, application_id=app.id) }}" class="btn btn-primary btn-sm">Start Interview</a>
+                    {% if app.status == 'hired' %}
+                        <span class="badge-status hired"><i class="fas fa-trophy me-1"></i> Hired</span>
+                    {% elif app.status == 'rejected' %}
+                        <span class="badge-status rejected">Not selected</span>
+                    {% else %}
+                        <span class="badge-status {{ app.status }}">{{ app.status }}</span>
+                        {% if app.interview_verdict %}
+                            <span class="badge-status {{ 'hired' if 'Yes' in app.interview_verdict else 'rejected' }}">AI: {{ app.interview_verdict }}</span>
+                        {% elif app.status == 'applied' %}
+                            <span class="badge-status rejected"><i class="fas fa-circle-exclamation me-1"></i> Interview Required</span>
+                            <a href="{{ url_for('candidate.interview', job_id=app.job_id, application_id=app.id) }}" class="btn btn-primary btn-sm">Start Interview</a>
+                        {% endif %}
                     {% endif %}
                 </div>
             {% endfor %}

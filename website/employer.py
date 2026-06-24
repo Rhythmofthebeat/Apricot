@@ -31,7 +31,7 @@ def _existing_interview_questions(job):
 from flask_login import login_required, current_user
 from functools import wraps
 from . import db
-from .models import Company, Job, Application, JOB_CATEGORIES, JOB_LOCATIONS
+from .models import Company, Job, Application, Notification, JOB_CATEGORIES, JOB_LOCATIONS
 
 from ai_services import generate_interview_question_preview
 from email_utils import send_branded_email
@@ -365,6 +365,22 @@ def update_status(application_id):
         copy = STATUS_EMAIL_COPY.get(new_status)
         if status_changed and copy:
             candidate = application.candidate
+
+            # In-app notification (respects user preference)
+            if candidate.notifications_enabled:
+                notif_messages = {
+                    "interviewing": f"Your application for {job.title} at {company.name} is moving forward!",
+                    "hired": f"Congratulations! {company.name} has hired you for {job.title}.",
+                    "rejected": f"Update on your application for {job.title} at {company.name}.",
+                }
+                notif = Notification(
+                    user_id=candidate.id,
+                    message=notif_messages.get(new_status, f"Your application status changed to {new_status}."),
+                    link=url_for('candidate.dashboard', _external=False),
+                )
+                db.session.add(notif)
+                db.session.commit()
+
             try:
                 send_branded_email(
                     to_email=candidate.email,

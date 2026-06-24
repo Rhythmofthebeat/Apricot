@@ -11,7 +11,8 @@ class Config:
     MAIL_USE_TLS = True
     MAIL_USERNAME = os.getenv("MAIL_USERNAME")
     MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
-    MAIL_DEFAULT_SENDER = os.getenv("MAIL_USERNAME")
+    MAIL_DEFAULT_SENDER = ("Avants AI", os.getenv("MAIL_USERNAME")) if os.getenv("MAIL_USERNAME") else None
+    APP_BASE_URL = os.getenv("APP_BASE_URL", "")
     GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "uploads")
     AUDIO_FOLDER = os.getenv("AUDIO_FOLDER", "audio")

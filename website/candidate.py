@@ -12,7 +12,7 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import getSampleStyleSheet
 
 from . import db
-from .models import Job, Application, CandidateProfile, Company, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
+from .models import Job, Application, CandidateProfile, Company, Notification, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
 
 from ai_services import (
     extract_text_from_file,
@@ -260,8 +260,23 @@ def interview_chat(job_id, application_id):
         transcript_lines = [f"{m.get('role')}: {m.get('content')}" for m in history]
         transcript_lines.append(f"assistant: {reply}")
         application.interview_transcript = "\n".join(transcript_lines)
-        application.interview_verdict = verdict_match.group(1).title()
+        verdict = verdict_match.group(1).title()
+        application.interview_verdict = verdict
         application.status = 'interviewing'
+
+        if current_user.notifications_enabled:
+            job = Job.query.get(job_id)
+            positive = "Yes" in verdict
+            notif = Notification(
+                user_id=current_user.id,
+                message=(
+                    f"Your AI interview for {job.title} is complete — verdict: {verdict}."
+                    if positive else
+                    f"Your AI interview for {job.title} is complete. The employer will review your result."
+                ),
+                link=url_for('candidate.dashboard', _external=False),
+            )
+            db.session.add(notif)
 
     db.session.commit()
 
@@ -433,3 +448,46 @@ def suggested_jobs():
         })
 
     return jsonify({"suggestions": suggestions})
+
+
+@candidate.route('/notifications')
+@login_required
+def notifications():
+    notifs = (
+        Notification.query.filter_by(user_id=current_user.id)
+        .order_by(Notification.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    unread = sum(1 for n in notifs if not n.read)
+    return jsonify({
+        "notifications": [
+            {
+                "id": n.id,
+                "message": n.message,
+                "link": n.link,
+                "read": n.read,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in notifs
+        ],
+        "unread_count": unread,
+        "notifications_enabled": current_user.notifications_enabled,
+    })
+
+
+@candidate.route('/notifications/read-all', methods=['POST'])
+@login_required
+def mark_notifications_read():
+    Notification.query.filter_by(user_id=current_user.id, read=False).update({"read": True})
+    db.session.commit()
+    return jsonify({"status": "ok"})
+
+
+@candidate.route('/notifications/preferences', methods=['POST'])
+@login_required
+def notification_preferences():
+    data = request.get_json() or {}
+    current_user.notifications_enabled = bool(data.get("enabled", True))
+    db.session.commit()
+    return jsonify({"notifications_enabled": current_user.notifications_enabled})
