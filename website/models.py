@@ -14,6 +14,26 @@ JOB_CATEGORIES = [
     "Other",
 ]
 
+JOB_LOCATIONS = [
+    "Remote",
+    "Remote — US Only",
+    "Hybrid",
+    "New York, NY",
+    "San Francisco, CA",
+    "Los Angeles, CA",
+    "Chicago, IL",
+    "Austin, TX",
+    "Seattle, WA",
+    "Boston, MA",
+    "Denver, CO",
+    "Atlanta, GA",
+    "Miami, FL",
+    "Washington, DC",
+    "Toronto, Canada",
+    "London, UK",
+    "Other",
+]
+
 COUNTRIES = [
     "United States", "Canada", "United Kingdom", "Ireland", "Australia",
     "New Zealand", "Germany", "France", "Spain", "Italy", "Netherlands",

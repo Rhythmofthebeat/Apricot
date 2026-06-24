@@ -12,7 +12,7 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import getSampleStyleSheet
 
 from . import db
-from .models import Job, Application, CandidateProfile, Company, JOB_CATEGORIES, COUNTRIES
+from .models import Job, Application, CandidateProfile, Company, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
 
 from ai_services import (
     extract_text_from_file,
@@ -61,6 +61,7 @@ def _extract_score(result_text):
 def browse_jobs():
     query = request.args.get('q', '').strip()
     category = request.args.get('category', '').strip()
+    location = request.args.get('location', '').strip()
 
     jobs_query = Job.query.filter_by(status='open')
     if query:
@@ -69,6 +70,8 @@ def browse_jobs():
         )
     if category in JOB_CATEGORIES:
         jobs_query = jobs_query.filter_by(category=category)
+    if location in JOB_LOCATIONS:
+        jobs_query = jobs_query.filter_by(location=location)
 
     jobs = jobs_query.order_by(Job.created_at.desc()).all()
     return render_template(
@@ -76,7 +79,9 @@ def browse_jobs():
         jobs=jobs,
         query=query,
         category=category,
+        location=location,
         categories=JOB_CATEGORIES,
+        locations=JOB_LOCATIONS,
     )
 
 
@@ -289,7 +294,14 @@ def dashboard():
         app.id: json.loads(app.scheduled_meeting) if app.scheduled_meeting else None
         for app in applications
     }
-    return render_template("candidate_dashboard.html", applications=applications, meetings=meetings)
+    candidate_profile = CandidateProfile.query.filter_by(user_id=current_user.id).first()
+    has_profile = bool(candidate_profile and (candidate_profile.resume_text or '').strip())
+    return render_template(
+        "candidate_dashboard.html",
+        applications=applications,
+        meetings=meetings,
+        has_profile=has_profile,
+    )
 
 
 @candidate.route('/profile')

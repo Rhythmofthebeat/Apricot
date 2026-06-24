@@ -31,7 +31,8 @@ from ai_services import (
 
 #  Load env & config
 load_dotenv()
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = Config.GOOGLE_APPLICATION_CREDENTIALS
+if Config.GOOGLE_APPLICATION_CREDENTIALS:
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = Config.GOOGLE_APPLICATION_CREDENTIALS
 
 # App setup
 app = create_app()

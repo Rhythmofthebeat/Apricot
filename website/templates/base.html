@@ -311,6 +311,14 @@
             </button>
 
             <div class="collapse navbar-collapse" id="navbar">
+                {% if current_user.is_authenticated %}
+                <form class="d-flex me-3" method="GET" action="{{ url_for('candidate.browse_jobs') }}">
+                    <div class="input-group input-group-sm" style="width:220px;">
+                        <input type="text" name="q" class="form-control" placeholder="Search jobs...">
+                        <button class="btn btn-primary" type="submit"><i class="fas fa-search"></i></button>
+                    </div>
+                </form>
+                {% endif %}
                 <div class="navbar-nav ms-auto">
                     {% if current_user.is_authenticated %}
                         {% if current_user.role == 'employer' %}

@@ -7,16 +7,22 @@
 <div class="row mb-3">
     <div class="col-12">
         <h1 class="h3 fw-bold mb-3">Browse Jobs</h1>
-        <form method="GET" class="d-flex gap-2 mb-3">
+        <form method="GET" class="d-flex gap-2 mb-3 flex-wrap">
+            <input type="text" name="q" class="form-control" style="min-width:200px;flex:1;" placeholder="Search by title or keyword..." value="{{ query }}">
+            <select name="location" class="form-control" style="max-width:200px;">
+                <option value="">All Locations</option>
+                {% for loc in locations %}
+                    <option value="{{ loc }}" {{ 'selected' if location == loc }}>{{ loc }}</option>
+                {% endfor %}
+            </select>
             <input type="hidden" name="category" value="{{ category }}">
-            <input type="text" name="q" class="form-control" placeholder="Search by title or keyword..." value="{{ query }}">
             <button type="submit" class="btn btn-primary">Search</button>
         </form>
 
         <div>
-            <a href="{{ url_for('candidate.browse_jobs', q=query) }}" class="category-pill {{ 'active' if not category }}">All</a>
+            <a href="{{ url_for('candidate.browse_jobs', q=query, location=location) }}" class="category-pill {{ 'active' if not category }}">All</a>
             {% for cat in categories %}
-                <a href="{{ url_for('candidate.browse_jobs', q=query, category=cat) }}" class="category-pill {{ 'active' if category == cat }}">{{ cat }}</a>
+                <a href="{{ url_for('candidate.browse_jobs', q=query, location=location, category=cat) }}" class="category-pill {{ 'active' if category == cat }}">{{ cat }}</a>
             {% endfor %}
         </div>
     </div>

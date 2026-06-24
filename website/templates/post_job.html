@@ -33,7 +33,11 @@
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label class="form-label fw-bold">Location</label>
-                            <input type="text" class="form-control" name="location" value="{{ job.location if job else '' }}" placeholder="e.g. Remote, San Francisco">
+                            <select class="form-control" name="location">
+                                {% for loc in locations %}
+                                    <option value="{{ loc }}" {{ 'selected' if job and job.location == loc }}>{{ loc }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label fw-bold">Employment Type</label>

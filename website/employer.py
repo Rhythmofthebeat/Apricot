@@ -31,7 +31,7 @@ def _existing_interview_questions(job):
 from flask_login import login_required, current_user
 from functools import wraps
 from . import db
-from .models import Company, Job, Application, JOB_CATEGORIES
+from .models import Company, Job, Application, JOB_CATEGORIES, JOB_LOCATIONS
 
 from ai_services import generate_interview_question_preview
 from email_utils import send_branded_email
@@ -150,7 +150,8 @@ def post_job():
         if not title or not description:
             flash("Title and description are required.", "error")
             return render_template(
-                "post_job.html", categories=JOB_CATEGORIES, interview_lengths=INTERVIEW_LENGTH_OPTIONS,
+                "post_job.html", categories=JOB_CATEGORIES, locations=JOB_LOCATIONS,
+                interview_lengths=INTERVIEW_LENGTH_OPTIONS,
                 interview_questions=json.loads(interview_questions) if interview_questions else [],
             )
 
@@ -170,7 +171,7 @@ def post_job():
         flash("Job posted!", "success")
         return redirect(url_for('employer.dashboard'))
 
-    return render_template("post_job.html", categories=JOB_CATEGORIES, interview_lengths=INTERVIEW_LENGTH_OPTIONS, interview_questions=[])
+    return render_template("post_job.html", categories=JOB_CATEGORIES, locations=JOB_LOCATIONS, interview_lengths=INTERVIEW_LENGTH_OPTIONS, interview_questions=[])
 
 
 @employer.route('/employer/jobs/<int:job_id>/edit', methods=['GET', 'POST'])
@@ -195,7 +196,8 @@ def edit_job(job_id):
         if not title or not description:
             flash("Title and description are required.", "error")
             return render_template(
-                "post_job.html", job=job, categories=JOB_CATEGORIES, interview_lengths=INTERVIEW_LENGTH_OPTIONS,
+                "post_job.html", job=job, categories=JOB_CATEGORIES, locations=JOB_LOCATIONS,
+                interview_lengths=INTERVIEW_LENGTH_OPTIONS,
                 interview_questions=_existing_interview_questions(job),
             )
 
@@ -213,7 +215,8 @@ def edit_job(job_id):
         return redirect(url_for('employer.dashboard'))
 
     return render_template(
-        "post_job.html", job=job, categories=JOB_CATEGORIES, interview_lengths=INTERVIEW_LENGTH_OPTIONS,
+        "post_job.html", job=job, categories=JOB_CATEGORIES, locations=JOB_LOCATIONS,
+        interview_lengths=INTERVIEW_LENGTH_OPTIONS,
         interview_questions=_existing_interview_questions(job),
     )
 
