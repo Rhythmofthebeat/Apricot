@@ -2,6 +2,35 @@
 from . import db
 from flask_login import UserMixin
 from sqlalchemy.sql import func
+import json as _json
+
+COMPANY_SIZES = [
+    "1–10",
+    "11–50",
+    "51–200",
+    "201–500",
+    "501–1,000",
+    "1,000+",
+]
+
+INDUSTRIES = [
+    "Technology",
+    "Healthcare",
+    "Finance & Banking",
+    "Marketing & Advertising",
+    "Sales",
+    "Design & Creative",
+    "Operations & Logistics",
+    "Education",
+    "Legal",
+    "Real Estate",
+    "Manufacturing",
+    "Retail & E-commerce",
+    "Media & Entertainment",
+    "Non-profit",
+    "Government",
+    "Other",
+]
 
 JOB_CATEGORIES = [
     "Software",
@@ -65,6 +94,10 @@ class Company(db.Model):
     owner_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     name = db.Column(db.String(200), nullable=False)
     website = db.Column(db.String(300))
+    description = db.Column(db.Text)
+    industry = db.Column(db.String(100))
+    size = db.Column(db.String(50))
+    location = db.Column(db.String(200))
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
 
@@ -80,9 +113,42 @@ class Job(db.Model):
     interview_length = db.Column(db.String(20), nullable=False, default="standard")  # short | standard | thorough
     interview_focus = db.Column(db.Text)  # optional employer instructions on what the AI should cover
     interview_questions = db.Column(db.Text)  # JSON list of employer-curated questions the AI should make sure to ask
+    salary_usd = db.Column(db.Integer)  # optional annual salary in USD dollars; drives placement fee calc
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     company = db.relationship("Company", backref="jobs")
+
+    _SECTION_LABELS = [
+        ('about', 'About the Role'),
+        ('requirements', 'Requirements'),
+        ('preferred', 'Preferred Qualifications'),
+        ('what_you_do', "What You'll Do"),
+        ('contract_terms', 'Contract & Payment Terms'),
+    ]
+
+    @property
+    def description_sections(self):
+        """Return structured dict if description is JSON, else None."""
+        try:
+            data = _json.loads(self.description)
+            if isinstance(data, dict):
+                return data
+        except (ValueError, TypeError):
+            pass
+        return None
+
+    @property
+    def description_text(self):
+        """Return plain-text description suitable for AI calls."""
+        sections = self.description_sections
+        if sections:
+            parts = []
+            for key, label in self._SECTION_LABELS:
+                val = (sections.get(key) or '').strip()
+                if val:
+                    parts.append(f"{label}:\n{val}")
+            return '\n\n'.join(parts) if parts else self.description
+        return self.description
 
 
 class CandidateProfile(db.Model):
@@ -107,6 +173,8 @@ class Application(db.Model):
     interview_audio_log = db.Column(db.Text)  # JSON list of {role, text, audio_filename}
     interview_verdict = db.Column(db.String(20))  # "Strong Yes" | "Yes" | "No" | "Strong No"
     status = db.Column(db.String(20), nullable=False, default="applied")  # applied | interviewing | rejected | hired
+    fee_paid = db.Column(db.Boolean, nullable=False, default=False)
+    stripe_payment_link = db.Column(db.String(500))  # Stripe Payment Link URL sent to candidate on hire
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     job = db.relationship("Job", backref="applications")
@@ -120,3 +188,29 @@ class Notification(db.Model):
     link = db.Column(db.String(300))
     read = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+
+class CompanyMember(db.Model):
+    """Additional employer users who can manage a company's jobs and applicants."""
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    joined_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    company = db.relationship("Company", backref="members")
+    user = db.relationship("User", backref="company_memberships")
+
+    __table_args__ = (db.UniqueConstraint("company_id", "user_id"),)
+
+
+class CompanyInvite(db.Model):
+    """Pending invitation for someone to join a company as a team member."""
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=False)
+    invited_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    email = db.Column(db.String(150), nullable=False)
+    token = db.Column(db.String(100), nullable=False, unique=True)
+    used = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    company = db.relationship("Company", backref="invites")

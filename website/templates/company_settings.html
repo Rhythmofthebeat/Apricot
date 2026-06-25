@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block title %}Company Settings — {{ company.name }}{% endblock %}
+
+{% block head %}
+<style>
+    .settings-nav .settings-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        text-decoration: none;
+        transition: background 0.15s, color 0.15s;
+    }
+    .settings-nav .settings-nav-item:hover,
+    .settings-nav .settings-nav-item.active {
+        background: var(--primary-soft);
+        color: var(--primary);
+    }
+    .settings-nav .settings-nav-item i { width: 16px; text-align: center; }
+    .section-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--text-muted);
+        margin-bottom: 16px;
+    }
+    .company-logo-preview {
+        width: 64px;
+        height: 64px;
+        border-radius: 12px;
+        background: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 800;
+        font-size: 1.6rem;
+        flex-shrink: 0;
+    }
+    .member-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .member-row:last-child { border-bottom: none; }
+    .member-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        flex-shrink: 0;
+    }
+    .invite-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        background: var(--warning-soft);
+        border: 1px solid #fcd34d;
+        border-radius: var(--radius);
+        margin-bottom: 8px;
+        font-size: 0.85rem;
+    }
+    .invite-row i { color: var(--warning); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+    <!-- Left sidebar nav -->
+    <div class="col-lg-3">
+        <div class="settings-nav d-flex flex-column gap-1">
+            <a href="#profile" class="settings-nav-item active" onclick="showSection('profile', this)">
+                <i class="fas fa-building"></i> Company Profile
+            </a>
+            <a href="#team" class="settings-nav-item" onclick="showSection('team', this)">
+                <i class="fas fa-users"></i> Team Members
+            </a>
+            <div class="mt-3 pt-3" style="border-top:1px solid var(--border);">
+                <a href="{{ url_for('employer.dashboard') }}" class="settings-nav-item">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+                <a href="{{ url_for('employer.company_page', company_id=company.id) }}" class="settings-nav-item" target="_blank">
+                    <i class="fas fa-external-link"></i> View Public Page
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main content -->
+    <div class="col-lg-9">
+
+        <!-- ===== PROFILE SECTION ===== -->
+        <div id="section-profile">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-building me-2"></i>Company Profile
+                </div>
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center gap-4 mb-4 pb-4" style="border-bottom:1px solid var(--border);">
+                        <div class="company-logo-preview">{{ company.name[0]|upper }}</div>
+                        <div>
+                            <div class="fw-bold mb-1">{{ company.name }}</div>
+                            <div class="text-muted small">{{ company.industry or "Industry not set" }} &middot; {{ company.location or "Location not set" }}</div>
+                            <a href="{{ url_for('employer.company_page', company_id=company.id) }}" target="_blank" class="small text-primary text-decoration-none">
+                                <i class="fas fa-external-link me-1" style="font-size:0.7rem;"></i>View public page
+                            </a>
+                        </div>
+                    </div>
+
+                    <form method="POST">
+                        <input type="hidden" name="action" value="save_profile">
+
+                        <div class="section-label">Basic Info</div>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-8">
+                                <label class="form-label fw-semibold">Company Name <span class="text-danger">*</span></label>
+                                <input type="text" name="name" class="form-control" value="{{ company.name }}" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Industry</label>
+                                <select name="industry" class="form-select">
+                                    <option value="">Select industry</option>
+                                    {% for ind in industries %}
+                                        <option value="{{ ind }}" {{ 'selected' if company.industry == ind }}>{{ ind }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Headquarters / Location</label>
+                                <input type="text" name="location" class="form-control" value="{{ company.location or '' }}" placeholder="e.g. San Francisco, CA">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold">Company Size</label>
+                                <select name="size" class="form-select">
+                                    <option value="">Select size</option>
+                                    {% for sz in sizes %}
+                                        <option value="{{ sz }}" {{ 'selected' if company.size == sz }}>{{ sz }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold">Website</label>
+                                <input type="url" name="website" class="form-control" value="{{ company.website or '' }}" placeholder="https://...">
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">About the Company</label>
+                            <textarea name="description" class="form-control" rows="5"
+                                placeholder="Describe your company — mission, culture, what you build, who you're looking for...">{{ company.description or '' }}</textarea>
+                            <div class="form-text">This appears on your public company page visible to candidates.</div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i> Save Changes
+                            </button>
+                            <a href="{{ url_for('employer.company_page', company_id=company.id) }}" target="_blank" class="btn btn-outline-secondary">
+                                <i class="fas fa-external-link me-1"></i> Preview
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== TEAM SECTION ===== -->
+        <div id="section-team" style="display:none;">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-users me-2"></i>Team Members
+                </div>
+                <div class="card-body p-4">
+                    <div class="section-label">Current team ({{ members|length + 1 }} member{{ 's' if members|length + 1 != 1 }})</div>
+
+                    <!-- Owner row -->
+                    <div class="member-row">
+                        <div class="member-avatar">{{ current_user.first_name[0]|upper if current_user.first_name else current_user.email[0]|upper }}</div>
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold small">{{ current_user.first_name or '' }} <span class="text-muted fw-normal">{{ current_user.email }}</span></div>
+                            <div class="text-muted" style="font-size:0.75rem;">Owner · Can manage all jobs and team members</div>
+                        </div>
+                        <span class="badge bg-primary bg-opacity-10 text-primary" style="font-size:0.7rem; font-weight:600; padding:4px 10px; border-radius:999px;">Owner</span>
+                    </div>
+
+                    {% for member in members %}
+                    <div class="member-row">
+                        <div class="member-avatar">{{ member.user.first_name[0]|upper if member.user.first_name else member.user.email[0]|upper }}</div>
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold small">{{ member.user.first_name or '' }} <span class="text-muted fw-normal">{{ member.user.email }}</span></div>
+                            <div class="text-muted" style="font-size:0.75rem;">Member · Joined {{ member.joined_at.strftime('%b %d, %Y') if member.joined_at else 'N/A' }}</div>
+                        </div>
+                        {% if is_owner %}
+                        <form method="POST" onsubmit="return confirm('Remove this team member?')">
+                            <input type="hidden" name="action" value="remove_member">
+                            <input type="hidden" name="member_id" value="{{ member.id }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" style="font-size:0.75rem;">
+                                <i class="fas fa-times"></i> Remove
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+
+                    {% if not members %}
+                    <p class="text-muted small mb-0 mt-2">No additional team members yet. Invite colleagues below to give them access.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if pending_invites %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-clock me-2"></i>Pending Invitations
+                </div>
+                <div class="card-body p-3">
+                    {% for invite in pending_invites %}
+                    <div class="invite-row">
+                        <i class="fas fa-envelope"></i>
+                        <span class="flex-grow-1"><strong>{{ invite.email }}</strong> — invite sent {{ invite.created_at.strftime('%b %d') if invite.created_at else '' }}</span>
+                        <span class="text-muted small">Waiting for them to sign up &amp; accept</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if is_owner %}
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-user-plus me-2"></i>Invite a Team Member
+                </div>
+                <div class="card-body p-4">
+                    <p class="text-muted small mb-3">
+                        Invite a colleague by email. They'll receive a link to create an employer account (or log in)
+                        and join your company — giving them access to all your job postings and applicants.
+                    </p>
+                    <form action="{{ url_for('employer.invite_member') }}" method="POST">
+                        <div class="d-flex gap-2">
+                            <input type="email" name="email" class="form-control" placeholder="colleague@yourcompany.com" required style="max-width:320px;">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-paper-plane me-1"></i> Send Invite
+                            </button>
+                        </div>
+                        <div class="form-text mt-2">The invitee must sign up or log in with the same email address to accept.</div>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-info small">
+                <i class="fas fa-circle-info me-1"></i>
+                Only the company owner can invite team members. Contact the owner to add more colleagues.
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showSection(name, el) {
+    document.querySelectorAll('[id^="section-"]').forEach(s => s.style.display = 'none');
+    document.getElementById('section-' + name).style.display = 'block';
+    document.querySelectorAll('.settings-nav-item').forEach(a => a.classList.remove('active'));
+    el.classList.add('active');
+    return false;
+}
+
+// Activate section from hash
+const hash = window.location.hash.replace('#', '');
+if (hash) {
+    const el = document.querySelector(`.settings-nav-item[href="#${hash}"]`);
+    if (el) showSection(hash, el);
+}
+</script>
+{% endblock %}

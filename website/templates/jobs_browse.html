@@ -3,12 +3,94 @@
 
 {% block container_class %}wide{% endblock %}
 
+{% block head %}
+<style>
+    .sort-dropdown {
+        position: relative;
+        display: inline-block;
+    }
+    .sort-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        font-size: 0.88rem;
+        font-weight: 500;
+        color: var(--text);
+        cursor: pointer;
+        white-space: nowrap;
+        transition: border-color 0.15s;
+    }
+    .sort-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .sort-btn i { font-size: 0.85rem; }
+    .sort-menu {
+        display: none;
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        min-width: 180px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        z-index: 200;
+        overflow: hidden;
+    }
+    .sort-menu.open { display: block; }
+    .sort-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 16px;
+        font-size: 0.88rem;
+        font-weight: 500;
+        color: var(--text);
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.1s;
+    }
+    .sort-option:hover { background: var(--bg); }
+    .sort-option.active { color: var(--primary); }
+    .sort-option .sort-check { margin-left: auto; color: var(--primary); }
+    .sort-option i { width: 16px; text-align: center; color: var(--text-muted); }
+    .sort-option.active i { color: var(--primary); }
+    .salary-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--success);
+        background: var(--success-soft);
+        border-radius: 999px;
+        padding: 2px 8px;
+        margin-top: 4px;
+    }
+    .hired-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.72rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 2px 8px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-3">
     <div class="col-12">
         <h1 class="h3 fw-bold mb-3">Browse Jobs</h1>
-        <form method="GET" class="d-flex gap-2 mb-3 flex-wrap">
-            <input type="text" name="q" class="form-control" style="min-width:200px;flex:1;" placeholder="Search by title or keyword..." value="{{ query }}">
+        <form method="GET" id="searchForm" class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+            <input type="text" name="q" class="form-control" style="min-width:200px;flex:1;"
+                   placeholder="Search by title or keyword..." value="{{ query }}">
             <select name="location" class="form-control" style="max-width:200px;">
                 <option value="">All Locations</option>
                 {% for loc in locations %}
@@ -16,13 +98,50 @@
                 {% endfor %}
             </select>
             <input type="hidden" name="category" value="{{ category }}">
+            <input type="hidden" name="sort" id="sortField" value="{{ sort }}">
             <button type="submit" class="btn btn-primary">Search</button>
+
+            <!-- Sort dropdown -->
+            <div class="sort-dropdown" id="sortDropdown">
+                <button type="button" class="sort-btn" id="sortToggleBtn">
+                    {% if sort == 'priority' %}
+                        <i class="fas fa-clock-rotate-left"></i> Priority
+                    {% elif sort == 'trending' %}
+                        <i class="fas fa-fire"></i> Trending
+                    {% elif sort == 'pay' %}
+                        <i class="fas fa-money-bill-wave"></i> Most Pay
+                    {% else %}
+                        <i class="fas fa-clock"></i> Newest
+                    {% endif %}
+                    <i class="fas fa-chevron-up-down" style="font-size:0.7rem; opacity:0.6;"></i>
+                </button>
+                <div class="sort-menu" id="sortMenu">
+                    <a class="sort-option {{ 'active' if sort == 'priority' }}" href="#" data-sort="priority">
+                        <i class="fas fa-clock-rotate-left"></i> Priority
+                        {% if sort == 'priority' %}<i class="fas fa-check sort-check"></i>{% endif %}
+                    </a>
+                    <a class="sort-option {{ 'active' if sort == 'newest' or not sort }}" href="#" data-sort="newest">
+                        <i class="fas fa-clock"></i> Newest
+                        {% if sort == 'newest' or not sort %}<i class="fas fa-check sort-check"></i>{% endif %}
+                    </a>
+                    <a class="sort-option {{ 'active' if sort == 'trending' }}" href="#" data-sort="trending">
+                        <i class="fas fa-fire"></i> Trending
+                        {% if sort == 'trending' %}<i class="fas fa-check sort-check"></i>{% endif %}
+                    </a>
+                    <a class="sort-option {{ 'active' if sort == 'pay' }}" href="#" data-sort="pay">
+                        <i class="fas fa-money-bill-wave"></i> Most Pay
+                        {% if sort == 'pay' %}<i class="fas fa-check sort-check"></i>{% endif %}
+                    </a>
+                </div>
+            </div>
         </form>
 
         <div>
-            <a href="{{ url_for('candidate.browse_jobs', q=query, location=location) }}" class="category-pill {{ 'active' if not category }}">All</a>
+            <a href="{{ url_for('candidate.browse_jobs', q=query, location=location, sort=sort) }}"
+               class="category-pill {{ 'active' if not category }}">All</a>
             {% for cat in categories %}
-                <a href="{{ url_for('candidate.browse_jobs', q=query, location=location, category=cat) }}" class="category-pill {{ 'active' if category == cat }}">{{ cat }}</a>
+                <a href="{{ url_for('candidate.browse_jobs', q=query, location=location, category=cat, sort=sort) }}"
+                   class="category-pill {{ 'active' if category == cat }}">{{ cat }}</a>
             {% endfor %}
         </div>
     </div>
@@ -36,16 +155,54 @@
     <div class="row g-3">
         {% for job in jobs %}
             <div class="col-md-6 col-lg-4 col-xl-3">
-                <a href="{{ url_for('candidate.job_detail', job_id=job.id) }}" class="text-decoration-none text-reset">
-                    <div class="job-card compact">
-                        <span class="badge-status applied mb-2">{{ job.category }}</span>
-                        <h3>{{ job.title }}</h3>
-                        <p class="text-muted job-card-meta mb-2">{{ job.company.name }} &middot; {{ job.location or "Remote" }} &middot; {{ job.employment_type or "Full-time" }}</p>
-                        <p class="job-card-desc mb-0">{{ job.description[:110] }}{{ '...' if job.description|length > 110 else '' }}</p>
+                <div class="job-card compact" role="button" style="cursor:pointer;"
+                     onclick="window.location='{{ url_for('candidate.job_detail', job_id=job.id) }}'">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="badge-status applied">{{ job.category }}</span>
+                        {% set hired_n = job.applications | selectattr('status', 'equalto', 'hired') | list | length %}
+                        {% if hired_n > 0 %}
+                            <span class="hired-badge"><i class="fas fa-trophy" style="font-size:0.65rem;color:#059669;"></i> {{ hired_n }} hired</span>
+                        {% endif %}
                     </div>
-                </a>
+                    <h3>{{ job.title }}</h3>
+                    <p class="text-muted job-card-meta mb-2">
+                        <a href="{{ url_for('employer.company_page', company_id=job.company.id) }}"
+                           class="text-muted fw-semibold"
+                           style="text-decoration:none;"
+                           onclick="event.stopPropagation();">{{ job.company.name }}</a>
+                        &middot; {{ job.location or "Remote" }} &middot; {{ job.employment_type or "Full-time" }}
+                    </p>
+                    {% if job.salary_usd %}
+                        <span class="salary-badge"><i class="fas fa-dollar-sign"></i> ${{ "{:,.0f}".format(job.salary_usd) }}/yr</span>
+                    {% endif %}
+                    {% set preview = job.description_text %}
+                    <p class="job-card-desc mb-0 mt-2">{{ preview[:110] }}{{ '...' if preview|length > 110 else '' }}</p>
+                </div>
             </div>
         {% endfor %}
     </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const sortToggleBtn = document.getElementById("sortToggleBtn");
+const sortMenu = document.getElementById("sortMenu");
+const sortField = document.getElementById("sortField");
+
+sortToggleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    sortMenu.classList.toggle("open");
+});
+
+document.querySelectorAll(".sort-option").forEach(option => {
+    option.addEventListener("click", (e) => {
+        e.preventDefault();
+        sortField.value = option.dataset.sort;
+        document.getElementById("searchForm").submit();
+    });
+});
+
+document.addEventListener("click", () => sortMenu.classList.remove("open"));
+</script>
 {% endblock %}

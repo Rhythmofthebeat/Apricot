@@ -1,30 +1,85 @@
 {% extends "base.html" %}
-{% block title %}My Dashboard{% endblock %}
+{% block title %}My Applications{% endblock %}
+
+{% block head %}
+<style>
+    .app-row {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 20px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        transition: border-color 0.13s;
+    }
+    .app-row:hover { border-color: #c7d2fe; }
+    .app-company-dot {
+        width: 40px; height: 40px;
+        border-radius: 10px;
+        background: var(--primary-soft);
+        color: var(--primary);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 800; font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+    .app-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
+    .app-meta { font-size: 0.78rem; color: var(--text-muted); }
+    .meeting-callout {
+        display: flex; align-items: center; gap: 7px;
+        background: var(--primary-soft); color: var(--primary);
+        border-radius: 8px; padding: 6px 12px;
+        font-size: 0.78rem; font-weight: 600; margin-top: 8px;
+    }
+    .meeting-callout a { color: var(--primary); text-decoration: underline; }
+    .empty-state {
+        background: var(--surface);
+        border: 1px dashed var(--border);
+        border-radius: var(--radius);
+        padding: 56px 24px;
+        text-align: center;
+    }
+    .empty-icon { font-size: 2.5rem; color: var(--border); margin-bottom: 14px; display: block; }
+    .suggest-row {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 16px; padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+    }
+    .suggest-row:last-child { border-bottom: none; }
+    .suggest-row .suggest-info { flex-grow: 1; min-width: 0; }
+    .suggest-row a { font-weight: 700; font-size: 0.9rem; text-decoration: none; color: var(--text); }
+    .suggest-row a:hover { color: var(--primary); }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="row g-4">
 
-    <!-- Suggested for You -->
+    <!-- Suggested Jobs -->
     <div class="col-12">
-        <div class="card">
+        <div class="card mb-0">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="fas fa-bullseye me-2"></i>Suggested for You</span>
+                <span><i class="fas fa-bullseye me-2"></i>Suggested for you</span>
                 <a href="{{ url_for('candidate.profile') }}#suggested-pane" class="btn btn-sm btn-outline-primary">See all</a>
             </div>
-            <div class="card-body p-3">
+            <div class="card-body p-0">
                 {% if has_profile %}
-                    <div id="dashSuggestedLoading" class="text-muted small py-2">
-                        <i class="fas fa-spinner fa-spin me-1"></i> Finding best-fit roles…
+                    <div id="dashSuggestedLoading" class="text-muted small p-4 d-flex align-items-center gap-2">
+                        <i class="fas fa-spinner fa-spin"></i> Finding best-fit roles…
                     </div>
                     <div id="dashSuggestedList"></div>
-                    <div id="dashSuggestedEmpty" class="text-muted small py-2" style="display:none;">
+                    <div id="dashSuggestedEmpty" class="text-muted small p-4" style="display:none;">
                         No open roles match your profile right now — check back as new jobs are posted.
                     </div>
                 {% else %}
-                    <p class="text-muted small mb-2">Build your profile and we'll surface open roles that fit you.</p>
-                    <a href="{{ url_for('candidate.profile') }}" class="btn btn-primary btn-sm btn-rounded">
-                        <i class="fas fa-id-card me-1"></i> Build My Profile
-                    </a>
+                    <div class="p-4">
+                        <p class="text-muted small mb-3">Build your profile so we can surface open roles that fit you.</p>
+                        <a href="{{ url_for('candidate.profile') }}" class="btn btn-primary btn-sm btn-rounded">
+                            <i class="fas fa-id-card me-1"></i> Build My Profile
+                        </a>
+                    </div>
                 {% endif %}
             </div>
         </div>
@@ -32,51 +87,89 @@
 
     <!-- Applications -->
     <div class="col-12">
-        <h1 class="h3 fw-bold mb-3">My Applications</h1>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1 class="h4 fw-bold mb-0">My Applications</h1>
+            <a href="{{ url_for('candidate.browse_jobs') }}" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-search me-1"></i> Browse Jobs
+            </a>
+        </div>
 
         {% if not applications %}
-            <div class="card">
-                <div class="card-body text-center p-5">
-                    <p class="text-muted mb-3">You haven't applied to any jobs yet.</p>
-                    <a href="{{ url_for('candidate.browse_jobs') }}" class="btn btn-primary">Browse Jobs</a>
-                </div>
-            </div>
+        <div class="empty-state">
+            <i class="fas fa-inbox empty-icon"></i>
+            <h4 class="fw-bold mb-2">No applications yet</h4>
+            <p class="text-muted mb-4">Browse open roles and apply in minutes — AI scores your match before you even submit.</p>
+            <a href="{{ url_for('candidate.browse_jobs') }}" class="btn btn-primary btn-rounded">Browse Jobs</a>
+        </div>
         {% else %}
             {% for app in applications %}
-                <div class="applicant-row">
-                    <div class="flex-grow-1">
-                        <strong>{{ app.job.title }}</strong>
-                        <p class="text-muted small mb-0">{{ app.job.company.name }} &middot; Applied {{ app.created_at.strftime('%b %d, %Y') if app.created_at else '' }}</p>
-                        {% set meeting = meetings.get(app.id) %}
-                        {% if meeting %}
-                            <p class="small text-primary mb-0 mt-1">
-                                <i class="fas fa-calendar-check me-1"></i>
-                                {{ 'Video call' if meeting.type == 'virtual' else 'In-person meeting' }} on {{ meeting.date }} at {{ meeting.time }}
-                                {% if meeting.type == 'virtual' %} &mdash; <a href="{{ meeting.location_or_url }}" target="_blank">Join Link</a>{% else %} &mdash; {{ meeting.location_or_url }}{% endif %}
-                            </p>
+            <div class="app-row">
+
+                <div class="app-company-dot">{{ app.job.company.name[0]|upper }}</div>
+
+                <div class="flex-grow-1 min-width-0">
+                    <div class="app-title">{{ app.job.title }}</div>
+                    <div class="app-meta">
+                        <a href="{{ url_for('employer.company_page', company_id=app.job.company.id) }}"
+                           class="text-muted fw-semibold text-decoration-none">{{ app.job.company.name }}</a>
+                        &middot; Applied {{ app.created_at.strftime('%b %d, %Y') if app.created_at else '' }}
+                    </div>
+
+                    {% set meeting = meetings.get(app.id) %}
+                    {% if meeting %}
+                    <div class="meeting-callout">
+                        <i class="fas {{ 'fa-video' if meeting.type == 'virtual' else 'fa-handshake' }}"></i>
+                        {{ 'Video call' if meeting.type == 'virtual' else 'In-person' }}
+                        on {{ meeting.date }} at {{ meeting.time }}
+                        {% if meeting.type == 'virtual' %}
+                            &mdash; <a href="{{ meeting.location_or_url }}" target="_blank" rel="noopener">Join link</a>
+                        {% else %}
+                            &mdash; {{ meeting.location_or_url }}
                         {% endif %}
                     </div>
-                    <div class="text-center">
-                        {% set score = app.match_score or 0 %}
-                        <span class="score-pill {{ 'high' if score >= 70 else ('mid' if score >= 40 else 'low') }}">{{ score }}</span>
-                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Score -->
+                <div class="text-center flex-shrink-0">
+                    {% set score = app.match_score or 0 %}
+                    <span class="score-pill {{ 'high' if score >= 70 else ('mid' if score >= 40 else 'low') }}">{{ score }}</span>
+                    <div class="text-muted" style="font-size:0.65rem; margin-top:2px; font-weight:500;">MATCH</div>
+                </div>
+
+                <!-- Status + actions -->
+                <div class="d-flex flex-wrap gap-2 align-items-center flex-shrink-0">
                     {% if app.status == 'hired' %}
                         <span class="badge-status hired"><i class="fas fa-trophy me-1"></i> Hired</span>
+                        {% if app.stripe_payment_link and not app.fee_paid %}
+                            <a href="{{ app.stripe_payment_link }}" target="_blank" class="btn btn-warning btn-sm" style="font-size:0.75rem;">
+                                <i class="fas fa-credit-card me-1"></i> Pay Fee
+                            </a>
+                        {% elif app.fee_paid %}
+                            <span class="badge-status hired"><i class="fas fa-circle-check me-1"></i> Fee Paid</span>
+                        {% endif %}
                     {% elif app.status == 'rejected' %}
                         <span class="badge-status rejected">Not selected</span>
                     {% else %}
                         <span class="badge-status {{ app.status }}">{{ app.status }}</span>
                         {% if app.interview_verdict %}
-                            <span class="badge-status {{ 'hired' if 'Yes' in app.interview_verdict else 'rejected' }}">AI: {{ app.interview_verdict }}</span>
+                            <span class="badge-status {{ 'hired' if 'Yes' in app.interview_verdict else 'rejected' }}">
+                                <i class="fas fa-robot me-1" style="font-size:0.65rem;"></i>AI: {{ app.interview_verdict }}
+                            </span>
                         {% elif app.status == 'applied' %}
-                            <span class="badge-status rejected"><i class="fas fa-circle-exclamation me-1"></i> Interview Required</span>
-                            <a href="{{ url_for('candidate.interview', job_id=app.job_id, application_id=app.id) }}" class="btn btn-primary btn-sm">Start Interview</a>
+                            <a href="{{ url_for('candidate.interview', job_id=app.job_id, application_id=app.id) }}"
+                               class="btn btn-primary btn-sm">
+                                <i class="fas fa-microphone me-1"></i> Start Interview
+                            </a>
                         {% endif %}
                     {% endif %}
                 </div>
+
+            </div>
             {% endfor %}
         {% endif %}
     </div>
+
 </div>
 {% endblock %}
 
@@ -85,8 +178,8 @@
 <script>
 (async () => {
     const loading = document.getElementById("dashSuggestedLoading");
-    const list = document.getElementById("dashSuggestedList");
-    const empty = document.getElementById("dashSuggestedEmpty");
+    const list    = document.getElementById("dashSuggestedList");
+    const empty   = document.getElementById("dashSuggestedEmpty");
 
     try {
         const r = await fetch("{{ url_for('candidate.suggested_jobs') }}");
@@ -96,13 +189,13 @@
             return;
         }
         list.innerHTML = data.suggestions.slice(0, 4).map(s => `
-            <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
-                <div>
-                    <a href="${s.url}" class="fw-bold text-decoration-none">${s.title}</a>
+            <div class="suggest-row">
+                <div class="suggest-info">
+                    <a href="${s.url}">${s.title}</a>
                     <span class="text-muted small ms-2">${s.company}</span>
-                    <p class="text-muted small mb-0">${s.reason}</p>
+                    <p class="text-muted mb-0" style="font-size:0.78rem;">${s.reason}</p>
                 </div>
-                <span class="score-pill ms-3 ${s.score >= 70 ? 'high' : (s.score >= 40 ? 'mid' : 'low')}">${s.score}</span>
+                <span class="score-pill ms-2 ${s.score >= 70 ? 'high' : (s.score >= 40 ? 'mid' : 'low')}">${s.score}</span>
             </div>
         `).join("");
     } catch (_) {

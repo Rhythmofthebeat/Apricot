@@ -1,43 +1,24 @@
 import json
+import secrets
 
-from flask import Blueprint, render_template, request, flash, redirect, url_for, abort, jsonify
-
-MAX_INTERVIEW_QUESTIONS = 15
-
-
-def _parse_interview_questions(raw):
-    """Employer-edited question list comes in as a JSON array of strings from
-    the post-job form. Falls back to None (no curated list) on bad input
-    rather than failing the whole job save."""
-    if not raw:
-        return None
-    try:
-        questions = json.loads(raw)
-    except (ValueError, TypeError):
-        return None
-    if not isinstance(questions, list):
-        return None
-    cleaned = [q.strip() for q in questions if isinstance(q, str) and q.strip()]
-    return json.dumps(cleaned[:MAX_INTERVIEW_QUESTIONS]) if cleaned else None
-
-
-def _existing_interview_questions(job):
-    if not job or not job.interview_questions:
-        return []
-    try:
-        return json.loads(job.interview_questions)
-    except (ValueError, TypeError):
-        return []
+import stripe
+from flask import Blueprint, render_template, request, flash, redirect, url_for, abort, jsonify, current_app
 from flask_login import login_required, current_user
 from functools import wraps
-from . import db
-from .models import Company, Job, Application, Notification, JOB_CATEGORIES, JOB_LOCATIONS
 
+from . import db
+from .models import (
+    Company, Job, Application, Notification,
+    CompanyMember, CompanyInvite,
+    JOB_CATEGORIES, JOB_LOCATIONS, COMPANY_SIZES, INDUSTRIES,
+)
 from ai_services import generate_interview_question_preview
 from email_utils import send_branded_email
 
 employer = Blueprint('employer', __name__)
 
+MAX_INTERVIEW_QUESTIONS = 15
+PLATFORM_FEE_PERCENT = 12.5
 INTERVIEW_LENGTH_OPTIONS = ["short", "standard", "thorough"]
 
 STATUS_EMAIL_COPY = {
@@ -69,42 +50,125 @@ STATUS_EMAIL_COPY = {
 }
 
 
+# ------------------------------------------------------------------ #
+#  Auth helpers
+# ------------------------------------------------------------------ #
+
+def get_user_company():
+    """Return the Company this user owns or is a member of, or None."""
+    company = Company.query.filter_by(owner_user_id=current_user.id).first()
+    if company:
+        return company
+    membership = CompanyMember.query.filter_by(user_id=current_user.id).first()
+    if membership:
+        return membership.company
+    return None
+
+
 def employer_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         if current_user.role != 'employer':
             abort(403)
-        if not Company.query.filter_by(owner_user_id=current_user.id).first():
+        if not get_user_company():
             return redirect(url_for('auth.complete_employer_profile'))
         return view(*args, **kwargs)
     return wrapped
 
 
 def get_owned_company():
-    company = Company.query.filter_by(owner_user_id=current_user.id).first()
+    company = get_user_company()
     if not company:
         abort(403)
     return company
 
 
+def is_company_owner():
+    return Company.query.filter_by(owner_user_id=current_user.id).first() is not None
+
+
+# ------------------------------------------------------------------ #
+#  Private helpers
+# ------------------------------------------------------------------ #
+
+def _create_stripe_payment_link(application, job, company, candidate):
+    stripe.api_key = current_app.config.get("STRIPE_SECRET_KEY")
+    if not stripe.api_key or not job.salary_usd:
+        return None
+    fee_cents = int(job.salary_usd * PLATFORM_FEE_PERCENT / 100 * 100)
+    if fee_cents <= 0:
+        return None
+    try:
+        product = stripe.Product.create(
+            name=f"Avants AI Placement Fee — {job.title} at {company.name}",
+            metadata={"application_id": str(application.id)},
+        )
+        price = stripe.Price.create(product=product.id, unit_amount=fee_cents, currency="usd")
+        link = stripe.PaymentLink.create(
+            line_items=[{"price": price.id, "quantity": 1}],
+            metadata={"application_id": str(application.id)},
+            customer_creation="always",
+        )
+        return link.url
+    except Exception as e:
+        print("Stripe payment link creation failed:", e)
+        return None
+
+
+def _extract_description_text(raw):
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            parts = []
+            for key in ('about', 'requirements', 'preferred', 'what_you_do', 'contract_terms'):
+                val = (data.get(key) or '').strip()
+                if val:
+                    parts.append(val)
+            return '\n\n'.join(parts)
+    except (ValueError, TypeError):
+        pass
+    return raw or ''
+
+
+def _parse_interview_questions(raw):
+    if not raw:
+        return None
+    try:
+        questions = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(questions, list):
+        return None
+    cleaned = [q.strip() for q in questions if isinstance(q, str) and q.strip()]
+    return json.dumps(cleaned[:MAX_INTERVIEW_QUESTIONS]) if cleaned else None
+
+
+def _existing_interview_questions(job):
+    if not job or not job.interview_questions:
+        return []
+    try:
+        return json.loads(job.interview_questions)
+    except (ValueError, TypeError):
+        return []
+
+
 def summarize_explanation(explanation, max_len=140):
-    """Condense a full match-explanation into a one-line teaser for the
-    applicant card, preferring the resume's strengths."""
     if not explanation:
         return "No summary available..."
-
     match_lines = [
         line.strip().lstrip('+').strip()
         for line in explanation.split('\n')
         if line.strip().startswith('+')
     ]
     text = " ".join(match_lines[:2]) if match_lines else explanation.strip().replace('\n', ' ')
-
     if len(text) > max_len:
         text = text[:max_len].rstrip()
-
     return text + "..."
 
+
+# ------------------------------------------------------------------ #
+#  Employer Dashboard
+# ------------------------------------------------------------------ #
 
 @employer.route('/employer/dashboard')
 @login_required
@@ -112,16 +176,33 @@ def summarize_explanation(explanation, max_len=140):
 def dashboard():
     company = get_owned_company()
     jobs = Job.query.filter_by(company_id=company.id).order_by(Job.created_at.desc()).all()
-    applicant_counts = {
-        job.id: Application.query.filter_by(job_id=job.id).count() for job in jobs
-    }
+    applicant_counts = {job.id: Application.query.filter_by(job_id=job.id).count() for job in jobs}
+    hired_counts = {job.id: Application.query.filter_by(job_id=job.id, status='hired').count() for job in jobs}
+
+    total_applicants = sum(applicant_counts.values())
+    total_hired = sum(hired_counts.values())
+    open_jobs = sum(1 for j in jobs if j.status == 'open')
+
+    members = CompanyMember.query.filter_by(company_id=company.id).all()
+    owner_is_current = company.owner_user_id == current_user.id
+
     return render_template(
         "employer_dashboard.html",
         company=company,
         jobs=jobs,
         applicant_counts=applicant_counts,
+        hired_counts=hired_counts,
+        total_applicants=total_applicants,
+        total_hired=total_hired,
+        open_jobs=open_jobs,
+        members=members,
+        is_owner=owner_is_current,
     )
 
+
+# ------------------------------------------------------------------ #
+#  Job CRUD
+# ------------------------------------------------------------------ #
 
 @employer.route('/employer/jobs/new', methods=['GET', 'POST'])
 @login_required
@@ -155,6 +236,9 @@ def post_job():
                 interview_questions=json.loads(interview_questions) if interview_questions else [],
             )
 
+        salary_raw = request.form.get('salary_usd', '').strip()
+        salary_usd = int(salary_raw) if salary_raw.isdigit() else None
+
         job = Job(
             company_id=company.id,
             title=title,
@@ -165,13 +249,20 @@ def post_job():
             interview_length=interview_length,
             interview_focus=interview_focus or None,
             interview_questions=interview_questions,
+            salary_usd=salary_usd,
         )
         db.session.add(job)
         db.session.commit()
-        flash("Job posted!", "success")
+        flash("Job posted successfully!", "success")
         return redirect(url_for('employer.dashboard'))
 
-    return render_template("post_job.html", categories=JOB_CATEGORIES, locations=JOB_LOCATIONS, interview_lengths=INTERVIEW_LENGTH_OPTIONS, interview_questions=[])
+    return render_template(
+        "post_job.html",
+        categories=JOB_CATEGORIES,
+        locations=JOB_LOCATIONS,
+        interview_lengths=INTERVIEW_LENGTH_OPTIONS,
+        interview_questions=[],
+    )
 
 
 @employer.route('/employer/jobs/<int:job_id>/edit', methods=['GET', 'POST'])
@@ -201,6 +292,7 @@ def edit_job(job_id):
                 interview_questions=_existing_interview_questions(job),
             )
 
+        salary_raw = request.form.get('salary_usd', '').strip()
         job.title = title
         job.description = description
         job.location = request.form.get('location', '').strip()
@@ -210,6 +302,7 @@ def edit_job(job_id):
         job.interview_focus = request.form.get('interview_focus', '').strip() or None
         job.interview_questions = _parse_interview_questions(request.form.get('interview_questions', ''))
         job.status = request.form.get('status', job.status)
+        job.salary_usd = int(salary_raw) if salary_raw.isdigit() else None
         db.session.commit()
         flash("Job updated!", "success")
         return redirect(url_for('employer.dashboard'))
@@ -225,11 +318,9 @@ def edit_job(job_id):
 @login_required
 @employer_required
 def preview_interview_questions():
-    """Generate sample questions for a job posting in progress — not tied to
-    a real candidate or application, purely illustrative for the employer."""
     data = request.get_json() or {}
     title = (data.get('title') or '').strip()
-    description = (data.get('description') or '').strip()
+    description = _extract_description_text(data.get('description') or '')
     interview_length = data.get('interview_length', 'standard')
     interview_focus = (data.get('interview_focus') or '').strip()
 
@@ -242,6 +333,10 @@ def preview_interview_questions():
     except Exception:
         return jsonify({"error": "Failed to generate a preview. Please try again."}), 500
 
+
+# ------------------------------------------------------------------ #
+#  Applicants
+# ------------------------------------------------------------------ #
 
 @employer.route('/employer/jobs/<int:job_id>/applicants')
 @login_required
@@ -291,7 +386,7 @@ def schedule_meeting(application_id):
     if job.company_id != company.id:
         abort(403)
 
-    meeting_type = request.form.get('meeting_type')  # 'virtual' | 'in_person'
+    meeting_type = request.form.get('meeting_type')
     date = request.form.get('date', '').strip()
     time = request.form.get('time', '').strip()
     location_or_url = request.form.get('location_or_url', '').strip()
@@ -301,13 +396,7 @@ def schedule_meeting(application_id):
         flash("Date, time, and a meeting link or address are required.", "error")
         return redirect(url_for('employer.applicants', job_id=job.id))
 
-    meeting = {
-        "type": meeting_type,
-        "date": date,
-        "time": time,
-        "location_or_url": location_or_url,
-        "notes": notes,
-    }
+    meeting = {"type": meeting_type, "date": date, "time": time, "location_or_url": location_or_url, "notes": notes}
     application.scheduled_meeting = json.dumps(meeting)
     db.session.commit()
 
@@ -366,7 +455,13 @@ def update_status(application_id):
         if status_changed and copy:
             candidate = application.candidate
 
-            # In-app notification (respects user preference)
+            payment_link_url = None
+            if new_status == 'hired' and not application.stripe_payment_link:
+                payment_link_url = _create_stripe_payment_link(application, job, company, candidate)
+                if payment_link_url:
+                    application.stripe_payment_link = payment_link_url
+                    db.session.commit()
+
             if candidate.notifications_enabled:
                 notif_messages = {
                     "interviewing": f"Your application for {job.title} at {company.name} is moving forward!",
@@ -382,17 +477,247 @@ def update_status(application_id):
                 db.session.commit()
 
             try:
-                send_branded_email(
-                    to_email=candidate.email,
-                    subject=copy["subject_tpl"].format(job_title=job.title),
-                    heading=copy["heading"],
-                    body_html=copy["body_tpl"].format(company=company.name, job_title=job.title),
-                    plain_text=copy["body_tpl"].format(company=company.name, job_title=job.title).replace("<strong>", "").replace("</strong>", ""),
-                    cta_label="View My Applications",
-                    cta_url=url_for('candidate.dashboard', _external=True),
-                )
+                fee_amount = int(job.salary_usd * PLATFORM_FEE_PERCENT / 100) if job.salary_usd else None
+                if new_status == 'hired' and payment_link_url:
+                    body_html = (
+                        f"Congratulations — <strong>{company.name}</strong> has offered you the <strong>{job.title}</strong> role!<br><br>"
+                        f"As part of your placement through Avants AI, a <strong>${fee_amount:,} placement fee</strong> "
+                        f"(12.5% of first-year compensation) is due within 30 days of your start date.<br><br>"
+                        f"Click the button below to pay securely via Stripe."
+                    )
+                    plain_text = (
+                        f"Congratulations — {company.name} has offered you the {job.title} role!\n\n"
+                        f"Avants AI placement fee: ${fee_amount:,} (12.5% of first-year compensation).\n"
+                        f"Pay here: {payment_link_url}"
+                    )
+                    send_branded_email(
+                        to_email=candidate.email,
+                        subject=f"You're hired — {job.title}",
+                        heading="You got the job!",
+                        body_html=body_html,
+                        plain_text=plain_text,
+                        cta_label="Pay Placement Fee",
+                        cta_url=payment_link_url,
+                    )
+                elif new_status == 'hired':
+                    body_html = (
+                        f"Congratulations — <strong>{company.name}</strong> has offered you the <strong>{job.title}</strong> role!<br><br>"
+                        f"As part of your placement through Avants AI, a placement fee of <strong>12.5% of your first-year compensation</strong> "
+                        f"will be invoiced to you within 30 days of your start date. Our team will be in touch."
+                    )
+                    plain_text = (
+                        f"Congratulations — {company.name} has offered you the {job.title} role!\n\n"
+                        f"Avants AI placement fee (12.5% of first-year compensation) will be invoiced to you."
+                    )
+                    send_branded_email(
+                        to_email=candidate.email,
+                        subject=f"You're hired — {job.title}",
+                        heading="You got the job!",
+                        body_html=body_html,
+                        plain_text=plain_text,
+                        cta_label="View My Dashboard",
+                        cta_url=url_for('candidate.dashboard', _external=True),
+                    )
+                else:
+                    send_branded_email(
+                        to_email=candidate.email,
+                        subject=copy["subject_tpl"].format(job_title=job.title),
+                        heading=copy["heading"],
+                        body_html=copy["body_tpl"].format(company=company.name, job_title=job.title),
+                        plain_text=copy["body_tpl"].format(company=company.name, job_title=job.title).replace("<strong>", "").replace("</strong>", ""),
+                        cta_label="View My Applications",
+                        cta_url=url_for('candidate.dashboard', _external=True),
+                    )
             except Exception as e:
                 print(f"Status email send failed ({new_status}):", e)
         flash("Status updated.", "success")
 
     return redirect(url_for('employer.applicants', job_id=job.id))
+
+
+# ------------------------------------------------------------------ #
+#  Company Settings
+# ------------------------------------------------------------------ #
+
+@employer.route('/employer/company/settings', methods=['GET', 'POST'])
+@login_required
+@employer_required
+def company_settings():
+    company = get_owned_company()
+
+    if request.method == 'POST':
+        action = request.form.get('action', 'save_profile')
+
+        if action == 'save_profile':
+            name = request.form.get('name', '').strip()
+            if not name:
+                flash("Company name is required.", "error")
+            else:
+                company.name = name
+                company.website = request.form.get('website', '').strip() or None
+                company.description = request.form.get('description', '').strip() or None
+                company.industry = request.form.get('industry', '').strip() or None
+                company.size = request.form.get('size', '').strip() or None
+                company.location = request.form.get('location', '').strip() or None
+                db.session.commit()
+                flash("Company profile updated.", "success")
+
+        elif action == 'remove_member':
+            member_id = request.form.get('member_id', type=int)
+            if company.owner_user_id != current_user.id:
+                flash("Only the company owner can remove team members.", "error")
+            elif member_id:
+                member = CompanyMember.query.filter_by(id=member_id, company_id=company.id).first()
+                if member:
+                    db.session.delete(member)
+                    db.session.commit()
+                    flash("Team member removed.", "success")
+
+        return redirect(url_for('employer.company_settings'))
+
+    members = CompanyMember.query.filter_by(company_id=company.id).all()
+    pending_invites = CompanyInvite.query.filter_by(company_id=company.id, used=False).all()
+    open_jobs_count = Job.query.filter_by(company_id=company.id, status='open').count()
+
+    return render_template(
+        "company_settings.html",
+        company=company,
+        members=members,
+        pending_invites=pending_invites,
+        sizes=COMPANY_SIZES,
+        industries=INDUSTRIES,
+        is_owner=(company.owner_user_id == current_user.id),
+        open_jobs_count=open_jobs_count,
+    )
+
+
+# ------------------------------------------------------------------ #
+#  Team Invitations
+# ------------------------------------------------------------------ #
+
+@employer.route('/employer/company/invite', methods=['POST'])
+@login_required
+@employer_required
+def invite_member():
+    company = get_owned_company()
+
+    if company.owner_user_id != current_user.id:
+        flash("Only the company owner can send invitations.", "error")
+        return redirect(url_for('employer.company_settings'))
+
+    email = request.form.get('email', '').strip().lower()
+    if not email or '@' not in email:
+        flash("A valid email address is required.", "error")
+        return redirect(url_for('employer.company_settings'))
+
+    # Don't invite someone already a member or the owner
+    from .models import User
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user:
+        if existing_user.id == company.owner_user_id:
+            flash("That person is already the company owner.", "error")
+            return redirect(url_for('employer.company_settings'))
+        already = CompanyMember.query.filter_by(company_id=company.id, user_id=existing_user.id).first()
+        if already:
+            flash("That person is already a team member.", "error")
+            return redirect(url_for('employer.company_settings'))
+
+    # Delete any previous unused invite for this email + company
+    CompanyInvite.query.filter_by(company_id=company.id, email=email, used=False).delete()
+    db.session.commit()
+
+    token = secrets.token_urlsafe(32)
+    invite = CompanyInvite(
+        company_id=company.id,
+        invited_by_user_id=current_user.id,
+        email=email,
+        token=token,
+    )
+    db.session.add(invite)
+    db.session.commit()
+
+    invite_url = url_for('employer.accept_invite', token=token, _external=True)
+    try:
+        send_branded_email(
+            to_email=email,
+            subject=f"You've been invited to join {company.name} on Avants AI",
+            heading=f"Join {company.name} on Avants AI",
+            body_html=(
+                f"<strong>{current_user.first_name or current_user.email}</strong> has invited you to join "
+                f"<strong>{company.name}</strong> as a team member on Avants AI. "
+                f"As a team member, you'll be able to post jobs and manage applicants for {company.name}.<br><br>"
+                f"This invite expires if not used."
+            ),
+            plain_text=(
+                f"{current_user.first_name or current_user.email} has invited you to join {company.name} on Avants AI.\n\n"
+                f"Accept the invite here: {invite_url}"
+            ),
+            cta_label="Accept Invitation",
+            cta_url=invite_url,
+        )
+        flash(f"Invitation sent to {email}.", "success")
+    except Exception as e:
+        print("Invite email failed:", e)
+        flash(f"Invite created but email delivery failed. Share this link manually: {invite_url}", "error")
+
+    return redirect(url_for('employer.company_settings'))
+
+
+@employer.route('/employer/join/<token>')
+@login_required
+def accept_invite(token):
+    invite = CompanyInvite.query.filter_by(token=token, used=False).first()
+
+    if not invite:
+        flash("This invitation is invalid or has already been used.", "error")
+        return redirect(url_for('views.home'))
+
+    if current_user.role != 'employer':
+        flash("You need an employer account to accept this invitation.", "error")
+        return redirect(url_for('views.home'))
+
+    if invite.email.lower() != current_user.email.lower():
+        flash("This invitation was sent to a different email address.", "error")
+        return redirect(url_for('views.home'))
+
+    company = Company.query.get_or_404(invite.company_id)
+
+    # Check if already a member or owner
+    if company.owner_user_id == current_user.id:
+        flash("You are already the owner of this company.", "info")
+        return redirect(url_for('employer.dashboard'))
+
+    existing = CompanyMember.query.filter_by(company_id=company.id, user_id=current_user.id).first()
+    if existing:
+        flash(f"You're already a team member of {company.name}.", "info")
+        return redirect(url_for('employer.dashboard'))
+
+    member = CompanyMember(company_id=company.id, user_id=current_user.id)
+    db.session.add(member)
+    invite.used = True
+    db.session.commit()
+
+    flash(f"Welcome to {company.name}! You can now post jobs and manage applicants.", "success")
+    return redirect(url_for('employer.dashboard'))
+
+
+# ------------------------------------------------------------------ #
+#  Public Company Page
+# ------------------------------------------------------------------ #
+
+@employer.route('/companies/<int:company_id>')
+def company_page(company_id):
+    company = Company.query.get_or_404(company_id)
+    open_jobs = Job.query.filter_by(company_id=company.id, status='open').order_by(Job.created_at.desc()).all()
+    total_hires = Application.query.join(Job).filter(
+        Job.company_id == company.id,
+        Application.status == 'hired',
+    ).count()
+    member_count = CompanyMember.query.filter_by(company_id=company.id).count() + 1  # +1 for owner
+    return render_template(
+        "company_page.html",
+        company=company,
+        open_jobs=open_jobs,
+        total_hires=total_hires,
+        member_count=member_count,
+    )

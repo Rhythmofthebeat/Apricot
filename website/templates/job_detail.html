@@ -1,29 +1,218 @@
 {% extends "base.html" %}
 {% block title %}{{ job.title }}{% endblock %}
 
+{% block head %}
+<style>
+    .jd-section-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+    }
+    .jd-section { margin-bottom: 28px; }
+    .jd-section p { white-space: pre-wrap; font-size: 0.93rem; line-height: 1.7; color: var(--text); margin: 0; }
+    .jd-meta-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 5px 14px;
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: var(--text-muted);
+    }
+    .jd-meta-pill i { color: var(--primary); font-size: 0.8rem; }
+    .jd-sidebar {
+        position: sticky;
+        top: 80px;
+    }
+    .jd-apply-card { border: 2px solid var(--primary); }
+    .company-badge {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px;
+        background: var(--bg);
+        border-radius: var(--radius);
+        margin-bottom: 16px;
+    }
+    .company-badge .company-icon {
+        width: 40px; height: 40px;
+        border-radius: 8px;
+        background: var(--primary);
+        display: flex; align-items: center; justify-content: center;
+        color: white; font-weight: 700; font-size: 1rem;
+        flex-shrink: 0;
+    }
+    .fee-notice {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        background: var(--primary-soft);
+        border-radius: var(--radius);
+        padding: 10px 14px;
+        margin-top: 12px;
+        line-height: 1.5;
+    }
+    .fee-notice i { color: var(--primary); }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
+    <div class="col-12 mb-3">
+        <a href="{{ url_for('candidate.browse_jobs') }}" class="text-decoration-none text-muted small">
+            <i class="fas fa-arrow-left me-1"></i> Back to jobs
+        </a>
+    </div>
+
+    <!-- Main content -->
     <div class="col-lg-8">
-        <a href="{{ url_for('candidate.browse_jobs') }}" class="text-decoration-none text-muted small"><i class="fas fa-arrow-left me-1"></i> Back to jobs</a>
+        <div class="card mb-4">
+            <div class="card-body p-4 p-md-5">
 
-        <div class="card mt-3">
-            <div class="card-body p-4">
-                <h1 class="h3 fw-bold mb-1">{{ job.title }}</h1>
-                <p class="text-muted mb-4">{{ job.company.name }} &middot; {{ job.location or "Remote" }} &middot; {{ job.employment_type or "Full-time" }}</p>
-
-                <h6 class="fw-bold">Description</h6>
-                <p style="white-space: pre-wrap;">{{ job.description }}</p>
-
-                {% if existing %}
-                    <div class="alert alert-info mt-4">
-                        You've already applied. Status: <span class="badge-status {{ existing.status }}">{{ existing.status }}</span>
-                        {% if existing.match_score is not none %}
-                            &middot; Match score: {{ existing.match_score }}
+                <!-- Header -->
+                <div class="company-badge">
+                    <div class="company-icon">{{ job.company.name[0]|upper }}</div>
+                    <div>
+                        <a href="{{ url_for('employer.company_page', company_id=job.company.id) }}"
+                           class="fw-bold text-decoration-none text-reset" style="font-size:0.95rem;">
+                            {{ job.company.name }}
+                        </a>
+                        {% if job.company.industry %}
+                            <div class="text-muted small">{{ job.company.industry }}{% if job.company.location %} &middot; {{ job.company.location }}{% endif %}</div>
+                        {% elif job.company.website %}
+                            <a href="{{ job.company.website }}" target="_blank" class="text-muted small text-decoration-none">{{ job.company.website }}</a>
                         {% endif %}
+                        <a href="{{ url_for('employer.company_page', company_id=job.company.id) }}" class="text-muted small text-decoration-none">
+                            <i class="fas fa-external-link me-1" style="font-size:0.65rem;"></i>View company
+                        </a>
                     </div>
+                </div>
+
+                <h1 class="h2 fw-bold mb-2">{{ job.title }}</h1>
+
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    {% if job.location %}
+                        <span class="jd-meta-pill"><i class="fas fa-location-dot"></i> {{ job.location }}</span>
+                    {% endif %}
+                    {% if job.employment_type %}
+                        <span class="jd-meta-pill"><i class="fas fa-briefcase"></i> {{ job.employment_type }}</span>
+                    {% endif %}
+                    {% if job.category %}
+                        <span class="jd-meta-pill"><i class="fas fa-tag"></i> {{ job.category }}</span>
+                    {% endif %}
+                </div>
+
+                <hr style="border-color: var(--border); margin-bottom: 28px;">
+
+                {% set secs = job.description_sections %}
+
+                {% if secs %}
+
+                    {% if secs.about %}
+                    <div class="jd-section">
+                        <div class="jd-section-label">About the role</div>
+                        <p>{{ secs.about }}</p>
+                    </div>
+                    {% endif %}
+
+                    {% if secs.requirements %}
+                    <div class="jd-section">
+                        <div class="jd-section-label">Requirements <span style="font-weight:400;text-transform:none;letter-spacing:0;">(must have)</span></div>
+                        <p>{{ secs.requirements }}</p>
+                    </div>
+                    {% endif %}
+
+                    {% if secs.preferred %}
+                    <div class="jd-section">
+                        <div class="jd-section-label">Preferred <span style="font-weight:400;text-transform:none;letter-spacing:0;">(nice to have)</span></div>
+                        <p>{{ secs.preferred }}</p>
+                    </div>
+                    {% endif %}
+
+                    {% if secs.what_you_do %}
+                    <div class="jd-section">
+                        <div class="jd-section-label">What you'll do</div>
+                        <p>{{ secs.what_you_do }}</p>
+                    </div>
+                    {% endif %}
+
+                    {% if secs.contract_terms %}
+                    <div class="jd-section">
+                        <div class="jd-section-label">Contract &amp; payment terms</div>
+                        <p>{{ secs.contract_terms }}</p>
+                    </div>
+                    {% endif %}
+
                 {% else %}
-                    <a href="{{ url_for('candidate.apply', job_id=job.id) }}" class="btn btn-primary btn-lg mt-3">Apply Now</a>
+                    <!-- Legacy plain-text description -->
+                    <div class="jd-section">
+                        <div class="jd-section-label">Description</div>
+                        <p>{{ job.description }}</p>
+                    </div>
                 {% endif %}
+
+                <!-- About Avants AI -->
+                <div class="jd-section" style="padding-top:12px; border-top: 1px solid var(--border);">
+                    <div class="jd-section-label">About Avants AI</div>
+                    <p style="font-size:0.88rem; color:var(--text-muted);">Avants AI partners with companies to vet candidates with AI-powered interviews and match scoring &mdash; so every application in our pipeline is already screened before a human reads it. We consider all qualified applicants without regard to legally protected characteristics.</p>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <div class="jd-sidebar">
+            <div class="card jd-apply-card mb-3">
+                <div class="card-body p-4 text-center">
+                    {% if existing %}
+                        <div class="mb-2">
+                            <span class="badge-status {{ existing.status }}">{{ existing.status }}</span>
+                        </div>
+                        <p class="text-muted small mb-0">You already applied to this role.</p>
+                        {% if existing.match_score is not none %}
+                            <p class="text-muted small mt-1">Match score: <strong>{{ existing.match_score }}</strong></p>
+                        {% endif %}
+                    {% else %}
+                        <h5 class="fw-bold mb-1">Ready to apply?</h5>
+                        <p class="text-muted small mb-3">AI-scored &amp; AI-interviewed &mdash; you'll hear back faster.</p>
+                        <a href="{{ url_for('candidate.apply', job_id=job.id) }}" class="btn btn-primary w-100">
+                            <i class="fas fa-paper-plane me-1"></i> Apply Now
+                        </a>
+                        <div class="fee-notice">
+                            <i class="fas fa-circle-info me-1"></i>
+                            Avants charges a <strong>12.5% placement fee</strong> of first-year compensation upon hire. <a href="/faq#fee" class="text-decoration-none">Learn more</a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body p-3">
+                    <p class="text-muted small mb-2 fw-bold">How it works</p>
+                    <div class="d-flex gap-2 mb-2">
+                        <span style="color:var(--primary); flex-shrink:0; margin-top:2px;"><i class="fas fa-file-lines fa-sm"></i></span>
+                        <span class="small text-muted">Submit your resume or paste your LinkedIn profile</span>
+                    </div>
+                    <div class="d-flex gap-2 mb-2">
+                        <span style="color:var(--primary); flex-shrink:0; margin-top:2px;"><i class="fas fa-bullseye fa-sm"></i></span>
+                        <span class="small text-muted">AI scores your match against the job description</span>
+                    </div>
+                    <div class="d-flex gap-2 mb-2">
+                        <span style="color:var(--primary); flex-shrink:0; margin-top:2px;"><i class="fas fa-comments fa-sm"></i></span>
+                        <span class="small text-muted">Complete a short AI screening interview</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <span style="color:var(--primary); flex-shrink:0; margin-top:2px;"><i class="fas fa-trophy fa-sm"></i></span>
+                        <span class="small text-muted">Employer reviews AI-ranked applicants and decides</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

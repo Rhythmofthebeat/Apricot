@@ -1,134 +1,226 @@
 {% extends "base.html" %}
 {% block title %}My Profile{% endblock %}
 
+{% block head %}
+<style>
+    .profile-tabs {
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 24px;
+        display: flex;
+        gap: 4px;
+    }
+    .profile-tab {
+        padding: 10px 18px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        border: none;
+        background: none;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+        transition: color 0.12s, border-color 0.12s;
+        margin-bottom: -1px;
+    }
+    .profile-tab.active {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+    }
+    .profile-tab:hover { color: var(--text); }
+    .form-label { font-size: 0.85rem; font-weight: 600; margin-bottom: 5px; }
+    .generate-error {
+        background: var(--danger-soft);
+        color: var(--danger);
+        border-radius: var(--radius);
+        padding: 10px 14px;
+        font-size: 0.85rem;
+        margin-top: 10px;
+    }
+    .suggest-item {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 16px; padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+    }
+    .suggest-item:last-child { border-bottom: none; }
+    .suggest-item a { font-weight: 700; font-size: 0.9rem; text-decoration: none; color: var(--text); }
+    .suggest-item a:hover { color: var(--primary); }
+    .linkedin-tip {
+        background: var(--primary-soft);
+        border-radius: var(--radius);
+        padding: 12px 16px;
+        font-size: 0.82rem;
+        color: var(--primary);
+        margin-bottom: 16px;
+        display: flex; gap: 8px; align-items: flex-start;
+    }
+    .linkedin-tip i { flex-shrink: 0; margin-top: 2px; }
+</style>
+{% endblock %}
+
 {% block content %}
-<h1 class="h3 fw-bold mb-4">My Profile</h1>
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
+    <div>
+        <h1 class="h3 fw-bold mb-1">My Profile</h1>
+        <p class="text-muted small mb-0">Your resume and job preferences power match scoring across all applications.</p>
+    </div>
+    <a href="{{ url_for('candidate.download_profile_resume') }}" target="_blank" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-download me-1"></i> Download Resume PDF
+    </a>
+</div>
 
-<ul class="nav nav-tabs mb-4" id="profileTabs" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="build-tab" data-bs-toggle="tab" data-bs-target="#build-pane" type="button">
-            <i class="fas fa-id-card me-1"></i> Profile &amp; Resume
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="suggested-tab" data-bs-toggle="tab" data-bs-target="#suggested-pane" type="button">
-            <i class="fas fa-bullseye me-1"></i> Suggested for You
-        </button>
-    </li>
-</ul>
+<div class="profile-tabs" role="tablist">
+    <button class="profile-tab active" id="tab-profile" onclick="switchTab('profile')">
+        <i class="fas fa-id-card me-1"></i> Profile &amp; Resume
+    </button>
+    <button class="profile-tab" id="tab-suggested" onclick="switchTab('suggested')">
+        <i class="fas fa-bullseye me-1"></i> Suggested for You
+    </button>
+</div>
 
-<div class="tab-content">
-    <!-- Profile & Resume -->
-    <div class="tab-pane fade show active" id="build-pane" role="tabpanel">
-        <div class="card mb-4">
-            <div class="card-body p-4">
-                <h2 class="h5 fw-bold mb-3">Basics</h2>
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold">Headline</label>
-                        <input type="text" class="form-control" id="headline" placeholder="e.g. Senior Backend Engineer"
+<!-- ===== Profile & Resume ===== -->
+<div id="pane-profile">
+    <div class="row g-4">
+
+        <!-- Left: basics + LinkedIn -->
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header"><i class="fas fa-user me-2"></i>Basics</div>
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label">Headline</label>
+                        <input type="text" class="form-control" id="headline"
+                               placeholder="e.g. Senior Backend Engineer"
                                value="{{ profile.headline if profile else '' }}">
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold">LinkedIn URL (optional)</label>
-                        <input type="url" class="form-control" id="linkedinUrl" placeholder="https://www.linkedin.com/in/your-name"
+                    <div class="mb-3">
+                        <label class="form-label">LinkedIn URL <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="url" class="form-control" id="linkedinUrl"
+                               placeholder="https://linkedin.com/in/your-name"
                                value="{{ profile.linkedin_url if profile else '' }}">
                     </div>
-                    <div class="col-12">
-                        <label class="form-label fw-bold">Roles / industries you're interested in (optional)</label>
-                        <input type="text" class="form-control" id="targetRoles" placeholder="e.g. Series A startups, backend infra, fintech"
+                    <div class="mb-3">
+                        <label class="form-label">Roles &amp; industries you want <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="text" class="form-control" id="targetRoles"
+                               placeholder="e.g. Series A startups, fintech, backend infra"
                                value="{{ profile.target_roles if profile else '' }}">
-                        <p class="text-muted small mt-1 mb-0">Helps the AI sharpen its company suggestions beyond what's in your resume.</p>
+                        <div class="form-text">Sharpens AI job suggestions beyond your resume.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><i class="fab fa-linkedin me-2"></i>Build from LinkedIn</div>
+                <div class="card-body p-4">
+                    <div class="linkedin-tip">
+                        <i class="fas fa-circle-info"></i>
+                        <span>Paste your LinkedIn <strong>About</strong>, <strong>Experience</strong>, and <strong>Education</strong> sections and we'll turn them into a structured resume.</span>
+                    </div>
+                    <textarea class="form-control mb-3" id="profileText" rows="7"
+                              placeholder="Paste your LinkedIn About / Experience / Education / Skills here…"></textarea>
+                    <button class="btn btn-primary btn-rounded w-100" id="generateBtn">
+                        <i class="fas fa-magic me-1"></i> Generate Resume
+                    </button>
+                    <div id="generateError" class="generate-error" style="display:none;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: resume editor -->
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-file-lines me-2"></i>Resume</span>
+                    <a href="{{ url_for('candidate.download_profile_resume') }}" target="_blank" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-download me-1"></i> PDF
+                    </a>
+                </div>
+                <div class="card-body p-4">
+                    <div class="form-text mb-2">Edit directly below. This text is used for match scoring across all your applications.</div>
+                    <textarea class="form-control" id="resumeText" rows="20"
+                              placeholder="Generate from LinkedIn (left) or paste / edit your resume here…"
+                              style="font-family: 'Courier New', monospace; font-size: 0.82rem; resize: vertical;">{{ profile.resume_text if profile else '' }}</textarea>
+                    <div class="d-flex align-items-center gap-3 mt-3">
+                        <button class="btn btn-primary btn-rounded" id="saveBtn">
+                            <i class="fas fa-save me-1"></i> Save Profile
+                        </button>
+                        <span id="saveStatus" class="small"></span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="card mb-4">
-            <div class="card-body p-4">
-                <h2 class="h5 fw-bold mb-2">Build your resume from LinkedIn</h2>
-                <p class="text-muted mb-3">No resume on hand? Paste your About, Experience, and Education sections from LinkedIn below — we'll intake the text and turn it into a structured resume you can edit and download.</p>
-                <textarea class="form-control mb-3" id="profileText" rows="8" placeholder="Paste your LinkedIn About / Experience / Education / Skills content here&#10;&#10;You can copy this directly from your LinkedIn profile page.">{{ '' }}</textarea>
-                <button class="btn btn-primary btn-rounded" id="generateBtn">
-                    <i class="fas fa-magic"></i> Generate Resume
-                </button>
-                <div id="generateError" class="alert alert-danger mt-3" style="display:none;"></div>
-            </div>
-        </div>
-
-        <div class="card mb-4">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h2 class="h5 fw-bold mb-0">Your resume</h2>
-                    <a class="btn btn-outline-primary btn-sm" id="downloadBtn" href="{{ url_for('candidate.download_profile_resume') }}" target="_blank">
-                        <i class="fas fa-download me-1"></i> Download PDF
-                    </a>
-                </div>
-                <textarea class="form-control mb-3" id="resumeText" rows="14" placeholder="Generate from LinkedIn above, or paste/edit your resume text directly.">{{ profile.resume_text if profile else '' }}</textarea>
-                <button class="btn btn-primary btn-rounded" id="saveBtn">
-                    <i class="fas fa-save"></i> Save Profile
-                </button>
-                <span id="saveStatus" class="text-success small ms-2"></span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Suggested for You -->
-    <div class="tab-pane fade" id="suggested-pane" role="tabpanel">
-        <div id="suggestedLoading" class="text-muted text-center p-5">
-            <i class="fas fa-spinner fa-spin me-2"></i> Finding companies that fit your profile...
-        </div>
-        <div id="suggestedEmpty" class="card" style="display:none;">
-            <div class="card-body text-center p-5">
-                <p class="text-muted mb-0">Save a resume on the "Profile &amp; Resume" tab first, and we'll suggest open roles that fit it.</p>
-            </div>
-        </div>
-        <div id="suggestedError" class="alert alert-danger" style="display:none;"></div>
-        <div id="suggestedList"></div>
     </div>
 </div>
+
+<!-- ===== Suggested for You ===== -->
+<div id="pane-suggested" style="display:none;">
+    <div class="card">
+        <div class="card-header"><i class="fas fa-bullseye me-2"></i>Jobs that match your profile</div>
+        <div class="card-body p-0">
+            <div id="suggestedLoading" class="text-muted p-4 d-flex align-items-center gap-2" style="font-size:0.88rem;">
+                <i class="fas fa-spinner fa-spin"></i> Finding companies that fit your profile…
+            </div>
+            <div id="suggestedEmpty" style="display:none;">
+                <div class="p-4 text-center text-muted small">
+                    Save a resume on the "Profile &amp; Resume" tab first, and we'll suggest open roles that fit it.
+                </div>
+            </div>
+            <div id="suggestedError" class="generate-error m-3" style="display:none;"></div>
+            <div id="suggestedList"></div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-function showAlert(id, message) {
+function switchTab(name) {
+    ['profile', 'suggested'].forEach(t => {
+        document.getElementById(`pane-${t}`).style.display = t === name ? 'block' : 'none';
+        document.getElementById(`tab-${t}`).classList.toggle('active', t === name);
+    });
+    if (name === 'suggested' && !window.__suggestLoaded) {
+        window.__suggestLoaded = true;
+        loadSuggestions();
+    }
+}
+
+function showError(id, msg) {
     const el = document.getElementById(id);
-    if (!message) { el.style.display = "none"; return; }
-    el.textContent = message;
-    el.style.display = "block";
+    if (!msg) { el.style.display = 'none'; return; }
+    el.textContent = msg;
+    el.style.display = 'block';
 }
 
 document.getElementById("generateBtn").addEventListener("click", async () => {
-    const linkedinUrl = document.getElementById("linkedinUrl").value.trim();
-    const profileText = document.getElementById("profileText").value.trim();
     const btn = document.getElementById("generateBtn");
+    const profileText = document.getElementById("profileText").value.trim();
+    const linkedinUrl = document.getElementById("linkedinUrl").value.trim();
+    showError("generateError", null);
 
-    showAlert("generateError", null);
     if (!profileText) {
-        showAlert("generateError", "Paste your LinkedIn profile content first.");
+        showError("generateError", "Paste your LinkedIn profile content first.");
         return;
     }
 
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Generating…';
 
     try {
-        const response = await fetch("{{ url_for('candidate.generate_profile_resume') }}", {
+        const r = await fetch("{{ url_for('candidate.generate_profile_resume') }}", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ linkedin_url: linkedinUrl, profile_text: profileText })
         });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "Failed to generate resume.");
-
+        const result = await r.json();
+        if (!r.ok) throw new Error(result.error || "Failed to generate.");
         document.getElementById("resumeText").value = result.resume_text;
-        btn.innerHTML = '<i class="fas fa-check"></i> Generated!';
+        btn.innerHTML = '<i class="fas fa-check me-1"></i> Done!';
+        setTimeout(() => { btn.innerHTML = '<i class="fas fa-magic me-1"></i> Generate Resume'; btn.disabled = false; }, 2000);
     } catch (e) {
-        showAlert("generateError", e.message);
-        btn.innerHTML = '<i class="fas fa-magic"></i> Generate Resume';
-    } finally {
+        showError("generateError", e.message);
+        btn.innerHTML = '<i class="fas fa-magic me-1"></i> Generate Resume';
         btn.disabled = false;
-        setTimeout(() => { btn.innerHTML = '<i class="fas fa-magic"></i> Generate Resume'; }, 2000);
     }
 });
 
@@ -136,75 +228,67 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
     const btn = document.getElementById("saveBtn");
     const status = document.getElementById("saveStatus");
     btn.disabled = true;
-    status.textContent = "";
+    status.textContent = '';
+    status.className = 'small';
 
     try {
-        const response = await fetch("{{ url_for('candidate.save_profile') }}", {
+        const r = await fetch("{{ url_for('candidate.save_profile') }}", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                headline: document.getElementById("headline").value,
+                headline:     document.getElementById("headline").value,
                 linkedin_url: document.getElementById("linkedinUrl").value,
                 target_roles: document.getElementById("targetRoles").value,
-                resume_text: document.getElementById("resumeText").value,
+                resume_text:  document.getElementById("resumeText").value,
             })
         });
-        if (!response.ok) throw new Error("Failed to save.");
-        status.textContent = "Saved!";
-        setTimeout(() => { status.textContent = ""; }, 2000);
-    } catch (e) {
-        status.classList.remove("text-success");
-        status.classList.add("text-danger");
-        status.textContent = "Couldn't save. Please try again.";
+        if (!r.ok) throw new Error();
+        status.textContent = 'Saved!';
+        status.className = 'small text-success';
+        setTimeout(() => { status.textContent = ''; }, 3000);
+    } catch (_) {
+        status.textContent = 'Save failed — please try again.';
+        status.className = 'small text-danger';
     } finally {
         btn.disabled = false;
     }
 });
 
-let suggestionsLoaded = false;
-document.getElementById("suggested-tab").addEventListener("shown.bs.tab", () => {
-    if (suggestionsLoaded) return;
-    suggestionsLoaded = true;
-    loadSuggestions();
-});
-
 async function loadSuggestions() {
     const loading = document.getElementById("suggestedLoading");
-    const empty = document.getElementById("suggestedEmpty");
-    const list = document.getElementById("suggestedList");
+    const empty   = document.getElementById("suggestedEmpty");
+    const list    = document.getElementById("suggestedList");
 
-    loading.style.display = "block";
+    loading.style.display = "flex";
     empty.style.display = "none";
-    showAlert("suggestedError", null);
     list.innerHTML = "";
 
     try {
-        const response = await fetch("{{ url_for('candidate.suggested_jobs') }}");
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "Failed to load suggestions.");
-
+        const r = await fetch("{{ url_for('candidate.suggested_jobs') }}");
+        const result = await r.json();
+        if (!r.ok) throw new Error(result.error || "Failed.");
         if (!result.suggestions || result.suggestions.length === 0) {
             empty.style.display = "block";
             return;
         }
-
         list.innerHTML = result.suggestions.map(s => `
-            <div class="job-card mb-3">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <h3><a href="${s.url}" class="text-decoration-none">${s.title}</a></h3>
-                        <div class="job-card-meta text-muted mb-2">${s.company}</div>
-                        <p class="job-card-desc mb-0">${s.reason}</p>
-                    </div>
-                    <span class="score-pill ${s.score >= 70 ? 'high' : (s.score >= 40 ? 'mid' : 'low')}">${s.score}</span>
+            <div class="suggest-item">
+                <div>
+                    <a href="${s.url}">${s.title}</a>
+                    <span class="text-muted small ms-2">${s.company}</span>
+                    <p class="text-muted mb-0" style="font-size:0.78rem;">${s.reason}</p>
                 </div>
+                <span class="score-pill ms-2 flex-shrink-0 ${s.score >= 70 ? 'high' : (s.score >= 40 ? 'mid' : 'low')}">${s.score}</span>
             </div>
-        `).join("");
+        `).join('');
     } catch (e) {
-        showAlert("suggestedError", e.message);
+        showError("suggestedError", e.message || "Couldn't load suggestions.");
     } finally {
         loading.style.display = "none";
     }
 }
+
+// If URL has #suggested, switch tab
+if (window.location.hash === '#suggested-pane') switchTab('suggested');
 </script>
 {% endblock %}

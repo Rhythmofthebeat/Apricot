@@ -2,45 +2,41 @@
 <html lang="en">
 <head>
     <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-GLFDS8ZT1H"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-GLFDS8ZT1H"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-GLFDS8ZT1H');
+    </script>
 
-  gtag('config', 'G-GLFDS8ZT1H');
-</script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}Dashboard{% endblock %} | Avants</title>
 
-    <!-- Bootstrap 5 CSS (grid/utilities only — visuals overridden below) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
         :root {
-            --bg: #f7f7f8;
-            --surface: #ffffff;
-            --text: #15161a;
-            --text-muted: #6b7280;
-            --border: #e6e7eb;
-            --primary: #4f46e5;
+            --bg:           #f4f5f7;
+            --surface:      #ffffff;
+            --text:         #111318;
+            --text-muted:   #6b7280;
+            --border:       #e5e7eb;
+            --primary:      #4f46e5;
             --primary-dark: #4338ca;
             --primary-soft: #eef2ff;
-            --success: #059669;
+            --success:      #059669;
             --success-soft: #d1fae5;
-            --warning: #b45309;
+            --warning:      #b45309;
             --warning-soft: #fef3c7;
-            --danger: #dc2626;
-            --danger-soft: #fee2e2;
-            --radius: 10px;
+            --danger:       #dc2626;
+            --danger-soft:  #fee2e2;
+            --radius:       10px;
+            --shadow-sm:    0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
         }
 
         * { box-sizing: border-box; }
@@ -54,142 +50,157 @@
             -webkit-font-smoothing: antialiased;
         }
 
+        /* ---- Navbar ---- */
         .navbar {
             background: var(--surface) !important;
             border-bottom: 1px solid var(--border);
-            box-shadow: none;
+            box-shadow: var(--shadow-sm);
             min-height: 64px;
         }
 
-        .navbar-brand { font-weight: 700; color: var(--text) !important; letter-spacing: -0.02em; margin-right: 0; }
+        .navbar-brand {
+            font-weight: 800;
+            color: var(--text) !important;
+            letter-spacing: -0.03em;
+            font-size: 1.15rem;
+            margin-right: 0;
+        }
 
-        .logo { height: 30px; width: auto; display: block; }
-
-        h1, h2, h3, h4, h5, h6 { letter-spacing: -0.01em; }
+        .logo { height: 28px; width: auto; display: block; }
 
         .nav-link {
             font-weight: 500;
-            font-size: 0.92rem;
+            font-size: 0.875rem;
             color: var(--text-muted) !important;
             border-radius: 8px;
-            padding: 8px 14px !important;
-            transition: color 0.15s, background 0.15s;
+            padding: 7px 12px !important;
+            transition: color 0.12s, background 0.12s;
+            white-space: nowrap;
+        }
+        .nav-link:hover, .nav-link.active {
+            color: var(--text) !important;
+            background: var(--bg);
         }
 
-        .nav-link:hover, .nav-link.active { color: var(--text) !important; background: var(--bg); }
+        .nav-company-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            background: var(--primary-soft);
+            color: var(--primary);
+            border-radius: 999px;
+            padding: 5px 12px 5px 6px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: background 0.12s;
+        }
+        .nav-company-chip:hover { background: #e0e7ff; color: var(--primary); }
+        .nav-company-chip .chip-icon {
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 800;
+        }
 
+        /* ---- Typography ---- */
+        h1, h2, h3, h4, h5, h6 { letter-spacing: -0.02em; }
+
+        /* ---- Buttons ---- */
         .btn {
             border-radius: 8px;
             font-weight: 600;
-            font-size: 0.92rem;
+            font-size: 0.875rem;
             padding: 9px 18px;
-            transition: all 0.15s;
+            transition: all 0.13s;
+            letter-spacing: -0.01em;
         }
+        .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+        .btn-primary { background: var(--primary); border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+        .btn-outline-primary { color: var(--primary); border-color: var(--primary); }
+        .btn-outline-primary:hover { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .btn-rounded { border-radius: 50px; padding: 10px 24px; }
 
-        .btn-primary {
-            background-color: var(--primary);
-            border-color: var(--primary);
-        }
-
-        .btn-primary:hover {
-            background-color: var(--primary-dark);
-            border-color: var(--primary-dark);
-        }
-
-        .btn-outline-primary {
-            color: var(--primary);
-            border-color: var(--primary);
-        }
-
-        .btn-outline-primary:hover {
-            background-color: var(--primary);
-            border-color: var(--primary);
-        }
-
+        /* ---- Alerts ---- */
         .alert {
             border-radius: var(--radius);
             border: 1px solid var(--border);
             box-shadow: none;
+            font-size: 0.9rem;
         }
 
+        /* ---- Layout ---- */
         .main-container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 28px 20px;
         }
+        .main-container.wide { max-width: 1440px; }
 
-        .main-container.wide {
-            max-width: 1600px;
-        }
-
+        /* ---- Cards ---- */
         .card {
             border-radius: var(--radius);
             border: 1px solid var(--border);
-            box-shadow: none;
+            box-shadow: var(--shadow-sm);
             background: var(--surface);
             margin-bottom: 20px;
         }
-
         .card-header {
             background: var(--surface);
             color: var(--text);
             border-bottom: 1px solid var(--border);
             border-radius: var(--radius) var(--radius) 0 0 !important;
             font-weight: 600;
-            padding: 16px 20px;
+            font-size: 0.9rem;
+            padding: 14px 20px;
         }
 
+        /* ---- Footer ---- */
         footer {
-            background: transparent;
+            background: var(--surface);
             color: var(--text-muted);
-            padding: 28px 0;
-            margin-top: 40px;
+            padding: 24px 0;
+            margin-top: 48px;
             border-top: 1px solid var(--border);
-            font-size: 0.85rem;
+            font-size: 0.83rem;
         }
+        footer a { color: var(--text-muted); text-decoration: none; }
+        footer a:hover { color: var(--text); }
 
-        .feature-icon { font-size: 2rem; color: var(--primary); margin-bottom: 12px; }
-
-        .section-title { position: relative; padding-bottom: 12px; margin-bottom: 24px; font-weight: 700; }
-
+        /* ---- Section titles ---- */
+        .section-title {
+            position: relative;
+            padding-bottom: 12px;
+            margin-bottom: 24px;
+            font-weight: 700;
+        }
         .section-title:after {
             content: '';
             position: absolute;
             bottom: 0; left: 0;
-            width: 48px; height: 3px;
+            width: 40px; height: 3px;
             background: var(--primary);
             border-radius: 3px;
         }
 
-        .btn-rounded { border-radius: 50px; padding: 10px 25px; }
-
-        .text-primary { color: var(--primary) !important; }
-
-        /* ---- Marketplace components ---- */
-
+        /* ---- Marketplace: job cards ---- */
         .job-card {
             border: 1px solid var(--border);
             border-radius: var(--radius);
             background: var(--surface);
             padding: 20px;
             margin-bottom: 16px;
-            transition: border-color 0.15s;
+            transition: border-color 0.13s, box-shadow 0.13s;
         }
-
-        .job-card:hover { border-color: var(--primary); }
-
-        .job-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
-
-        .job-card.compact {
-            padding: 14px 16px;
-            margin-bottom: 0;
-            height: 100%;
-        }
-
-        .job-card.compact h3 { font-size: 0.95rem; margin-bottom: 2px; }
-
+        .job-card:hover { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,0.06); }
+        .job-card h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 4px; }
+        .job-card.compact { padding: 16px; margin-bottom: 0; height: 100%; }
+        .job-card.compact h3 { font-size: 0.92rem; margin-bottom: 2px; }
         .job-card.compact .job-card-meta { font-size: 0.78rem; }
-
         .job-card.compact .job-card-desc {
             font-size: 0.82rem;
             display: -webkit-box;
@@ -198,28 +209,24 @@
             overflow: hidden;
         }
 
+        /* ---- Category pills ---- */
         .category-pill {
             display: inline-block;
-            padding: 6px 14px;
+            padding: 5px 14px;
             border-radius: 999px;
-            font-size: 0.85rem;
-            font-weight: 600;
+            font-size: 0.82rem;
+            font-weight: 500;
             border: 1px solid var(--border);
             color: var(--text-muted);
             background: var(--surface);
             text-decoration: none;
-            margin: 0 6px 8px 0;
-            transition: all 0.15s;
+            margin: 0 5px 8px 0;
+            transition: all 0.13s;
         }
-
         .category-pill:hover { border-color: var(--primary); color: var(--primary); }
+        .category-pill.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 
-        .category-pill.active {
-            background: var(--primary);
-            border-color: var(--primary);
-            color: #fff;
-        }
-
+        /* ---- Applicants ---- */
         .applicant-row {
             display: flex;
             align-items: center;
@@ -229,8 +236,10 @@
             border: 1px solid var(--border);
             border-radius: var(--radius);
             background: var(--surface);
-            margin-bottom: 12px;
+            margin-bottom: 10px;
+            transition: border-color 0.13s;
         }
+        .applicant-row:hover { border-color: var(--border); }
 
         .applicant-card {
             display: flex;
@@ -242,7 +251,6 @@
             background: var(--surface);
             margin-bottom: 10px;
         }
-
         .applicant-card .rank-badge {
             flex-shrink: 0;
             width: 28px; height: 28px;
@@ -250,17 +258,13 @@
             background: var(--bg);
             border: 1px solid var(--border);
             display: flex; align-items: center; justify-content: center;
-            font-weight: 700;
-            font-size: 0.8rem;
-            color: var(--text-muted);
+            font-weight: 700; font-size: 0.8rem; color: var(--text-muted);
         }
-
         .applicant-card .summary-text {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            margin: 4px 0 8px 0;
+            font-size: 0.85rem; color: var(--text-muted); margin: 4px 0 8px 0;
         }
 
+        /* ---- Score pills ---- */
         .score-pill {
             display: inline-flex;
             align-items: center;
@@ -269,32 +273,59 @@
             padding: 4px 10px;
             border-radius: 999px;
             font-weight: 700;
-            font-size: 0.85rem;
+            font-size: 0.83rem;
         }
-
         .score-pill.high { background: var(--success-soft); color: var(--success); }
-        .score-pill.mid { background: var(--warning-soft); color: var(--warning); }
-        .score-pill.low { background: var(--danger-soft); color: var(--danger); }
+        .score-pill.mid  { background: var(--warning-soft); color: var(--warning); }
+        .score-pill.low  { background: var(--danger-soft);  color: var(--danger); }
 
+        /* ---- Status badges ---- */
         .badge-status {
             display: inline-block;
-            padding: 4px 12px;
+            padding: 3px 11px;
             border-radius: 999px;
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             font-weight: 700;
             text-transform: capitalize;
+            letter-spacing: 0.02em;
         }
+        .badge-status.applied      { background: var(--primary-soft); color: var(--primary); }
+        .badge-status.interviewing { background: var(--warning-soft);  color: var(--warning); }
+        .badge-status.rejected     { background: var(--danger-soft);   color: var(--danger); }
+        .badge-status.hired        { background: var(--success-soft);  color: var(--success); }
+        .badge-status.open         { background: var(--success-soft);  color: var(--success); }
+        .badge-status.closed       { background: var(--bg);            color: var(--text-muted); }
 
-        .badge-status.applied { background: var(--primary-soft); color: var(--primary); }
-        .badge-status.interviewing { background: var(--warning-soft); color: var(--warning); }
-        .badge-status.rejected { background: var(--danger-soft); color: var(--danger); }
-        .badge-status.hired { background: var(--success-soft); color: var(--success); }
+        /* ---- Stats strip ---- */
+        .stats-strip {
+            display: flex;
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+        .stats-strip-cell {
+            flex: 1;
+            background: var(--surface);
+            padding: 16px 20px;
+            text-align: center;
+        }
+        .stats-strip-cell .sv { font-size: 1.6rem; font-weight: 800; color: var(--text); line-height: 1; }
+        .stats-strip-cell .sl { font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
 
+        /* ---- Responsive ---- */
         @media (max-width: 768px) {
             body { padding-top: 60px; }
-            .main-container { padding: 16px; }
+            .main-container { padding: 14px; }
             .applicant-row { flex-direction: column; align-items: flex-start; }
+            .stats-strip { flex-direction: column; }
         }
+
+        /* ---- Misc ---- */
+        .text-primary { color: var(--primary) !important; }
+        .feature-icon { font-size: 2rem; color: var(--primary); margin-bottom: 12px; }
     </style>
 
     {% block head %}{% endblock %}
@@ -302,55 +333,76 @@
 <body>
     <nav class="navbar navbar-expand-lg fixed-top">
         <div class="container-fluid px-4 px-lg-5">
-            <a class="navbar-brand d-flex align-items-center" href="/">
-                <img src="{{ url_for('static', filename='Avants.png') }}" alt="Avants AI Logo" class="logo" />
+            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+                <img src="{{ url_for('static', filename='Avants.png') }}" alt="Avants" class="logo" />
             </a>
 
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar">
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbar">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
             <div class="collapse navbar-collapse" id="navbar">
                 {% if current_user.is_authenticated %}
-                <form class="d-flex me-3" method="GET" action="{{ url_for('candidate.browse_jobs') }}">
-                    <div class="input-group input-group-sm" style="width:220px;">
-                        <input type="text" name="q" class="form-control" placeholder="Search jobs...">
-                        <button class="btn btn-primary" type="submit"><i class="fas fa-search"></i></button>
-                    </div>
-                </form>
+                    {% if current_user.role == 'candidate' %}
+                    <form class="d-flex ms-3 me-3" method="GET" action="{{ url_for('candidate.browse_jobs') }}">
+                        <div class="input-group input-group-sm" style="width:220px;">
+                            <input type="text" name="q" class="form-control" style="border-radius:8px 0 0 8px;" placeholder="Search jobs…">
+                            <button class="btn btn-primary" type="submit" style="border-radius:0 8px 8px 0;"><i class="fas fa-search"></i></button>
+                        </div>
+                    </form>
+                    {% endif %}
                 {% endif %}
-                <div class="navbar-nav ms-auto">
+
+                <div class="navbar-nav ms-auto align-items-center gap-1">
                     {% if current_user.is_authenticated %}
                         {% if current_user.role == 'employer' %}
-                            <a class="nav-link" href="{{ url_for('employer.dashboard') }}"><i class="fas fa-briefcase me-1"></i> Dashboard</a>
-                            <a class="nav-link" href="{{ url_for('employer.post_job') }}"><i class="fas fa-plus me-1"></i> Post a Job</a>
+                            {# Show which company this user belongs to #}
+                            {% set nav_company = None %}
+                            {# We pass nav_company from views but fall back gracefully #}
+                            <a class="nav-link" href="{{ url_for('employer.dashboard') }}">
+                                <i class="fas fa-gauge me-1"></i> Dashboard
+                            </a>
+                            <a class="nav-link" href="{{ url_for('employer.post_job') }}">
+                                <i class="fas fa-plus me-1"></i> Post Job
+                            </a>
+                            <a class="nav-link" href="{{ url_for('employer.company_settings') }}">
+                                <i class="fas fa-building me-1"></i> Company
+                            </a>
                         {% else %}
-                            <a class="nav-link" href="{{ url_for('candidate.browse_jobs') }}"><i class="fas fa-search me-1"></i> Browse Jobs</a>
-                            <a class="nav-link" href="{{ url_for('candidate.dashboard') }}"><i class="fas fa-list-check me-1"></i> My Applications</a>
-                            <a class="nav-link" href="{{ url_for('candidate.profile') }}"><i class="fas fa-id-card me-1"></i> My Profile</a>
+                            <a class="nav-link" href="{{ url_for('candidate.browse_jobs') }}">
+                                <i class="fas fa-search me-1"></i> Jobs
+                            </a>
+                            <a class="nav-link" href="{{ url_for('candidate.dashboard') }}">
+                                <i class="fas fa-list-check me-1"></i> Applications
+                            </a>
+                            <a class="nav-link" href="{{ url_for('candidate.profile') }}">
+                                <i class="fas fa-id-card me-1"></i> Profile
+                            </a>
                             <div class="nav-item dropdown" id="notifDropdownWrap" style="display:none;">
-                                <a class="nav-link position-relative" href="#" id="notifBell" data-bs-toggle="dropdown">
+                                <a class="nav-link position-relative" href="#" id="notifBell" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="fas fa-bell"></i>
-                                    <span id="notifBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:0.6rem; display:none;"></span>
+                                    <span id="notifBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:0.58rem; display:none;"></span>
                                 </a>
-                                <div class="dropdown-menu dropdown-menu-end p-0" style="width:340px; max-height:400px; overflow-y:auto;" id="notifMenu">
+                                <div class="dropdown-menu dropdown-menu-end p-0 shadow" style="width:340px; max-height:420px; overflow-y:auto; border-radius:var(--radius);" id="notifMenu">
                                     <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
-                                        <strong class="small">Notifications</strong>
+                                        <strong style="font-size:0.85rem;">Notifications</strong>
                                         <div class="d-flex gap-2 align-items-center">
-                                            <button class="btn btn-link btn-sm p-0 text-muted small" id="markAllRead">Mark all read</button>
-                                            <div class="form-check form-switch mb-0 ms-2" title="Toggle notifications">
+                                            <button class="btn btn-link btn-sm p-0 text-muted" style="font-size:0.78rem;" id="markAllRead">Mark all read</button>
+                                            <div class="form-check form-switch mb-0 ms-1" title="Toggle email notifications">
                                                 <input class="form-check-input" type="checkbox" id="notifToggle" checked>
                                             </div>
                                         </div>
                                     </div>
-                                    <div id="notifList"><div class="text-muted small px-3 py-3">Loading…</div></div>
+                                    <div id="notifList"><div class="text-muted px-3 py-3" style="font-size:0.83rem;">Loading…</div></div>
                                 </div>
                             </div>
                         {% endif %}
-                        <a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt me-1"></i> Logout</a>
+                        <a class="nav-link" href="/logout" title="Log out">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </a>
                     {% else %}
-                        <a class="nav-link" href="/login"><i class="fas fa-sign-in-alt me-1"></i> Login</a>
-                        <a class="nav-link" href="/sign-up"><i class="fas fa-user-plus me-1"></i> Sign Up</a>
+                        <a class="nav-link" href="/login">Log in</a>
+                        <a href="/sign-up" class="btn btn-primary btn-sm ms-1">Sign Up</a>
                     {% endif %}
                 </div>
             </div>
@@ -361,7 +413,8 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show mb-3" role="alert">
+                        <i class="fas {{ 'fa-circle-exclamation' if category == 'error' else 'fa-circle-check' }} me-2"></i>
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
@@ -369,68 +422,67 @@
             {% endif %}
         {% endwith %}
 
-        {% block content %}
-        {% endblock %}
+        {% block content %}{% endblock %}
     </div>
 
     <footer>
-        <div class="container text-center">
-            <p class="mb-0">&copy; 2026 Avants. All rights reserved. &middot; <a href="{{ url_for('faq') }}" class="text-muted">FAQ</a> &middot; <a href="{{ url_for('contact') }}" class="text-muted">Contact Us</a></p>
+        <div class="container">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div class="d-flex align-items-center gap-2">
+                    <img src="{{ url_for('static', filename='Avants.png') }}" alt="Avants" style="height:20px; opacity:0.6;">
+                    <span class="text-muted">&copy; 2026 Avants AI. All rights reserved.</span>
+                </div>
+                <div class="d-flex gap-4">
+                    <a href="{{ url_for('faq') }}">FAQ</a>
+                    <a href="{{ url_for('contact') }}">Contact</a>
+                </div>
+            </div>
         </div>
     </footer>
 
-    <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- Custom JS -->
     <script src="{{ url_for('static', filename='index.js') }}"></script>
 
     <script>
-        // Wait 3 seconds, then fade out and remove alerts
         setTimeout(() => {
-          document.querySelectorAll('.alert').forEach(alert => {
-            alert.classList.remove('show');
-            alert.classList.add('hide');
-            setTimeout(() => alert.remove(), 200);
-          });
-        },3000);
-      </script>
+            document.querySelectorAll('.alert').forEach(alert => {
+                alert.classList.remove('show');
+                setTimeout(() => alert.remove(), 200);
+            });
+        }, 4000);
+    </script>
 
     {% block scripts %}{% endblock %}
 
     {% if current_user.is_authenticated and current_user.role == 'candidate' %}
     <script>
     (function() {
-        const wrap = document.getElementById("notifDropdownWrap");
-        const badge = document.getElementById("notifBadge");
-        const list  = document.getElementById("notifList");
+        const wrap   = document.getElementById("notifDropdownWrap");
+        const badge  = document.getElementById("notifBadge");
+        const list   = document.getElementById("notifList");
         const toggle = document.getElementById("notifToggle");
 
         async function loadNotifications() {
             try {
                 const r = await fetch("{{ url_for('candidate.notifications') }}");
                 const data = await r.json();
-
                 toggle.checked = data.notifications_enabled;
                 wrap.style.display = "";
-
                 if (data.unread_count > 0) {
                     badge.textContent = data.unread_count > 9 ? "9+" : data.unread_count;
                     badge.style.display = "";
                 } else {
                     badge.style.display = "none";
                 }
-
                 if (!data.notifications || data.notifications.length === 0) {
-                    list.innerHTML = '<div class="text-muted small px-3 py-3">No notifications yet.</div>';
+                    list.innerHTML = '<div class="text-muted px-3 py-3" style="font-size:0.83rem;">No notifications yet.</div>';
                     return;
                 }
-
                 list.innerHTML = data.notifications.map(n => `
                     <a href="${n.link || '#'}" class="d-block px-3 py-2 border-bottom text-decoration-none ${n.read ? 'text-muted' : 'fw-semibold'}"
-                       style="font-size:0.82rem; background:${n.read ? '#fff' : '#eef2ff'};">
+                       style="font-size:0.82rem; background:${n.read ? '#fff' : '#eef2ff'}; transition:background 0.1s;">
                         ${n.message}
-                        <div class="text-muted" style="font-size:0.72rem;">${n.created_at ? new Date(n.created_at).toLocaleString() : ''}</div>
+                        <div class="text-muted mt-1" style="font-size:0.7rem;">${n.created_at ? new Date(n.created_at).toLocaleString() : ''}</div>
                     </a>
                 `).join("");
             } catch (_) {}
@@ -457,7 +509,6 @@
             });
         });
 
-        // Load unread count silently on page load
         loadNotifications();
     })();
     </script>

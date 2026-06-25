@@ -1,17 +1,7 @@
-{% extends "base.html" %} 
-{% block title %}Sign Up{% endblock %}
+{% extends "base.html" %}
+{% block title %}Create account — Avants{% endblock %}
 
-{% block content %}
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-GLFDS8ZT1H"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-GLFDS8ZT1H');
-</script>
-
+{% block head %}
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     const employerRadio = document.getElementById("roleEmployer");
@@ -19,82 +9,153 @@ document.addEventListener("DOMContentLoaded", () => {
     const companyGroup = document.getElementById("companyNameGroup");
     const companyInput = document.getElementById("companyName");
     const googleLink = document.getElementById("googleSignupLink");
+    const feeNotice = document.getElementById("candidateFeeNotice");
 
-    function toggleCompanyField() {
+    function toggle() {
         const isEmployer = employerRadio.checked;
         companyGroup.style.display = isEmployer ? "block" : "none";
         companyInput.required = isEmployer;
-        if (googleLink) {
-            googleLink.href = "/login/google?role=" + (isEmployer ? "employer" : "candidate");
-        }
+        if (feeNotice) feeNotice.style.display = isEmployer ? "none" : "flex";
+        if (googleLink) googleLink.href = "/login/google?role=" + (isEmployer ? "employer" : "candidate");
     }
 
-    employerRadio.addEventListener("change", toggleCompanyField);
-    candidateRadio.addEventListener("change", toggleCompanyField);
-    toggleCompanyField();
+    employerRadio.addEventListener("change", toggle);
+    candidateRadio.addEventListener("change", toggle);
+    toggle();
 });
 </script>
+<style>
+    .auth-wrap {
+        min-height: calc(100vh - 140px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 16px;
+    }
+    .auth-card {
+        width: 100%;
+        max-width: 460px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 40px 36px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+    }
+    .auth-logo { height: 32px; margin-bottom: 28px; }
+    .auth-title { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 6px; }
+    .auth-sub { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 28px; }
+    .role-toggle { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+    .role-toggle input[type="radio"] { display: none; }
+    .role-toggle label {
+        flex: 1;
+        text-align: center;
+        padding: 10px 14px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        color: var(--text-muted);
+        background: var(--surface);
+        transition: all 0.12s;
+        border-right: 1px solid var(--border);
+        margin: 0;
+        user-select: none;
+    }
+    .role-toggle label:last-of-type { border-right: none; }
+    .role-toggle input:checked + label {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+    }
+    .divider-line {
+        display: flex; align-items: center; gap: 12px;
+        color: var(--text-muted); font-size: 0.78rem; font-weight: 500;
+        margin: 20px 0;
+    }
+    .divider-line:before, .divider-line:after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .google-btn {
+        display: flex; align-items: center; justify-content: center; gap: 10px;
+        width: 100%; padding: 11px 16px;
+        border: 1px solid var(--border); border-radius: 8px;
+        background: var(--surface); color: var(--text);
+        font-size: 0.9rem; font-weight: 600;
+        cursor: pointer; text-decoration: none;
+        transition: background 0.12s, border-color 0.12s;
+    }
+    .google-btn:hover { background: var(--bg); border-color: #94a3b8; color: var(--text); }
+    .fee-notice {
+        background: var(--primary-soft);
+        border-radius: 8px;
+        padding: 12px 14px;
+        font-size: 0.78rem;
+        color: var(--primary);
+        margin-top: 16px;
+        display: flex; align-items: flex-start; gap: 8px;
+    }
+    .fee-notice i { flex-shrink: 0; margin-top: 1px; }
+</style>
+{% endblock %}
 
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-6 col-lg-5">
-            <div class="card">
-                <div class="card-header text-center">
-                    <h3><i class="fas fa-user-plus me-2"></i>Sign Up</h3>
-                </div>
-                <div class="card-body">
-                    <form method="POST">
-                        <div class="mb-3">
-                            <label class="form-label d-block">I'm signing up as a...</label>
-                            <div class="btn-group w-100" role="group">
-                                <input type="radio" class="btn-check" name="role" id="roleCandidate" value="candidate" checked>
-                                <label class="btn btn-outline-primary" for="roleCandidate">Candidate &mdash; looking for work</label>
+{% block content %}
+<div class="auth-wrap">
+    <div class="auth-card">
+        <img src="{{ url_for('static', filename='Avants.png') }}" alt="Avants" class="auth-logo">
+        <h1 class="auth-title">Create your account</h1>
+        <p class="auth-sub">Join Avants AI — free to sign up</p>
 
-                                <input type="radio" class="btn-check" name="role" id="roleEmployer" value="employer">
-                                <label class="btn btn-outline-primary" for="roleEmployer">Employer &mdash; hiring</label>
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="email" class="form-label">Email Address</label>
-                            <input type="email" class="form-control" id="email" name="email" placeholder="Enter your email" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="firstName" class="form-label">First Name</label>
-                            <input type="text" class="form-control" id="firstName" name="firstName" placeholder="Enter your first name" required>
-                        </div>
-
-                        <div class="mb-3" id="companyNameGroup" style="display:none;">
-                            <label for="companyName" class="form-label">Company Name</label>
-                            <input type="text" class="form-control" id="companyName" name="companyName" placeholder="Enter your company name">
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="password1" class="form-label">Password</label>
-                            <input type="password" class="form-control" id="password1" name="password1" placeholder="Create a password" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="password2" class="form-label">Confirm Password</label>
-                            <input type="password" class="form-control" id="password2" name="password2" placeholder="Confirm your password" required>
-                        </div>
-
-                        <div class="d-grid mb-3">
-                            <button type="submit" class="btn btn-primary">Create Account</button>
-                            <a id="googleSignupLink" href="/login/google?role=candidate" class="btn btn-outline-secondary mt-2 d-flex align-items-center justify-content-center gap-2">
-                                <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google logo" style="width:18px;height:18px;">
-                                Continue with Google
-                            </a>
-                        </div>
-
-                        <div class="text-center">
-                            <p class="mb-0">Already have an account? <a href="{{ url_for('auth.login') }}">Login here</a></p>
-                        </div>
-                    </form>
-                </div>
+        <form method="POST">
+            <!-- Role selector -->
+            <div class="role-toggle">
+                <input type="radio" name="role" id="roleCandidate" value="candidate" checked>
+                <label for="roleCandidate"><i class="fas fa-user me-1"></i> I'm a candidate</label>
+                <input type="radio" name="role" id="roleEmployer" value="employer">
+                <label for="roleEmployer"><i class="fas fa-briefcase me-1"></i> I'm hiring</label>
             </div>
-        </div>
+
+            <div class="mb-3">
+                <label for="firstName" class="form-label fw-semibold" style="font-size:0.85rem;">First name</label>
+                <input type="text" class="form-control" id="firstName" name="firstName" placeholder="Your first name" required autocomplete="given-name">
+            </div>
+
+            <div class="mb-3">
+                <label for="email" class="form-label fw-semibold" style="font-size:0.85rem;">Email address</label>
+                <input type="email" class="form-control" id="email" name="email" placeholder="you@company.com" required autocomplete="email">
+            </div>
+
+            <div id="companyNameGroup" class="mb-3" style="display:none;">
+                <label for="companyName" class="form-label fw-semibold" style="font-size:0.85rem;">Company name</label>
+                <input type="text" class="form-control" id="companyName" name="companyName" placeholder="Your company name">
+                <div class="form-text">Use your company email — personal providers like Gmail aren't accepted.</div>
+            </div>
+
+            <div class="mb-3">
+                <label for="password1" class="form-label fw-semibold" style="font-size:0.85rem;">Password</label>
+                <input type="password" class="form-control" id="password1" name="password1" placeholder="Create a password (7+ chars)" required autocomplete="new-password">
+            </div>
+
+            <div class="mb-4">
+                <label for="password2" class="form-label fw-semibold" style="font-size:0.85rem;">Confirm password</label>
+                <input type="password" class="form-control" id="password2" name="password2" placeholder="Repeat your password" required autocomplete="new-password">
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100" style="padding:11px;">Create account</button>
+
+            <div id="candidateFeeNotice" class="fee-notice" style="display:none;">
+                <i class="fas fa-circle-info"></i>
+                <span><strong>Candidate note:</strong> A 12.5% placement fee of first-year compensation is charged upon hire.
+                <a href="/faq#fee" class="text-decoration-none fw-semibold">Learn more</a></span>
+            </div>
+        </form>
+
+        <div class="divider-line">or</div>
+
+        <a id="googleSignupLink" href="/login/google?role=candidate" class="google-btn">
+            <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" style="width:18px;height:18px;">
+            Continue with Google
+        </a>
+
+        <p class="text-center text-muted mt-4 mb-0" style="font-size:0.85rem;">
+            Already have an account? <a href="{{ url_for('auth.login') }}" class="fw-semibold text-decoration-none">Log in</a>
+        </p>
     </div>
 </div>
 {% endblock %}

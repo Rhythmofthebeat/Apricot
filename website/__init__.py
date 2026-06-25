@@ -4,11 +4,38 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_mail import Mail
+from sqlalchemy import text
 from config import Config
 
 db = SQLAlchemy()
 mail = Mail()
 DB_NAME = "database.db"
+
+
+def _run_migrations(db):
+    """Add columns that were introduced after the initial schema.
+    Each ALTER TABLE is wrapped in try/except — safe to run on every
+    startup, no-op when the column already exists."""
+    new_columns = [
+        # company — extended profile fields
+        "ALTER TABLE company ADD COLUMN description TEXT",
+        "ALTER TABLE company ADD COLUMN industry VARCHAR(100)",
+        "ALTER TABLE company ADD COLUMN size VARCHAR(50)",
+        "ALTER TABLE company ADD COLUMN location VARCHAR(200)",
+        # job — salary + interview config (added in later commits)
+        "ALTER TABLE job ADD COLUMN salary_usd INTEGER",
+        "ALTER TABLE job ADD COLUMN employment_type VARCHAR(50)",
+        "ALTER TABLE job ADD COLUMN interview_length VARCHAR(20) NOT NULL DEFAULT 'standard'",
+        "ALTER TABLE job ADD COLUMN interview_focus TEXT",
+        "ALTER TABLE job ADD COLUMN interview_questions TEXT",
+    ]
+    with db.engine.connect() as conn:
+        for stmt in new_columns:
+            try:
+                conn.execute(text(stmt))
+                conn.commit()
+            except Exception:
+                conn.rollback()
 
 def create_app():
     app = Flask(__name__)
@@ -42,10 +69,11 @@ def create_app():
     
     os.makedirs(upload_path, exist_ok=True)
 
-    from .models import User, Company, Job, CandidateProfile, Application
+    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite
 
-    with app.app_context():       #Sets up the app context
-            db.create_all()
+    with app.app_context():
+        db.create_all()
+        _run_migrations(db)
 
     from .views import views
     from .auth import auth

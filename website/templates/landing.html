@@ -1,44 +1,278 @@
 {% extends "base.html" %}
+{% block title %}Hire smarter with AI — Avants{% endblock %}
 
-{% block title %}Hire and get hired, AI-vetted{% endblock %}
+{% block head %}
+<style>
+    .hero-wrap {
+        background: linear-gradient(160deg, #f8f7ff 0%, #f4f5f7 100%);
+        border-bottom: 1px solid var(--border);
+        padding: 80px 0 72px;
+        margin: -28px -20px 0;
+    }
+    .hero-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--primary-soft);
+        color: var(--primary);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        border-radius: 999px;
+        padding: 5px 14px;
+        margin-bottom: 20px;
+    }
+    .hero-title {
+        font-size: clamp(2rem, 5vw, 3.2rem);
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        line-height: 1.1;
+        margin-bottom: 20px;
+    }
+    .hero-sub {
+        font-size: 1.05rem;
+        line-height: 1.7;
+        color: var(--text-muted);
+        max-width: 520px;
+        margin: 0 auto 32px;
+    }
+    .hero-cta-group { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+    .btn-hero {
+        padding: 13px 28px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        border-radius: 50px;
+        letter-spacing: -0.01em;
+    }
+    .how-it-works { padding: 64px 0 48px; }
+    .step-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 28px 24px;
+        height: 100%;
+        position: relative;
+    }
+    .step-num {
+        width: 36px; height: 36px;
+        border-radius: 10px;
+        background: var(--primary-soft);
+        color: var(--primary);
+        font-weight: 800;
+        font-size: 0.95rem;
+        display: flex; align-items: center; justify-content: center;
+        margin-bottom: 16px;
+    }
+    .step-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .step-card p { font-size: 0.88rem; color: var(--text-muted); margin: 0; line-height: 1.65; }
+    .step-connector {
+        position: absolute;
+        right: -20px; top: 36px;
+        color: var(--border);
+        font-size: 1.1rem;
+        z-index: 1;
+    }
+    .value-strip {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 32px;
+        margin-bottom: 24px;
+    }
+    .value-strip h2 { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 8px; }
+    .check-list { list-style: none; padding: 0; margin: 16px 0 24px; }
+    .check-list li {
+        display: flex; align-items: flex-start; gap: 10px;
+        font-size: 0.9rem; margin-bottom: 10px; color: var(--text);
+    }
+    .check-list li i { color: var(--success); flex-shrink: 0; margin-top: 2px; }
+    .fee-callout {
+        background: var(--primary-soft);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        margin-top: 16px;
+        font-size: 0.85rem;
+        color: var(--primary);
+        display: flex; align-items: flex-start; gap: 10px;
+    }
+    .fee-callout i { flex-shrink: 0; margin-top: 2px; }
+    .social-proof {
+        background: var(--bg);
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+        padding: 24px 0;
+        text-align: center;
+        margin: 0 -20px;
+    }
+    .proof-stat { font-size: 1.5rem; font-weight: 800; color: var(--text); }
+    .proof-label { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; margin-top: 2px; }
+    .section-eyebrow {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--primary);
+        margin-bottom: 8px;
+    }
+    @media (max-width: 768px) {
+        .hero-wrap { padding: 56px 20px 48px; margin: -14px -14px 0; }
+        .step-connector { display: none; }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container pt-3 pb-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-9 text-center mb-5">
-            <h1 class="display-4 fw-bold mb-3">Hiring, vetted by AI</h1>
-            <p class="lead text-muted mb-4">Post a role and get a ranked, AI-scored pipeline. Apply to a role and get matched and interviewed by AI &mdash; no resume required.</p>
-            <div class="d-flex flex-wrap justify-content-center gap-3">
-                <a href="/sign-up" class="btn btn-primary btn-lg btn-rounded">
-                    <i class="fas fa-user-plus me-2"></i>I'm looking for work
-                </a>
-                <a href="/sign-up" class="btn btn-outline-primary btn-lg btn-rounded">
-                    <i class="fas fa-briefcase me-2"></i>I'm hiring
-                </a>
+
+<!-- ====== HERO ====== -->
+<div class="hero-wrap">
+    <div class="container text-center">
+        <div class="hero-label"><i class="fas fa-bolt"></i> AI-Powered Hiring</div>
+        <h1 class="hero-title">The faster way<br>to hire and get hired</h1>
+        <p class="hero-sub">
+            Avants AI scores every resume, runs a structured interview, and surfaces only the best candidates —
+            so employers hire in days, not weeks.
+        </p>
+        <div class="hero-cta-group">
+            <a href="/sign-up" class="btn btn-primary btn-hero">
+                <i class="fas fa-search me-2"></i>Find a Job
+            </a>
+            <a href="/sign-up" class="btn btn-outline-primary btn-hero">
+                <i class="fas fa-briefcase me-2"></i>Post a Role
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- ====== SOCIAL PROOF STRIP ====== -->
+<div class="social-proof">
+    <div class="container">
+        <div class="row g-0 justify-content-center">
+            <div class="col-4 col-md-2">
+                <div class="proof-stat">AI</div>
+                <div class="proof-label">Resume Scoring</div>
+            </div>
+            <div class="col-4 col-md-2">
+                <div class="proof-stat">0–100</div>
+                <div class="proof-label">Match Score</div>
+            </div>
+            <div class="col-4 col-md-2">
+                <div class="proof-stat">Voice</div>
+                <div class="proof-label">AI Interviews</div>
+            </div>
+            <div class="col-4 col-md-2 mt-3 mt-md-0">
+                <div class="proof-stat">&lt;24h</div>
+                <div class="proof-label">Avg. Screen Time</div>
+            </div>
+            <div class="col-4 col-md-2 mt-3 mt-md-0">
+                <div class="proof-stat">12.5%</div>
+                <div class="proof-label">Placement Fee</div>
             </div>
         </div>
     </div>
+</div>
 
-    <div class="row g-4 justify-content-center">
-        <div class="col-md-5">
-            <div class="card h-100">
-                <div class="card-body text-center p-4">
-                    <div class="feature-icon"><i class="fas fa-bullseye"></i></div>
-                    <h3 class="card-title">AI Match Scoring</h3>
-                    <p class="card-text text-muted">Every application is scored 0-100 against the job description &mdash; employers see a ranked list, not a pile of resumes.</p>
+<!-- ====== HOW IT WORKS ====== -->
+<div class="how-it-works">
+    <div class="container">
+        <div class="text-center mb-5">
+            <div class="section-eyebrow">How it works</div>
+            <h2 class="h2 fw-bold" style="letter-spacing:-0.03em;">From application to offer in&nbsp;hours</h2>
+        </div>
+
+        <div class="row g-3 mb-5">
+            <div class="col-md-3 position-relative">
+                <div class="step-card">
+                    <div class="step-num">1</div>
+                    <h3>Apply in minutes</h3>
+                    <p>Upload your resume or paste LinkedIn text. Our AI reads it and extracts your experience automatically.</p>
+                </div>
+                <div class="step-connector d-none d-md-block"><i class="fas fa-chevron-right"></i></div>
+            </div>
+            <div class="col-md-3 position-relative">
+                <div class="step-card">
+                    <div class="step-num">2</div>
+                    <h3>Get AI-scored</h3>
+                    <p>Your resume is matched against the job description and scored 0–100 with a clear breakdown of strengths and gaps.</p>
+                </div>
+                <div class="step-connector d-none d-md-block"><i class="fas fa-chevron-right"></i></div>
+            </div>
+            <div class="col-md-3 position-relative">
+                <div class="step-card">
+                    <div class="step-num">3</div>
+                    <h3>Voice AI interview</h3>
+                    <p>Complete a structured voice interview tailored to the role. The AI gives a verdict — so employers get context, not just a score.</p>
+                </div>
+                <div class="step-connector d-none d-md-block"><i class="fas fa-chevron-right"></i></div>
+            </div>
+            <div class="col-md-3">
+                <div class="step-card">
+                    <div class="step-num">4</div>
+                    <h3>Employer decides</h3>
+                    <p>Employers review a ranked, pre-screened pipeline and move fast — no inbox full of unreviewed applications.</p>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-5">
-            <div class="card h-100">
-                <div class="card-body text-center p-4">
-                    <div class="feature-icon"><i class="fas fa-comments"></i></div>
-                    <h3 class="card-title">AI Interview</h3>
-                    <p class="card-text text-muted">A focused, structured AI screening interview &mdash; like a real recruiter call &mdash; produces a clear verdict before a human ever has to screen.</p>
+        <!-- For candidates vs employers -->
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="value-strip">
+                    <div class="section-eyebrow"><i class="fas fa-user me-1"></i> For candidates</div>
+                    <h2>Stand out with every application</h2>
+                    <p class="text-muted" style="font-size:0.9rem;">Traditional applications disappear into a pile. Avants AI makes sure yours is seen, scored, and seriously considered.</p>
+                    <ul class="check-list">
+                        <li><i class="fas fa-check-circle"></i> Know your match score before you submit</li>
+                        <li><i class="fas fa-check-circle"></i> AI coaching on how to improve your application</li>
+                        <li><i class="fas fa-check-circle"></i> Structured interview — no ghosting after you finish</li>
+                        <li><i class="fas fa-check-circle"></i> Track all your applications in one dashboard</li>
+                        <li><i class="fas fa-check-circle"></i> Build your resume from LinkedIn in seconds</li>
+                    </ul>
+                    <a href="/sign-up" class="btn btn-primary btn-rounded">
+                        <i class="fas fa-search me-1"></i> Browse open roles
+                    </a>
+                    <div class="fee-callout mt-3">
+                        <i class="fas fa-circle-info"></i>
+                        <span>A <strong>12.5% placement fee</strong> of first-year compensation is charged to candidates upon hire.
+                        <a href="/faq#fee" class="text-primary fw-semibold text-decoration-none">Learn more</a></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="value-strip">
+                    <div class="section-eyebrow"><i class="fas fa-building me-1"></i> For employers</div>
+                    <h2>A pre-screened pipeline, not a pile</h2>
+                    <p class="text-muted" style="font-size:0.9rem;">Post a role in minutes. Every applicant is scored and interviewed by AI before you read a single resume.</p>
+                    <ul class="check-list">
+                        <li><i class="fas fa-check-circle"></i> AI ranks applicants by match score</li>
+                        <li><i class="fas fa-check-circle"></i> Voice interview with verdict before human review</li>
+                        <li><i class="fas fa-check-circle"></i> Structured job description builder with AI assist</li>
+                        <li><i class="fas fa-check-circle"></i> Schedule meetings and update status in one place</li>
+                        <li><i class="fas fa-check-circle"></i> Company page — team members, public profile</li>
+                    </ul>
+                    <a href="/sign-up" class="btn btn-primary btn-rounded">
+                        <i class="fas fa-briefcase me-1"></i> Post a job for free
+                    </a>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- ====== BOTTOM CTA ====== -->
+<div style="background: var(--primary); padding: 64px 0; margin: 0 -20px -28px; text-align: center;">
+    <div class="container">
+        <h2 style="color:#fff; font-weight:800; font-size:1.8rem; letter-spacing:-0.03em; margin-bottom:12px;">
+            Ready to get started?
+        </h2>
+        <p style="color: rgba(255,255,255,0.75); font-size:1rem; margin-bottom:28px;">
+            Join candidates and companies using Avants AI to hire and get hired — faster.
+        </p>
+        <a href="/sign-up" class="btn btn-hero" style="background:#fff; color:var(--primary); border:none;">
+            Create a free account <i class="fas fa-arrow-right ms-2"></i>
+        </a>
+    </div>
+</div>
+
 {% endblock %}
