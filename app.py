@@ -386,6 +386,7 @@ def contact():
             return render_template("contact.html")
 
         try:
+            # Notify us
             msg = Message(
                 subject=f"Contact form: {name}",
                 recipients=["bazarirhythm@gmail.com"],
@@ -393,7 +394,26 @@ def contact():
                 body=f"From: {name} <{email}>\n\n{message}",
             )
             mail.send(msg)
-            flash("Message sent! We'll get back to you soon.", "success")
+
+            # Auto-reply to sender
+            from email_utils import send_branded_email
+            send_branded_email(
+                to_email=email,
+                subject="We received your message",
+                heading=f"Thanks for reaching out, {name.split()[0]}!",
+                body_html=(
+                    f"We got your message and will get back to you shortly.<br><br>"
+                    f"<strong>Your message:</strong><br>"
+                    f"<div style='background:#f7f7f8;border-radius:8px;padding:14px 16px;margin-top:8px;"
+                    f"font-size:13px;color:#3a3c42;'>{message}</div>"
+                ),
+                plain_text=(
+                    f"Hi {name},\n\nWe received your message and will get back to you soon.\n\n"
+                    f"Your message:\n{message}\n\nAvants AI Team"
+                ),
+            )
+
+            flash("Message sent! Check your email for confirmation.", "success")
         except Exception as e:
             logger.error(f"Contact form send failed: {str(e)}")
             flash("Couldn't send your message right now. Please try again shortly.", "error")

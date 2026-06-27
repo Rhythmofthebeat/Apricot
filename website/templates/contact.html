@@ -1,30 +1,103 @@
 {% extends "base.html" %}
 {% block title %}Contact Us{% endblock %}
 
-{% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-6">
-        <h1 class="h3 fw-bold mb-1">Contact Us</h1>
-        <p class="text-muted mb-1">Questions, feedback, or issues? Send us a message and we'll get back to you.</p>
-        <p class="text-muted small mb-4">Or email us directly at <a href="mailto:bazarirhythm@gmail.com">bazarirhythm@gmail.com</a></p>
+{% block head %}
+<style>
+    .contact-wrap {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    .contact-info-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        margin-bottom: 14px;
+    }
+    .contact-icon {
+        width: 40px; height: 40px; border-radius: 10px;
+        background: var(--primary-soft);
+        color: var(--primary);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+    .contact-info-label { font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+    .contact-info-value { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+    .contact-info-value a { color: var(--primary); text-decoration: none; }
+    .contact-info-value a:hover { text-decoration: underline; }
+</style>
+{% endblock %}
 
-        <div class="card">
-            <div class="card-body p-4">
-                <form method="POST">
-                    <div class="mb-3">
-                        <label for="name" class="form-label fw-bold">Name</label>
-                        <input type="text" class="form-control" id="name" name="name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="email" class="form-label fw-bold">Email</label>
-                        <input type="email" class="form-control" id="email" name="email" required>
-                    </div>
-                    <div class="mb-4">
-                        <label for="message" class="form-label fw-bold">Message</label>
-                        <textarea class="form-control" id="message" name="message" rows="6" required></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100">Send Message</button>
-                </form>
+{% block content %}
+<div class="contact-wrap">
+    <div class="mb-4">
+        <h1 class="h3 fw-bold mb-1">Contact Us</h1>
+        <p class="text-muted">Have a question or need help? We usually respond within a few hours.</p>
+    </div>
+
+    <div class="row g-4">
+        <!-- Form -->
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-4">Send a message</h5>
+                    <form method="POST">
+                        <div class="row g-3 mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label fw-semibold" style="font-size:0.85rem;">Your name</label>
+                                <input type="text" class="form-control" name="name" placeholder="Jane Smith" required>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label fw-semibold" style="font-size:0.85rem;">Email address</label>
+                                <input type="email" class="form-control" name="email" placeholder="you@example.com" required>
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold" style="font-size:0.85rem;">Message</label>
+                            <textarea class="form-control" name="message" rows="6" placeholder="Tell us what's on your mind..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100" style="padding:11px;">
+                            <i class="fas fa-paper-plane me-2"></i>Send Message
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info -->
+        <div class="col-lg-5">
+            <div class="contact-info-card">
+                <div class="contact-icon"><i class="fas fa-envelope"></i></div>
+                <div>
+                    <div class="contact-info-label">Email us directly</div>
+                    <div class="contact-info-value"><a href="mailto:bazarirhythm@gmail.com">bazarirhythm@gmail.com</a></div>
+                </div>
+            </div>
+            <div class="contact-info-card">
+                <div class="contact-icon"><i class="fas fa-clock"></i></div>
+                <div>
+                    <div class="contact-info-label">Response time</div>
+                    <div class="contact-info-value">Usually within a few hours</div>
+                </div>
+            </div>
+            <div class="contact-info-card">
+                <div class="contact-icon"><i class="fas fa-circle-question"></i></div>
+                <div>
+                    <div class="contact-info-label">Common questions</div>
+                    <div class="contact-info-value"><a href="{{ url_for('faq') }}">Browse our FAQ</a></div>
+                </div>
+            </div>
+
+            <div class="card mt-3" style="background:var(--primary-soft);border-color:transparent;">
+                <div class="card-body p-4">
+                    <div style="font-size:1.4rem;margin-bottom:8px;">👋</div>
+                    <div class="fw-bold mb-1" style="font-size:0.9rem;">We're a small team</div>
+                    <p class="text-muted mb-0" style="font-size:0.82rem;">Every message goes straight to the founders. We read everything and take feedback seriously.</p>
+                </div>
             </div>
         </div>
     </div>
