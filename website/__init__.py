@@ -61,6 +61,8 @@ def _run_migrations(db):
         "ALTER TABLE company ADD COLUMN blind_mode_enabled BOOLEAN NOT NULL DEFAULT 0",
         # application — saved interview session for resume-later
         "ALTER TABLE application ADD COLUMN interview_saved_session TEXT",
+        # user — admin flag
+        "ALTER TABLE \"user\" ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE",
     ]
     with db.engine.connect() as conn:
         for stmt in new_columns:
@@ -117,12 +119,14 @@ def create_app():
     from .employer import employer
     from .candidate import candidate
     from .earn import earn
+    from .admin import admin_bp
 
     app.register_blueprint(views, url_prefix='/')
     app.register_blueprint(auth, url_prefix='/')
     app.register_blueprint(employer, url_prefix='/')
     app.register_blueprint(candidate, url_prefix='/')
     app.register_blueprint(earn, url_prefix='/')
+    app.register_blueprint(admin_bp, url_prefix='/')
 
     from datetime import datetime, timezone
 

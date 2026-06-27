@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Admin — Training Tasks{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h4 fw-bold mb-0"><i class="fas fa-robot me-2 text-primary"></i>Training Task Admin</h1>
+    <a href="{{ url_for('admin_bp.create_task') }}" class="btn btn-primary btn-sm">
+        <i class="fas fa-plus me-1"></i> New Task
+    </a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card text-center p-3">
+            <div style="font-size:1.8rem;font-weight:800;">{{ tasks|length }}</div>
+            <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Total Tasks</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center p-3">
+            <div style="font-size:1.8rem;font-weight:800;">{{ total_submissions }}</div>
+            <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Total Submissions</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center p-3">
+            <div style="font-size:1.8rem;font-weight:800;color:#dc2626;">${{ "%.2f"|format(total_pending_payout / 100) }}</div>
+            <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Unpaid Earnings</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header fw-semibold">All Tasks</div>
+    {% if not tasks %}
+    <div class="card-body text-center p-5 text-muted">No tasks yet. <a href="{{ url_for('admin_bp.create_task') }}">Create one</a></div>
+    {% else %}
+    <div class="card-body p-0">
+        {% for task in tasks %}
+        <div class="d-flex align-items-center gap-3 px-4 py-3" style="border-bottom:1px solid var(--border);">
+            <div class="flex-grow-1">
+                <div class="fw-semibold" style="font-size:0.9rem;">{{ task.title }}</div>
+                <div class="text-muted" style="font-size:0.78rem;">
+                    {{ task.task_type }} &middot; {{ task.domain or 'Any domain' }} &middot;
+                    ${{ "%.2f"|format(task.pay_cents / 100) }}/task &middot;
+                    {{ task.submissions|length }} submission{{ 's' if task.submissions|length != 1 }}
+                </div>
+            </div>
+            <span class="badge {{ 'bg-success' if task.status == 'open' else 'bg-secondary' }}">{{ task.status }}</span>
+            <a href="{{ url_for('admin_bp.task_submissions', task_id=task.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+            <a href="{{ url_for('admin_bp.export_task', task_id=task.id) }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-download me-1"></i> JSONL
+            </a>
+            {% if task.status == 'open' %}
+            <form method="POST" action="{{ url_for('admin_bp.close_task', task_id=task.id) }}"
+                  data-confirm-title="Close this task?"
+                  data-confirm-message="No new submissions will be accepted."
+                  data-confirm-btn="Close task">
+                <button class="btn btn-sm btn-outline-danger">Close</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

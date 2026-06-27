@@ -87,6 +87,7 @@ class User(db.Model, UserMixin):
     role = db.Column(db.String(20), nullable=False, default="candidate")  # "candidate" | "employer"
     email_verified = db.Column(db.Boolean, nullable=False, default=True)  # employers start False
     notifications_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    is_admin = db.Column(db.Boolean, nullable=False, default=False)
 
 
 class Company(db.Model):

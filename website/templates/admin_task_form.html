@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Create Training Task{% endblock %}
+
+{% block head %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const typeSelect = document.getElementById('task_type');
+    const rankingFields = document.getElementById('rankingFields');
+    const singleFields = document.getElementById('singleFields');
+
+    function toggle() {
+        const isRanking = typeSelect.value === 'ranking';
+        rankingFields.style.display = isRanking ? 'block' : 'none';
+        singleFields.style.display = isRanking ? 'none' : 'block';
+    }
+    typeSelect.addEventListener('change', toggle);
+    toggle();
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-lg-8">
+    <a href="{{ url_for('admin_bp.dashboard') }}" class="btn btn-sm btn-outline-secondary mb-4">
+        <i class="fas fa-arrow-left me-1"></i> Back
+    </a>
+    <h1 class="h4 fw-bold mb-4">Create Training Task</h1>
+
+    <div class="card">
+        <div class="card-body p-4">
+            <form method="POST">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Task title</label>
+                    <input type="text" class="form-control" name="title" placeholder="e.g. Rank these two legal summaries" required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Instructions / prompt shown to annotator</label>
+                    <textarea class="form-control" name="description" rows="3"
+                        placeholder="What should the professional evaluate? What context do they need?" required></textarea>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Task type</label>
+                        <select class="form-select" name="task_type" id="task_type">
+                            <option value="ranking">Ranking (pick better response)</option>
+                            <option value="rating">Rating (1–5 stars)</option>
+                            <option value="factcheck">Fact-check (accurate/not)</option>
+                            <option value="writing">Writing (compose a response)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Domain</label>
+                        <input type="text" class="form-control" name="domain" placeholder="e.g. Legal, Software, Medicine">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">Pay ($)</label>
+                        <input type="number" class="form-control" name="pay_dollars" value="5.00" step="0.50" min="0.50" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">Est. mins</label>
+                        <input type="number" class="form-control" name="estimated_minutes" value="5" min="1" required>
+                    </div>
+                </div>
+
+                <!-- Ranking: two options -->
+                <div id="rankingFields">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Response A <span class="text-muted fw-normal">(AI output #1)</span></label>
+                        <textarea class="form-control" name="option_a" rows="5" placeholder="Paste the first AI response here..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Response B <span class="text-muted fw-normal">(AI output #2)</span></label>
+                        <textarea class="form-control" name="option_b" rows="5" placeholder="Paste the second AI response here..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Single content (rating / factcheck) -->
+                <div id="singleFields" style="display:none;">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">AI response to evaluate</label>
+                        <textarea class="form-control" name="content" rows="6" placeholder="Paste the AI response here..."></textarea>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="padding:10px 28px;">
+                    <i class="fas fa-plus me-2"></i>Create Task
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}
