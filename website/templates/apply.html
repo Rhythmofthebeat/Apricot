@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Apply &mdash; {{ job.title }}{% endblock %}
+{% block title %}Applying for {{ job.title }}{% endblock %}
 
 {% block container_class %}wide{% endblock %}
 
@@ -253,7 +253,7 @@
                         <label class="btn btn-outline-primary" for="modeUpload"><i class="fas fa-file-arrow-up me-1"></i> Upload Resume</label>
 
                         <input type="radio" class="btn-check" name="resumeMode" id="modeLinkedin" value="linkedin">
-                        <label class="btn btn-outline-primary" for="modeLinkedin"><i class="fa-brands fa-linkedin me-1"></i> No Resume &mdash; Use LinkedIn</label>
+                        <label class="btn btn-outline-primary" for="modeLinkedin"><i class="fa-brands fa-linkedin me-1"></i> No Resume: Use LinkedIn</label>
                     </div>
 
                     <div id="uploadSection">
@@ -266,7 +266,7 @@
                         <input type="url" class="form-control mb-3" id="linkedinUrl" placeholder="https://www.linkedin.com/in/your-name">
 
                         <label class="form-label fw-bold">Pasted Profile Content</label>
-                        <p class="text-muted small">LinkedIn doesn't let us pull this automatically &mdash; paste your About, Experience, and Education sections here.</p>
+                        <p class="text-muted small">LinkedIn doesn't let us pull this automatically. Paste your About, Experience, and Education sections here.</p>
                         <textarea class="form-control mb-2" id="profileText" rows="8" placeholder="Paste your About, Experience, and Education sections here..."></textarea>
 
                         <button type="button" id="generateBtn" class="btn btn-outline-primary btn-sm">
@@ -289,7 +289,7 @@
                     <input type="text" class="form-control mb-3" id="dob" placeholder="MM/DD/YYYY">
 
                     <h6 class="fw-bold mt-4">Location of Residence</h6>
-                    <p class="text-muted small">Where you're based for most of the year &mdash; this might be different from your citizenship.</p>
+                    <p class="text-muted small">Where you're based for most of the year. This might be different from your citizenship.</p>
 
                     <div class="row g-3 mb-2">
                         <div class="col-md-6">
@@ -423,7 +423,7 @@
                     <div class="chat-box mt-4" id="chatBoxWrap" style="display:none;">
                         <div class="chat-box-header"><i class="fas fa-wand-magic-sparkles"></i> Get Help Improving Your Resume</div>
                         <div class="chat-box-messages" id="chatMessages">
-                            <div class="chat-msg assistant">Ask me anything about improving your resume for this role &mdash; I can see your match score and analysis above.</div>
+                            <div class="chat-msg assistant">Ask me anything about improving your resume for this role. I can see your match score and analysis above.</div>
                         </div>
                         <div class="chat-box-input">
                             <input type="text" class="form-control form-control-sm" id="chatInput" placeholder="e.g. How can I improve my Skills section?">
@@ -792,6 +792,7 @@ document.getElementById("toStep4Btn").addEventListener("click", () => {
 document.getElementById("submitBtn").addEventListener("click", async () => {
     const btn = document.getElementById("submitBtn");
     showError("step4Error", null);
+
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
 

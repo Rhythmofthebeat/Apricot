@@ -1,24 +1,36 @@
 import json
+import logging
+import os
 import secrets
+
+logger = logging.getLogger(__name__)
 
 import stripe
 from flask import Blueprint, render_template, request, flash, redirect, url_for, abort, jsonify, current_app
 from flask_login import login_required, current_user
 from functools import wraps
+from PIL import Image
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except ImportError:
+    pass
 
 from . import db
 from .models import (
     Company, Job, Application, Notification,
-    CompanyMember, CompanyInvite,
+    CompanyMember, CompanyInvite, CandidateProfile,
     JOB_CATEGORIES, JOB_LOCATIONS, COMPANY_SIZES, INDUSTRIES,
 )
-from ai_services import generate_interview_question_preview
+from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description
 from email_utils import send_branded_email
 
 employer = Blueprint('employer', __name__)
 
 MAX_INTERVIEW_QUESTIONS = 15
-PLATFORM_FEE_PERCENT = 12.5
+PLATFORM_FEE_PERCENT = 15
+LOGO_ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+LOGO_MAX_SIZE = (800, 800)
 INTERVIEW_LENGTH_OPTIONS = ["short", "standard", "thorough"]
 
 STATUS_EMAIL_COPY = {
@@ -238,6 +250,12 @@ def post_job():
 
         salary_raw = request.form.get('salary_usd', '').strip()
         salary_usd = int(salary_raw) if salary_raw.isdigit() else None
+        salary_max_raw = request.form.get('salary_max_usd', '').strip()
+        salary_max_usd = int(salary_max_raw) if salary_max_raw.isdigit() else None
+        pay_type = request.form.get('pay_type', 'yearly')
+        if pay_type not in ('yearly', 'hourly', 'monthly', 'stipend', 'contract'):
+            pay_type = 'yearly'
+        save_as_draft = request.form.get('save_as_draft') == '1'
 
         job = Job(
             company_id=company.id,
@@ -250,10 +268,16 @@ def post_job():
             interview_focus=interview_focus or None,
             interview_questions=interview_questions,
             salary_usd=salary_usd,
+            salary_max_usd=salary_max_usd,
+            pay_type=pay_type,
+            status='draft' if save_as_draft else 'open',
         )
         db.session.add(job)
         db.session.commit()
-        flash("Job posted successfully!", "success")
+        if save_as_draft:
+            flash("Job saved as draft.", "success")
+        else:
+            flash("Job posted successfully!", "success")
         return redirect(url_for('employer.dashboard'))
 
     return render_template(
@@ -293,6 +317,11 @@ def edit_job(job_id):
             )
 
         salary_raw = request.form.get('salary_usd', '').strip()
+        salary_max_raw = request.form.get('salary_max_usd', '').strip()
+        save_as_draft = request.form.get('save_as_draft') == '1'
+        pay_type = request.form.get('pay_type', 'yearly')
+        if pay_type not in ('yearly', 'hourly', 'monthly', 'stipend', 'contract'):
+            pay_type = 'yearly'
         job.title = title
         job.description = description
         job.location = request.form.get('location', '').strip()
@@ -301,10 +330,12 @@ def edit_job(job_id):
         job.interview_length = interview_length
         job.interview_focus = request.form.get('interview_focus', '').strip() or None
         job.interview_questions = _parse_interview_questions(request.form.get('interview_questions', ''))
-        job.status = request.form.get('status', job.status)
+        job.status = 'draft' if save_as_draft else 'open'
         job.salary_usd = int(salary_raw) if salary_raw.isdigit() else None
+        job.salary_max_usd = int(salary_max_raw) if salary_max_raw.isdigit() else None
+        job.pay_type = pay_type
         db.session.commit()
-        flash("Job updated!", "success")
+        flash("Draft saved." if save_as_draft else "Job updated!", "success")
         return redirect(url_for('employer.dashboard'))
 
     return render_template(
@@ -312,6 +343,20 @@ def edit_job(job_id):
         interview_lengths=INTERVIEW_LENGTH_OPTIONS,
         interview_questions=_existing_interview_questions(job),
     )
+
+
+@employer.route('/employer/jobs/<int:job_id>/publish', methods=['POST'])
+@login_required
+@employer_required
+def publish_job(job_id):
+    company = get_owned_company()
+    job = Job.query.get_or_404(job_id)
+    if job.company_id != company.id:
+        abort(403)
+    job.status = 'open'
+    db.session.commit()
+    flash("Job published successfully.", "success")
+    return redirect(url_for('employer.dashboard'))
 
 
 @employer.route('/employer/preview-interview-questions', methods=['POST'])
@@ -330,8 +375,14 @@ def preview_interview_questions():
     try:
         questions = generate_interview_question_preview(title, description, interview_length, interview_focus)
         return jsonify({"questions": questions})
-    except Exception:
-        return jsonify({"error": "Failed to generate a preview. Please try again."}), 500
+    except Exception as e:
+        logger.exception("preview-interview-questions failed")
+        msg = str(e)
+        if "api_key" in msg.lower() or "authentication" in msg.lower():
+            return jsonify({"error": "OpenAI API key is missing or invalid. Check your environment config."}), 500
+        if "rate" in msg.lower():
+            return jsonify({"error": "Rate limit hit. Wait a moment and try again."}), 429
+        return jsonify({"error": f"Failed to generate questions: {msg}"}), 500
 
 
 # ------------------------------------------------------------------ #
@@ -365,6 +416,16 @@ def applicants(job_id):
         app.id: json.loads(app.scheduled_meeting) if app.scheduled_meeting else None
         for app in applications
     }
+    profiles = {
+        app.candidate_user_id: CandidateProfile.query.filter_by(user_id=app.candidate_user_id).first()
+        for app in applications
+    }
+    # Blind mode: assign anonymous IDs sorted by score (rank order = Candidate #1, #2, ...)
+    blind_labels = {}
+    if company.blind_mode_enabled:
+        for i, app in enumerate(applications, 1):
+            blind_labels[app.id] = f"Candidate #{i}"
+
     return render_template(
         "job_applicants.html",
         job=job,
@@ -373,6 +434,9 @@ def applicants(job_id):
         audio_logs=audio_logs,
         work_auths=work_auths,
         meetings=meetings,
+        profiles=profiles,
+        blind_mode=company.blind_mode_enabled,
+        blind_labels=blind_labels,
     )
 
 
@@ -478,46 +542,66 @@ def update_status(application_id):
 
             try:
                 fee_amount = int(job.salary_usd * PLATFORM_FEE_PERCENT / 100) if job.salary_usd else None
-                if new_status == 'hired' and payment_link_url:
-                    body_html = (
-                        f"Congratulations — <strong>{company.name}</strong> has offered you the <strong>{job.title}</strong> role!<br><br>"
-                        f"As part of your placement through Avants AI, a <strong>${fee_amount:,} placement fee</strong> "
-                        f"(12.5% of first-year compensation) is due within 30 days of your start date.<br><br>"
-                        f"Click the button below to pay securely via Stripe."
-                    )
-                    plain_text = (
-                        f"Congratulations — {company.name} has offered you the {job.title} role!\n\n"
-                        f"Avants AI placement fee: ${fee_amount:,} (12.5% of first-year compensation).\n"
-                        f"Pay here: {payment_link_url}"
-                    )
+                if new_status == 'hired':
+                    # Email the candidate — clean congratulations, no fee language
                     send_branded_email(
                         to_email=candidate.email,
                         subject=f"You're hired — {job.title}",
                         heading="You got the job!",
-                        body_html=body_html,
-                        plain_text=plain_text,
-                        cta_label="Pay Placement Fee",
-                        cta_url=payment_link_url,
-                    )
-                elif new_status == 'hired':
-                    body_html = (
-                        f"Congratulations — <strong>{company.name}</strong> has offered you the <strong>{job.title}</strong> role!<br><br>"
-                        f"As part of your placement through Avants AI, a placement fee of <strong>12.5% of your first-year compensation</strong> "
-                        f"will be invoiced to you within 30 days of your start date. Our team will be in touch."
-                    )
-                    plain_text = (
-                        f"Congratulations — {company.name} has offered you the {job.title} role!\n\n"
-                        f"Avants AI placement fee (12.5% of first-year compensation) will be invoiced to you."
-                    )
-                    send_branded_email(
-                        to_email=candidate.email,
-                        subject=f"You're hired — {job.title}",
-                        heading="You got the job!",
-                        body_html=body_html,
-                        plain_text=plain_text,
+                        body_html=(
+                            f"Congratulations — <strong>{company.name}</strong> has decided to move forward "
+                            f"with you for the <strong>{job.title}</strong> role!<br><br>"
+                            f"They'll be in touch with next steps. Best of luck in your new role!"
+                        ),
+                        plain_text=(
+                            f"Congratulations — {company.name} has offered you the {job.title} role! "
+                            f"They'll be in touch with next steps."
+                        ),
                         cta_label="View My Dashboard",
                         cta_url=url_for('candidate.dashboard', _external=True),
                     )
+                    # Email the employer — Stripe payment link for the 15% placement fee
+                    employer_user = current_user
+                    if payment_link_url and fee_amount:
+                        send_branded_email(
+                            to_email=employer_user.email,
+                            subject=f"Placement fee invoice — {candidate.first_name} / {job.title}",
+                            heading="Placement fee due",
+                            body_html=(
+                                f"You've hired <strong>{candidate.first_name}</strong> for "
+                                f"<strong>{job.title}</strong> through Avants AI.<br><br>"
+                                f"The platform placement fee is <strong>${fee_amount:,}</strong> "
+                                f"(15% of first-year compensation of ${job.salary_usd:,}).<br><br>"
+                                f"This is due within 30 days of the candidate's start date. "
+                                f"Click below to pay securely via Stripe."
+                            ),
+                            plain_text=(
+                                f"You've hired {candidate.first_name} for {job.title} through Avants AI.\n\n"
+                                f"Placement fee: ${fee_amount:,} (15% of ${job.salary_usd:,} first-year salary).\n"
+                                f"Pay here: {payment_link_url}"
+                            ),
+                            cta_label="Pay Placement Fee",
+                            cta_url=payment_link_url,
+                        )
+                    elif new_status == 'hired':
+                        send_branded_email(
+                            to_email=employer_user.email,
+                            subject=f"Placement fee — {candidate.first_name} / {job.title}",
+                            heading="Placement fee due",
+                            body_html=(
+                                f"You've hired <strong>{candidate.first_name}</strong> for "
+                                f"<strong>{job.title}</strong> through Avants AI.<br><br>"
+                                f"A placement fee of <strong>15% of first-year compensation</strong> "
+                                f"is due within 30 days of the candidate's start date. "
+                                f"Our team will follow up with an invoice."
+                            ),
+                            plain_text=(
+                                f"You've hired {candidate.first_name} for {job.title} through Avants AI.\n\n"
+                                f"A 15% placement fee will be invoiced to you within 30 days of the start date."
+                            ),
+                            cta_label="View Dashboard",
+                            cta_url=url_for('employer.dashboard', _external=True),
+                        )
                 else:
                     send_branded_email(
                         to_email=candidate.email,
@@ -530,9 +614,167 @@ def update_status(application_id):
                     )
             except Exception as e:
                 print(f"Status email send failed ({new_status}):", e)
+        # For rejections, if the caller wants JSON (AJAX), return a feedback draft
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        if new_status == 'rejected' and status_changed and is_ajax:
+            try:
+                draft = generate_rejection_feedback(
+                    job_title=job.title,
+                    company_name=company.name,
+                    match_score=application.match_score,
+                    match_explanation=application.match_explanation or '',
+                    interview_verdict=application.interview_verdict,
+                    interview_transcript=application.interview_transcript or '',
+                )
+            except Exception:
+                draft = ""
+            return jsonify({
+                "status": "ok",
+                "application_id": application.id,
+                "candidate_name": application.candidate.first_name,
+                "feedback_draft": draft,
+                "redirect": url_for('employer.applicants', job_id=job.id),
+            })
+
         flash("Status updated.", "success")
 
     return redirect(url_for('employer.applicants', job_id=job.id))
+
+
+@employer.route('/employer/applications/<int:application_id>/send-feedback', methods=['POST'])
+@login_required
+@employer_required
+def send_candidate_feedback(application_id):
+    company = get_owned_company()
+    application = Application.query.get_or_404(application_id)
+    job = Job.query.get_or_404(application.job_id)
+    if job.company_id != company.id:
+        abort(403)
+
+    feedback_text = (request.get_json() or {}).get('feedback', '').strip()
+    if not feedback_text:
+        return jsonify({"error": "No feedback provided"}), 400
+
+    application.candidate_feedback = feedback_text
+    db.session.commit()
+
+    # Notify candidate
+    candidate = application.candidate
+    if candidate.notifications_enabled:
+        notif = Notification(
+            user_id=candidate.id,
+            message=f"You received feedback on your {job.title} application from {company.name}.",
+            link=url_for('candidate.dashboard', _external=False),
+        )
+        db.session.add(notif)
+        db.session.commit()
+
+    try:
+        send_branded_email(
+            to_email=candidate.email,
+            subject=f"Feedback on your {job.title} application",
+            heading="Application feedback",
+            body_html=(
+                f"<strong>{company.name}</strong> wanted to share some feedback on your "
+                f"application for <strong>{job.title}</strong>:<br><br>"
+                f"<blockquote style='border-left:3px solid #6366f1;padding-left:14px;color:#374151;'>"
+                f"{feedback_text}</blockquote>"
+            ),
+            plain_text=f"Feedback from {company.name} on your {job.title} application:\n\n{feedback_text}",
+            cta_label="View My Applications",
+            cta_url=url_for('candidate.dashboard', _external=True),
+        )
+    except Exception as e:
+        print("Feedback email failed:", e)
+
+    return jsonify({"status": "sent"})
+
+
+@employer.route('/employer/jobs/analyze-jd', methods=['POST'])
+@login_required
+@employer_required
+def analyze_jd():
+    data = request.get_json() or {}
+    try:
+        result = analyze_job_description(
+            title=data.get('title', ''),
+            about=data.get('about', ''),
+            requirements=data.get('requirements', ''),
+            preferred=data.get('preferred', ''),
+            what_you_do=data.get('what_you_do', ''),
+            contract_terms=data.get('contract_terms', ''),
+            salary_provided=bool(data.get('salary_usd')),
+            category=data.get('category', ''),
+        )
+        return jsonify(result)
+    except Exception as e:
+        print("JD analysis failed:", e)
+        return jsonify({"error": "Analysis failed"}), 500
+
+
+@employer.route('/employer/analytics')
+@login_required
+@employer_required
+def analytics():
+    company = get_owned_company()
+    jobs = Job.query.filter_by(company_id=company.id).all()
+    job_ids = [j.id for j in jobs]
+
+    if not job_ids:
+        return render_template('employer_analytics.html', company=company, stats={}, top_jobs=[])
+
+    all_apps = Application.query.filter(Application.job_id.in_(job_ids)).all()
+
+    total = len(all_apps)
+    interviewed = sum(1 for a in all_apps if a.interview_transcript)
+    hired = sum(1 for a in all_apps if a.status == 'hired')
+    rejected = sum(1 for a in all_apps if a.status == 'rejected')
+    scores = [a.match_score for a in all_apps if a.match_score is not None]
+    avg_score = round(sum(scores) / len(scores)) if scores else None
+    interview_rate = round(interviewed / total * 100) if total else 0
+    hire_rate = round(hired / total * 100) if total else 0
+
+    # Per-job breakdown
+    jobs_by_id = {j.id: j for j in jobs}
+    job_counts = {}
+    for a in all_apps:
+        jid = a.job_id
+        if jid not in job_counts:
+            job_counts[jid] = {"title": jobs_by_id[jid].title, "total": 0, "interviewed": 0, "hired": 0}
+        job_counts[jid]["total"] += 1
+        if a.interview_transcript:
+            job_counts[jid]["interviewed"] += 1
+        if a.status == "hired":
+            job_counts[jid]["hired"] += 1
+
+    top_jobs = sorted(job_counts.values(), key=lambda x: x["total"], reverse=True)[:5]
+
+    stats = {
+        "total": total,
+        "interviewed": interviewed,
+        "hired": hired,
+        "rejected": rejected,
+        "avg_score": avg_score,
+        "interview_rate": interview_rate,
+        "hire_rate": hire_rate,
+        "open_jobs": sum(1 for j in jobs if j.status == 'open'),
+    }
+
+    return render_template('employer_analytics.html', company=company, stats=stats, top_jobs=top_jobs)
+
+
+@employer.route('/employer/applications/<int:application_id>/notes', methods=['POST'])
+@login_required
+@employer_required
+def save_notes(application_id):
+    company = get_owned_company()
+    application = Application.query.get_or_404(application_id)
+    job = Job.query.get_or_404(application.job_id)
+    if job.company_id != company.id:
+        abort(403)
+    application.employer_notes = request.get_json().get('notes', '').strip() or None
+    db.session.commit()
+    return jsonify({"status": "saved"})
 
 
 # ------------------------------------------------------------------ #
@@ -559,8 +801,22 @@ def company_settings():
                 company.industry = request.form.get('industry', '').strip() or None
                 company.size = request.form.get('size', '').strip() or None
                 company.location = request.form.get('location', '').strip() or None
+                company.blind_mode_enabled = request.form.get('blind_mode_enabled') == 'on'
                 db.session.commit()
                 flash("Company profile updated.", "success")
+
+        elif action == 'remove_logo':
+            if company.logo_filename:
+                logos_dir = os.path.join(os.path.dirname(__file__), "static", "logos")
+                filepath = os.path.join(logos_dir, company.logo_filename)
+                try:
+                    os.remove(filepath)
+                except FileNotFoundError:
+                    pass
+                company.logo_filename = None
+                company.logo_version = (company.logo_version or 0) + 1
+                db.session.commit()
+            flash("Logo removed.", "success")
 
         elif action == 'remove_member':
             member_id = request.form.get('member_id', type=int)
@@ -591,6 +847,93 @@ def company_settings():
     )
 
 
+def _detect_image_format(path):
+    """Return detected format from magic bytes, or None if unrecognised."""
+    try:
+        with open(path, 'rb') as f:
+            h = f.read(16)
+        if h[:8] == b'\x89PNG\r\n\x1a\n':
+            return 'PNG'
+        if h[:3] == b'\xff\xd8\xff':
+            return 'JPEG'
+        if h[:6] in (b'GIF87a', b'GIF89a'):
+            return 'GIF'
+        if h[:4] == b'RIFF' and h[8:12] == b'WEBP':
+            return 'WEBP'
+        if h[:2] == b'BM':
+            return 'BMP'
+        if h[:4] in (b'II*\x00', b'MM\x00*'):
+            return 'TIFF'
+        # HEIC/HEIF: 'ftyp' box appears at offset 4
+        if h[4:8] == b'ftyp':
+            return 'HEIF'
+        if h[:4] == b'\x00\x00\x00\x0c' and h[8:12] in (b'avif', b'avis'):
+            return 'AVIF'
+    except OSError:
+        pass
+    return None
+
+
+@employer.route('/employer/company/logo', methods=['POST'])
+@login_required
+@employer_required
+def upload_logo():
+    company = get_owned_company()
+    file = request.files.get('logo')
+
+    if not file or not file.filename:
+        flash("No file selected.", "error")
+        return redirect(url_for('employer.company_settings'))
+
+    ext = (file.filename.rsplit('.', 1)[-1] if '.' in file.filename else '').lower()
+    if ext not in LOGO_ALLOWED_EXTENSIONS:
+        flash("Unsupported file type. Use PNG, JPG, GIF, or WebP.", "error")
+        return redirect(url_for('employer.company_settings'))
+
+    logos_dir = os.path.join(os.path.dirname(__file__), "static", "logos")
+    os.makedirs(logos_dir, exist_ok=True)
+
+    tmp_path = os.path.join(logos_dir, f"_tmp_{company.id}.bin")
+    final_path = os.path.join(logos_dir, f"company_{company.id}.png")
+
+    try:
+        file.save(tmp_path)
+
+        # Guard: empty file
+        if os.path.getsize(tmp_path) == 0:
+            flash("The uploaded file was empty. Please try again.", "error")
+            return redirect(url_for('employer.company_settings'))
+
+        raw = Image.open(tmp_path)
+        raw.load()  # force full decode so errors surface here, not later
+
+        if raw.mode == 'RGBA':
+            bg = Image.new("RGB", raw.size, (255, 255, 255))
+            bg.paste(raw, mask=raw.split()[3])
+            img = bg
+        elif raw.mode == 'P':
+            converted = raw.convert("RGBA")
+            bg = Image.new("RGB", converted.size, (255, 255, 255))
+            bg.paste(converted, mask=converted.split()[3])
+            img = bg
+        else:
+            img = raw.convert("RGB")
+
+        img.thumbnail(LOGO_MAX_SIZE, Image.LANCZOS)
+        img.save(final_path, "PNG", optimize=True)
+        company.logo_filename = f"company_{company.id}.png"
+        company.logo_version = (company.logo_version or 0) + 1
+        db.session.commit()
+        flash("Logo updated.", "success")
+    except Exception as e:
+        flash(f"Could not process image: {e}", "error")
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+    return redirect(url_for('employer.company_settings'))
+
+
 # ------------------------------------------------------------------ #
 #  Team Invitations
 # ------------------------------------------------------------------ #
@@ -608,6 +951,12 @@ def invite_member():
     email = request.form.get('email', '').strip().lower()
     if not email or '@' not in email:
         flash("A valid email address is required.", "error")
+        return redirect(url_for('employer.company_settings'))
+
+    from .models import FREE_EMAIL_DOMAINS
+    domain = email.split('@')[-1]
+    if domain in FREE_EMAIL_DOMAINS:
+        flash("Please invite using a company email address — personal email providers like Gmail aren't accepted.", "error")
         return redirect(url_for('employer.company_settings'))
 
     # Don't invite someone already a member or the owner

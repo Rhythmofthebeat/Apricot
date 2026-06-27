@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Create account — Avants{% endblock %}
+{% block title %}Create an Account | Avants{% endblock %}
 
 {% block head %}
 <script>
@@ -9,14 +9,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const companyGroup = document.getElementById("companyNameGroup");
     const companyInput = document.getElementById("companyName");
     const googleLink = document.getElementById("googleSignupLink");
-    const feeNotice = document.getElementById("candidateFeeNotice");
+    const feeBlock = document.getElementById("employerFeeBlock");
+    const feeCheck = document.getElementById("feeAgreementCheck");
 
+    const emailInput = document.getElementById("email");
     function toggle() {
         const isEmployer = employerRadio.checked;
         companyGroup.style.display = isEmployer ? "block" : "none";
         companyInput.required = isEmployer;
-        if (feeNotice) feeNotice.style.display = isEmployer ? "none" : "flex";
+        if (feeBlock) feeBlock.style.display = isEmployer ? "block" : "none";
+        if (feeCheck) feeCheck.required = isEmployer;
         if (googleLink) googleLink.href = "/login/google?role=" + (isEmployer ? "employer" : "candidate");
+        if (emailInput) emailInput.placeholder = isEmployer ? "you@company.com" : "your@email.com";
     }
 
     employerRadio.addEventListener("change", toggle);
@@ -82,16 +86,17 @@ document.addEventListener("DOMContentLoaded", () => {
         transition: background 0.12s, border-color 0.12s;
     }
     .google-btn:hover { background: var(--bg); border-color: #94a3b8; color: var(--text); }
-    .fee-notice {
-        background: var(--primary-soft);
+    .employer-fee-block {
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
         border-radius: 8px;
         padding: 12px 14px;
         font-size: 0.78rem;
-        color: var(--primary);
-        margin-top: 16px;
+        color: #92400e;
+        margin-bottom: 16px;
         display: flex; align-items: flex-start; gap: 8px;
     }
-    .fee-notice i { flex-shrink: 0; margin-top: 1px; }
+    .employer-fee-block i { flex-shrink: 0; margin-top: 2px; }
 </style>
 {% endblock %}
 
@@ -100,7 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
     <div class="auth-card">
         <img src="{{ url_for('static', filename='Avants.png') }}" alt="Avants" class="auth-logo">
         <h1 class="auth-title">Create your account</h1>
-        <p class="auth-sub">Join Avants AI — free to sign up</p>
+        <p class="auth-sub">Join Avants AI. It's free.</p>
 
         <form method="POST">
             <!-- Role selector -->
@@ -124,7 +129,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div id="companyNameGroup" class="mb-3" style="display:none;">
                 <label for="companyName" class="form-label fw-semibold" style="font-size:0.85rem;">Company name</label>
                 <input type="text" class="form-control" id="companyName" name="companyName" placeholder="Your company name">
-                <div class="form-text">Use your company email — personal providers like Gmail aren't accepted.</div>
+                <div class="form-text">Use your company email. Personal providers like Gmail are not accepted.</div>
             </div>
 
             <div class="mb-3">
@@ -137,13 +142,29 @@ document.addEventListener("DOMContentLoaded", () => {
                 <input type="password" class="form-control" id="password2" name="password2" placeholder="Repeat your password" required autocomplete="new-password">
             </div>
 
-            <button type="submit" class="btn btn-primary w-100" style="padding:11px;">Create account</button>
-
-            <div id="candidateFeeNotice" class="fee-notice" style="display:none;">
-                <i class="fas fa-circle-info"></i>
-                <span><strong>Candidate note:</strong> A 12.5% placement fee of first-year compensation is charged upon hire.
-                <a href="/faq#fee" class="text-decoration-none fw-semibold">Learn more</a></span>
+            <!-- Employer: placement fee agreement -->
+            <div id="employerFeeBlock" style="display:none;" class="mb-3">
+                <div class="employer-fee-block">
+                    <i class="fas fa-file-contract"></i>
+                    <span><strong>Placement fee agreement:</strong> If you hire a candidate sourced through Avants AI, a placement fee of <strong>10–15% of their first-year compensation</strong> will apply. The exact rate is confirmed before any payment is due. <a href="/terms#fee" class="text-decoration-none fw-semibold" style="color:#92400e;">Learn more</a></span>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="feeAgreementCheck" name="fee_agreement">
+                    <label class="form-check-label" style="font-size:0.82rem;" for="feeAgreementCheck">
+                        I understand and agree to the placement fee terms
+                    </label>
+                </div>
             </div>
+
+            <!-- Terms + Privacy (all users) -->
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="termsCheck" name="terms" required>
+                <label class="form-check-label" style="font-size:0.82rem;" for="termsCheck">
+                    I agree to the <a href="/terms" target="_blank" class="text-decoration-none fw-semibold">Terms of Service</a> and <a href="/privacy" target="_blank" class="text-decoration-none fw-semibold">Privacy Policy</a>
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100" style="padding:11px;">Create account</button>
         </form>
 
         <div class="divider-line">or</div>

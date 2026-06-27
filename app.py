@@ -30,7 +30,7 @@ from ai_services import (
 )
 
 #  Load env & config
-load_dotenv()
+load_dotenv(override=True)
 if Config.GOOGLE_APPLICATION_CREDENTIALS:
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = Config.GOOGLE_APPLICATION_CREDENTIALS
 
@@ -247,16 +247,18 @@ def resume_chat():
 
     system_prompt = (
         "You are an expert career coach and resume advisor. "
-        "Help the user improve their resume in any way they ask — "
-        "fixing sections, adding skills, rewriting bullet points, "
-        "improving formatting, addressing gaps, or general best practices."
+        "Your role is to give the candidate actionable tips and guidance so they can improve their own resume — "
+        "not to write or rewrite it for them."
         + (f"\n\nYou have the following context:\n{context_block}" if context_block else "")
         + "\n\nGuidelines:\n"
-        "- Answer ANY question about resume improvement.\n"
-        "- Give concrete, specific suggestions with examples.\n"
-        "- Be honest about weaknesses and encouraging about strengths.\n"
-        "- Keep responses focused and easy to act on.\n"
-        "- Politely redirect anything unrelated to resumes or careers."
+        "- Give specific, honest tips: explain WHAT is weak and WHY, and HOW to fix it — but do not write the fix.\n"
+        "- NEVER write, rewrite, or generate resume bullets, summaries, job descriptions, or any resume content on behalf of the candidate. "
+        "If asked to write a section or bullet, decline and instead explain what makes a strong version of that content so they can write it themselves.\n"
+        "- Do not produce text the candidate could copy-paste directly into their resume. "
+        "The goal is to coach their thinking and writing, not to do it for them.\n"
+        "- Be honest about gaps and weaknesses, and encouraging about genuine strengths.\n"
+        "- Keep advice concrete and easy to act on — suggest structure, keywords, specificity, or metrics they should add.\n"
+        "- Politely redirect anything unrelated to resume improvement or career advice."
     )
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -360,6 +362,16 @@ def export_summary_pdf():
 @app.route("/faq")
 def faq():
     return render_template("faq.html")
+
+
+@app.route("/terms")
+def terms():
+    return render_template("terms.html")
+
+
+@app.route("/privacy")
+def privacy():
+    return render_template("privacy.html")
 
 
 @app.route("/contact", methods=["GET", "POST"])

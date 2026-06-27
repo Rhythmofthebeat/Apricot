@@ -258,6 +258,280 @@ Reason: <1-2 sentences, specific to this candidate's actual background and this 
     return results
 
 
+def find_similar_jobs(current_job, other_jobs):
+    """Given a job dict (id, title, description) and a list of other open jobs,
+    return the 3 most semantically similar ones. Similarity is based on role
+    responsibilities and required skills, not category labels.
+
+    Returns list of dicts: {job_id, similarity, reason}"""
+    if not other_jobs:
+        return []
+
+    current_block = (
+        f"Title: {current_job['title']}\n"
+        f"Description: {current_job['description'][:800]}"
+    )
+    candidates_block = "\n\n".join(
+        f"[Job ID: {j['id']}] {j['title']} — {j['company']}\n{j['description'][:500]}"
+        for j in other_jobs
+    )
+
+    prompt = f"""You are a job similarity engine. Given a reference job and a list of other open roles, identify the 3 most similar jobs based on the actual role responsibilities, required skills, and seniority level — NOT by job category label.
+
+Reference job:
+{current_block}
+
+Other open jobs:
+{candidates_block}
+
+Pick the 3 most similar jobs and respond EXACTLY in this format (no extra text, no markdown):
+
+Job ID: <id>
+Similarity: <number 0-100>
+Reason: <one short sentence explaining the similarity>
+
+Job ID: <id>
+Similarity: <number 0-100>
+Reason: <one short sentence>
+
+Job ID: <id>
+Similarity: <number 0-100>
+Reason: <one short sentence>"""
+
+    response = openai.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=400,
+        temperature=0.2,
+    )
+    content = response.choices[0].message.content.strip()
+
+    results = []
+    for block in re.split(r"\n(?=Job ID:)", content):
+        id_match = re.search(r"Job ID:\s*(\d+)", block)
+        sim_match = re.search(r"Similarity:\s*(\d{1,3})", block)
+        reason_match = re.search(r"Reason:\s*(.+)", block, re.DOTALL)
+        if not id_match:
+            continue
+        results.append({
+            "job_id": int(id_match.group(1)),
+            "similarity": int(sim_match.group(1)) if sim_match else 0,
+            "reason": reason_match.group(1).strip() if reason_match else "",
+        })
+    return results[:3]
+
+
+def generate_rejection_feedback(job_title, company_name, match_score, match_explanation, interview_verdict, interview_transcript):
+    """Draft a short, honest, encouraging rejection feedback note from employer to candidate.
+    The employer will review and optionally edit before sending."""
+    score_context = f"Their match score was {match_score}/100." if match_score is not None else ""
+    verdict_context = f"The AI interview verdict was: {interview_verdict}." if interview_verdict else "They did not complete an AI interview."
+    explanation_context = match_explanation[:600] if match_explanation else ""
+    transcript_snippet = (interview_transcript or "")[:800]
+
+    prompt = f"""You are writing a brief, honest rejection feedback note on behalf of a hiring company to a job candidate. The note should:
+- Be 3-5 sentences maximum
+- Be warm and encouraging in tone
+- Give specific, actionable feedback (what gaps existed, what would strengthen future applications)
+- NOT be generic (avoid "we had many strong candidates")
+- NOT mention the AI interview or match scoring system by name
+- Be written as if from the employer directly to the candidate
+
+Context:
+- Role: {job_title} at {company_name}
+- {score_context}
+- {verdict_context}
+- Match analysis: {explanation_context}
+- Interview highlights: {transcript_snippet}
+
+Write only the feedback message text. No subject line, no greeting, no sign-off."""
+
+    response = openai.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=250,
+        temperature=0.5,
+    )
+    return response.choices[0].message.content.strip()
+
+
+def analyze_job_description(title, about, requirements, preferred, what_you_do, contract_terms, salary_provided, category):
+    """Analyze a job description and return a quality score + specific improvement suggestions.
+    Returns {score: int, issues: [{level: 'error'|'warning'|'tip', text: str}]}"""
+
+    salary_note = "Salary range: NOT provided." if not salary_provided else "Salary range: provided."
+    desc_block = "\n".join(filter(None, [
+        f"Title: {title}",
+        f"Category: {category}",
+        salary_note,
+        f"About the role:\n{about[:600]}" if about else "",
+        f"Requirements:\n{requirements[:600]}" if requirements else "",
+        f"Preferred:\n{preferred[:400]}" if preferred else "",
+        f"What you'll do:\n{what_you_do[:400]}" if what_you_do else "",
+        f"Contract terms:\n{contract_terms[:300]}" if contract_terms else "",
+    ]))
+
+    prompt = f"""You are an expert recruiter reviewing a job posting for quality and candidate appeal. Analyze the posting below and return:
+1. An overall quality score from 0-100
+2. A list of specific, actionable issues (errors, warnings, or tips)
+
+Scoring guide:
+- 85-100: Excellent — clear, complete, specific, competitive
+- 70-84: Good — minor gaps
+- 50-69: Fair — missing important elements
+- Below 50: Needs work — major issues
+
+Issue levels:
+- error: Missing or critically wrong (e.g., no description at all, discriminatory language)
+- warning: Important gap that reduces applications (e.g., no salary, vague requirements)
+- tip: Improvement opportunity (e.g., requirements list too long, could be more specific)
+
+Job posting to analyze:
+{desc_block}
+
+Respond EXACTLY in this format (no extra text):
+Score: <number>
+Issue: <level> | <specific actionable feedback, 1 sentence>
+Issue: <level> | <specific actionable feedback, 1 sentence>
+...
+
+Include 3-7 issues total. Be specific to this actual posting — do not give generic advice."""
+
+    response = openai.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=500,
+        temperature=0.2,
+    )
+    content = response.choices[0].message.content.strip()
+
+    score = 70
+    issues = []
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith("Score:"):
+            try:
+                score = int(re.search(r"\d+", line).group())
+            except Exception:
+                pass
+        elif line.startswith("Issue:"):
+            rest = line[6:].strip()
+            if "|" in rest:
+                level, text = rest.split("|", 1)
+                level = level.strip().lower()
+                if level not in ("error", "warning", "tip"):
+                    level = "tip"
+                issues.append({"level": level, "text": text.strip()})
+
+    return {"score": min(100, max(0, score)), "issues": issues}
+
+
+def generate_interview_coaching(transcript, job_title, requirements, verdict, match_score):
+    """Analyze a candidate's interview transcript and produce a private coaching report.
+    Returns a dict with: communication_score, strengths (list), improvements (list), tips (list)."""
+    prompt = f"""You are an expert communication coach analyzing a job interview. Your report is private — the candidate will use it to improve.
+
+Job: {job_title}
+Requirements: {(requirements or '')[:400]}
+AI verdict: {verdict or 'Not yet determined'}
+Match score: {match_score}/100 (0–100 scale)
+
+Interview transcript:
+{transcript[:3000]}
+
+Produce a coaching report with:
+1. A Communication Score (0–100) based on confidence, clarity, depth, and specificity
+2. 2–3 specific Strengths (what they did well, with a specific example from the transcript)
+3. 2–3 specific Improvements (concrete gaps, not generic advice)
+4. 2–3 actionable Tips for their next interview
+
+Respond EXACTLY in this format:
+CommunicationScore: <number>
+Strength: <1 sentence referencing something specific they said>
+Strength: <1 sentence>
+Improvement: <1 sentence identifying a specific gap>
+Improvement: <1 sentence>
+Tip: <1 sentence, concrete and actionable>
+Tip: <1 sentence>
+Tip: <1 sentence>"""
+
+    response = openai.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=600,
+        temperature=0.3,
+    )
+    content = response.choices[0].message.content.strip()
+
+    result = {
+        "communication_score": 70,
+        "strengths": [],
+        "improvements": [],
+        "tips": [],
+    }
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith("CommunicationScore:"):
+            try:
+                result["communication_score"] = int(re.search(r"\d+", line).group())
+            except Exception:
+                pass
+        elif line.startswith("Strength:"):
+            result["strengths"].append(line[9:].strip())
+        elif line.startswith("Improvement:"):
+            result["improvements"].append(line[12:].strip())
+        elif line.startswith("Tip:"):
+            result["tips"].append(line[4:].strip())
+    return result
+
+
+def generate_skills_roadmap(job_title, match_explanation, match_score, requirements):
+    """Generate a specific 30-day action plan to close the skills gap for a role.
+    Returns a list of {step, description, timeline} dicts."""
+    prompt = f"""A candidate applied for {job_title} and scored {match_score}/100. Generate a specific, actionable 30-day plan to help them become competitive for this type of role.
+
+Their match analysis:
+{(match_explanation or '')[:800]}
+
+Job requirements:
+{(requirements or '')[:500]}
+
+Create 4–5 specific steps. Each step must be concrete (name a specific skill, course type, or project to build — not just "learn Python"). Focus only on closing the actual gaps identified above.
+
+Respond EXACTLY in this format:
+Step: <short title (3-6 words)>
+Description: <1-2 sentences — what exactly to do and why it closes a gap>
+Timeline: <e.g. "Week 1–2" or "Days 1–7">
+
+Step: ...
+Description: ...
+Timeline: ..."""
+
+    response = openai.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=600,
+        temperature=0.3,
+    )
+    content = response.choices[0].message.content.strip()
+
+    steps = []
+    current = {}
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith("Step:"):
+            if current.get("step"):
+                steps.append(current)
+            current = {"step": line[5:].strip(), "description": "", "timeline": ""}
+        elif line.startswith("Description:"):
+            current["description"] = line[12:].strip()
+        elif line.startswith("Timeline:"):
+            current["timeline"] = line[9:].strip()
+    if current.get("step"):
+        steps.append(current)
+    return steps[:5]
+
+
 VERDICT_FORMAT = (
     "Verdict: <Strong Yes / Yes / No / Strong No>\n\n"
     "Why:\n"

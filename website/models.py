@@ -98,6 +98,9 @@ class Company(db.Model):
     industry = db.Column(db.String(100))
     size = db.Column(db.String(50))
     location = db.Column(db.String(200))
+    logo_filename = db.Column(db.String(200))
+    logo_version = db.Column(db.Integer, default=0)
+    blind_mode_enabled = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
 
@@ -113,7 +116,9 @@ class Job(db.Model):
     interview_length = db.Column(db.String(20), nullable=False, default="standard")  # short | standard | thorough
     interview_focus = db.Column(db.Text)  # optional employer instructions on what the AI should cover
     interview_questions = db.Column(db.Text)  # JSON list of employer-curated questions the AI should make sure to ask
-    salary_usd = db.Column(db.Integer)  # optional annual salary in USD dollars; drives placement fee calc
+    salary_usd = db.Column(db.Integer)
+    salary_max_usd = db.Column(db.Integer)
+    pay_type = db.Column(db.String(20), default='yearly')
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     company = db.relationship("Company", backref="jobs")
@@ -174,7 +179,12 @@ class Application(db.Model):
     interview_verdict = db.Column(db.String(20))  # "Strong Yes" | "Yes" | "No" | "Strong No"
     status = db.Column(db.String(20), nullable=False, default="applied")  # applied | interviewing | rejected | hired
     fee_paid = db.Column(db.Boolean, nullable=False, default=False)
-    stripe_payment_link = db.Column(db.String(500))  # Stripe Payment Link URL sent to candidate on hire
+    stripe_payment_link = db.Column(db.String(500))  # Stripe Payment Link URL sent to employer on hire
+    employer_notes = db.Column(db.Text)  # private notes visible only to employer
+    withdrawn = db.Column(db.Boolean, nullable=False, default=False)
+    candidate_feedback = db.Column(db.Text)  # employer-approved AI feedback sent to candidate on rejection
+    skills_roadmap = db.Column(db.Text)  # JSON: AI-generated skill gap action plan (generated when score < 65)
+    interview_saved_session = db.Column(db.Text)  # JSON: partial history saved for later resumption
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     job = db.relationship("Job", backref="applications")

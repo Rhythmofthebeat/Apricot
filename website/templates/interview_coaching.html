@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Interview Coaching | {{ job.title }}{% endblock %}
+
+{% block head %}
+<style>
+    .coaching-header {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        color: white;
+        border-radius: var(--radius);
+        padding: 32px;
+        margin-bottom: 24px;
+        text-align: center;
+    }
+    .score-ring {
+        width: 96px; height: 96px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.2);
+        display: flex; align-items: center; justify-content: center;
+        margin: 0 auto 12px;
+        font-size: 2rem; font-weight: 800;
+    }
+    .coaching-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        margin-bottom: 16px;
+    }
+    .coaching-card-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+        margin-bottom: 12px;
+    }
+    .coaching-item {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+        align-items: flex-start;
+        font-size: 0.88rem;
+    }
+    .coaching-item:last-child { margin-bottom: 0; }
+    .coaching-icon {
+        width: 24px; height: 24px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.65rem;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+    .ci-strength { background: var(--success-soft); color: var(--success); }
+    .ci-improve  { background: var(--warning-soft); color: var(--warning); }
+    .ci-tip      { background: var(--primary-soft); color: var(--primary); }
+    .score-bar-wrap { height: 8px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: 6px; }
+    .score-bar-fill { height: 100%; border-radius: 99px; transition: width 0.6s ease; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+
+        <div class="mb-3">
+            <a href="{{ url_for('candidate.dashboard') }}" class="text-muted text-decoration-none small">
+                <i class="fas fa-arrow-left me-1"></i> Back to applications
+            </a>
+        </div>
+
+        <!-- Header -->
+        <div class="coaching-header">
+            {% set cs = coaching.communication_score %}
+            {% set cs_color = '#22c55e' if cs >= 75 else ('#f59e0b' if cs >= 50 else '#ef4444') %}
+            <div class="score-ring" style="border: 4px solid {{ cs_color }};">{{ cs }}</div>
+            <h1 style="font-size:1.3rem;font-weight:800;margin-bottom:4px;">Communication Score</h1>
+            <p style="opacity:0.85;font-size:0.9rem;margin:0;">
+                Your AI interview coaching report for <strong>{{ job.title }}</strong> at <strong>{{ job.company.name }}</strong>
+            </p>
+            <div class="mt-3" style="font-size:0.8rem;opacity:0.75;">
+                This report is private — only you can see it. Use it to improve for your next interview.
+            </div>
+        </div>
+
+        <!-- Score bar -->
+        <div class="coaching-card">
+            <div class="coaching-card-title">Communication Score Breakdown</div>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span style="font-size:0.85rem;">Overall communication</span>
+                <span class="fw-bold" style="font-size:0.85rem;">{{ cs }}/100</span>
+            </div>
+            <div class="score-bar-wrap">
+                <div class="score-bar-fill" style="width:{{ cs }}%; background:{{ cs_color }};"></div>
+            </div>
+            <div class="d-flex justify-content-between mt-2" style="font-size:0.7rem;color:var(--text-muted);">
+                <span>Needs work</span><span>Strong</span><span>Excellent</span>
+            </div>
+        </div>
+
+        <!-- Strengths -->
+        {% if coaching.strengths %}
+        <div class="coaching-card">
+            <div class="coaching-card-title"><i class="fas fa-check-circle me-1" style="color:var(--success);"></i>What you did well</div>
+            {% for s in coaching.strengths %}
+            <div class="coaching-item">
+                <div class="coaching-icon ci-strength"><i class="fas fa-check"></i></div>
+                <span>{{ s }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Improvements -->
+        {% if coaching.improvements %}
+        <div class="coaching-card">
+            <div class="coaching-card-title"><i class="fas fa-arrow-trend-up me-1" style="color:var(--warning);"></i>Areas to improve</div>
+            {% for imp in coaching.improvements %}
+            <div class="coaching-item">
+                <div class="coaching-icon ci-improve"><i class="fas fa-triangle-exclamation"></i></div>
+                <span>{{ imp }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Tips -->
+        {% if coaching.tips %}
+        <div class="coaching-card">
+            <div class="coaching-card-title"><i class="fas fa-lightbulb me-1" style="color:var(--primary);"></i>Tips for your next interview</div>
+            {% for tip in coaching.tips %}
+            <div class="coaching-item">
+                <div class="coaching-icon ci-tip"><i class="fas fa-lightbulb"></i></div>
+                <span>{{ tip }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Verdict context -->
+        {% if application.interview_verdict %}
+        <div class="coaching-card" style="border-color:{{ 'var(--success)' if 'Yes' in application.interview_verdict else 'var(--border)' }};">
+            <div class="coaching-card-title">AI Verdict for this role</div>
+            <div class="d-flex align-items-center gap-3">
+                <span class="badge-status {{ 'hired' if 'Yes' in application.interview_verdict else 'rejected' }}" style="font-size:0.85rem;padding:6px 14px;">
+                    {{ application.interview_verdict }}
+                </span>
+                <p class="text-muted small mb-0">
+                    This was the AI's assessment for <strong>this specific role</strong>. Your communication score reflects general skill that transfers to any interview.
+                </p>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="text-center mt-4 mb-4">
+            <a href="{{ url_for('candidate.browse_jobs') }}" class="btn btn-primary me-2">Browse More Jobs</a>
+            <a href="{{ url_for('candidate.dashboard') }}" class="btn btn-outline-secondary">My Applications</a>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

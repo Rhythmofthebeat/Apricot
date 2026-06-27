@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Privacy Policy | Avants{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <h1 class="h3 fw-bold mb-1">Privacy Policy</h1>
+        <p class="text-muted mb-5">Last updated: June 26, 2026</p>
+
+        <div class="card mb-4">
+            <div class="card-body p-4" style="line-height:1.8; font-size:0.92rem; color:var(--text);">
+
+                <h5 class="fw-bold mb-2">1. What We Collect</h5>
+                <p>When you use Avants AI, we collect the following information:</p>
+                <ul>
+                    <li><strong>Account information:</strong> Your name, email address, role (candidate or employer), and company name if applicable.</li>
+                    <li><strong>Resume data:</strong> Text extracted from uploaded resumes or LinkedIn profile content you paste into the platform.</li>
+                    <li><strong>Interview recordings:</strong> Audio recordings of AI voice interviews, along with transcripts generated from those recordings.</li>
+                    <li><strong>Application data:</strong> Jobs you've applied to, AI match scores, work authorization attestations, and application status.</li>
+                    <li><strong>Usage data:</strong> Pages visited, actions taken, and device/browser information collected automatically via Google Analytics.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">2. How We Use Your Data</h5>
+                <ul>
+                    <li>To operate the platform and provide AI matching, scoring, and interview services.</li>
+                    <li>To send transactional emails (application updates, hire notifications, invoices).</li>
+                    <li>To process payments via Stripe when a placement fee is due.</li>
+                    <li>To improve our AI models and platform features using anonymized, aggregated data.</li>
+                    <li>We do not sell your personal data to third parties.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">3. Third-Party Services</h5>
+                <p>We use the following third-party services to operate the platform:</p>
+                <ul>
+                    <li><strong>OpenAI:</strong> Resume text and interview transcripts are sent to OpenAI's API for AI scoring and analysis. OpenAI's data use policies apply.</li>
+                    <li><strong>Google Cloud:</strong> Text-to-speech and speech-to-text services are powered by Google Cloud APIs.</li>
+                    <li><strong>Stripe:</strong> Placement fee payments are processed securely by Stripe. We do not store credit card information.</li>
+                    <li><strong>Google Analytics:</strong> We use Google Analytics to understand how users navigate the platform. You can opt out via browser extensions.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">4. Who Can See Your Data</h5>
+                <ul>
+                    <li><strong>Candidates:</strong> Your resume, match score, and interview transcript are visible only to the specific employer you applied to. Other employers cannot see your applications or recordings.</li>
+                    <li><strong>Employers:</strong> Your company information and job postings are publicly visible to candidates browsing the platform.</li>
+                    <li><strong>Avants staff:</strong> We may access account data to provide support or investigate violations of our Terms of Service.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">5. Data Retention</h5>
+                <ul>
+                    <li>Your account and application data is retained as long as your account is active.</li>
+                    <li>Interview audio files are stored for up to 12 months after the application closes.</li>
+                    <li>You may request deletion of your data at any time by contacting us.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">6. Your Rights</h5>
+                <p>Depending on your location, you may have the right to:</p>
+                <ul>
+                    <li>Access the personal data we hold about you.</li>
+                    <li>Request correction of inaccurate data.</li>
+                    <li>Request deletion of your data ("right to be forgotten").</li>
+                    <li>Withdraw consent for data processing where consent is the legal basis.</li>
+                </ul>
+                <p>To exercise these rights, contact us via the <a href="{{ url_for('contact') }}" class="text-decoration-none fw-semibold">contact page</a>.</p>
+
+                <h5 class="fw-bold mb-2 mt-4">7. Security</h5>
+                <p>We use industry-standard security practices to protect your data, including HTTPS encryption, secure credential hashing, and access controls. However, no system is 100% secure, and we cannot guarantee absolute security.</p>
+
+                <h5 class="fw-bold mb-2 mt-4">8. Changes to This Policy</h5>
+                <p>We may update this Privacy Policy from time to time. Significant changes will be communicated via email or an in-platform notice.</p>
+
+                <h5 class="fw-bold mb-2 mt-4">9. Contact</h5>
+                <p>For privacy-related questions, reach us via the <a href="{{ url_for('contact') }}" class="text-decoration-none fw-semibold">contact page</a>.</p>
+
+            </div>
+        </div>
+
+        <p class="text-center text-muted" style="font-size:0.82rem;">
+            See also: <a href="{{ url_for('terms') }}" class="text-decoration-none fw-semibold">Terms of Service</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

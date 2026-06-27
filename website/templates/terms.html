@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Terms of Service | Avants{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <h1 class="h3 fw-bold mb-1">Terms of Service</h1>
+        <p class="text-muted mb-5">Last updated: June 26, 2026</p>
+
+        <div class="card mb-4">
+            <div class="card-body p-4" style="line-height:1.8; font-size:0.92rem; color:var(--text);">
+
+                <h5 class="fw-bold mb-2">1. Acceptance of Terms</h5>
+                <p>By creating an account or using the Avants AI platform ("Avants", "we", "us"), you agree to be bound by these Terms of Service. If you do not agree, do not use the platform.</p>
+
+                <h5 class="fw-bold mb-2 mt-4">2. Who We Are</h5>
+                <p>Avants AI is a hiring platform that uses artificial intelligence to match job seekers ("Candidates") with employers ("Companies"). We provide AI-powered resume scoring, structured voice interviews, and candidate pipeline management tools.</p>
+
+                <h5 class="fw-bold mb-2 mt-4">3. Accounts</h5>
+                <ul>
+                    <li>You must provide accurate information when creating your account.</li>
+                    <li>You are responsible for maintaining the security of your login credentials.</li>
+                    <li>Employer accounts must be registered with a legitimate company email address. Personal webmail providers are not accepted.</li>
+                    <li>We reserve the right to suspend or terminate accounts that violate these Terms.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4" id="fee">4. Placement Fee (Companies)</h5>
+                <p>When a Company hires a Candidate sourced through Avants AI, a <strong>placement fee applies to the Company</strong>. Candidates are never charged a placement fee.</p>
+                <ul>
+                    <li>The placement fee is <strong>10–15% of the Candidate's first-year gross compensation</strong>.</li>
+                    <li>The exact rate will be confirmed in writing between Avants and the Company before any payment is due.</li>
+                    <li>The fee is due within <strong>30 days of the Candidate's official start date</strong>.</li>
+                    <li>Payment is processed securely via Stripe. Invoices will be sent to the email address on the employer account.</li>
+                    <li>If a hire is not made through the Avants platform, no fee applies.</li>
+                    <li>In the event of a dispute about whether a Candidate was "sourced through Avants," the date of first application on the platform is the determining factor.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">5. Candidate Use</h5>
+                <ul>
+                    <li>Candidates may browse and apply to open roles at no cost.</li>
+                    <li>AI match scores and interview verdicts are tools to assist employers; they are not guarantees of employment or rejection.</li>
+                    <li>Candidates must complete work authorization attestations truthfully. Providing false information is grounds for permanent account suspension.</li>
+                    <li>Interview recordings are stored securely and shared only with the specific employer you applied to.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">6. Prohibited Uses</h5>
+                <p>You may not use Avants to:</p>
+                <ul>
+                    <li>Post fraudulent job listings or apply with fabricated credentials.</li>
+                    <li>Scrape, copy, or redistribute any content from the platform without written permission.</li>
+                    <li>Circumvent AI screening or manipulate match scores.</li>
+                    <li>Harass, discriminate against, or misrepresent any other user.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">7. AI Services Disclaimer</h5>
+                <p>Avants uses third-party AI models (including OpenAI) to provide resume scoring, interview analysis, and job matching. AI outputs are intended as assistive tools and do not constitute professional advice. They are not deterministic. Employers retain full discretion over all hiring decisions. Avants is not liable for outcomes based on AI-generated scores or verdicts.</p>
+
+                <h5 class="fw-bold mb-2 mt-4">8. Intellectual Property</h5>
+                <p>The Avants platform, branding, and software are the property of Avants AI. User-submitted content (resumes, interview recordings) remains the property of the submitting user, but you grant Avants a limited license to use it to operate the platform.</p>
+
+                <h5 class="fw-bold mb-2 mt-4">9. Limitation of Liability</h5>
+                <p>Avants is provided "as is." We are not liable for any indirect, incidental, or consequential damages arising from use of the platform, including but not limited to failed hires, lost employment opportunities, or data loss.</p>
+
+                <h5 class="fw-bold mb-2 mt-4">10. Changes to These Terms</h5>
+                <p>We may update these Terms from time to time. Continued use of the platform after changes are posted constitutes acceptance of the updated Terms.</p>
+
+                <h5 class="fw-bold mb-2 mt-4">11. Contact</h5>
+                <p>For any questions about these Terms, contact us at <a href="{{ url_for('contact') }}" class="text-decoration-none fw-semibold">the contact page</a>.</p>
+
+            </div>
+        </div>
+
+        <p class="text-center text-muted" style="font-size:0.82rem;">
+            See also: <a href="{{ url_for('privacy') }}" class="text-decoration-none fw-semibold">Privacy Policy</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

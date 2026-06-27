@@ -23,7 +23,9 @@
         font-size: 2rem;
         flex-shrink: 0;
         letter-spacing: -0.02em;
+        overflow: hidden;
     }
+    .company-logo-lg img { width: 100%; height: 100%; object-fit: cover; }
     .company-stat {
         text-align: center;
         padding: 16px 20px;
@@ -109,7 +111,13 @@
         <!-- Hero -->
         <div class="company-hero">
             <div class="d-flex align-items-start gap-4 mb-4">
-                <div class="company-logo-lg">{{ company.name[0]|upper }}</div>
+                <div class="company-logo-lg">
+                    {% if company.logo_filename %}
+                        <img src="{{ url_for('static', filename='logos/' + company.logo_filename) }}?v={{ company.logo_version or 0 }}" alt="{{ company.name }} logo">
+                    {% else %}
+                        {{ company.name[0]|upper }}
+                    {% endif %}
+                </div>
                 <div class="flex-grow-1">
                     <h1 class="h2 fw-bold mb-1">{{ company.name }}</h1>
                     <div class="d-flex flex-wrap gap-2 mb-3">
@@ -180,8 +188,9 @@
                                 </div>
                             </div>
                             <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                                {% if job.salary_usd %}
-                                    <span class="salary-chip"><i class="fas fa-dollar-sign"></i> ${{ "{:,.0f}".format(job.salary_usd) }}/yr</span>
+                                {% set sal = job|salary_range %}
+                                {% if sal %}
+                                    <span class="salary-chip"><i class="fas fa-dollar-sign"></i> {{ sal }}</span>
                                 {% endif %}
                                 <i class="fas fa-chevron-right text-muted" style="font-size:0.75rem;"></i>
                             </div>

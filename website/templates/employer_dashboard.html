@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — {{ company.name }}{% endblock %}
+{% block title %}Dashboard | {{ company.name }}{% endblock %}
 
 {% block container_class %}wide{% endblock %}
 
@@ -134,6 +134,9 @@
 </div>
 
 <!-- Job listings -->
+{% set live_jobs  = jobs | selectattr('status', 'ne', 'draft') | list %}
+{% set draft_jobs = jobs | selectattr('status', 'equalto', 'draft') | list %}
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="h5 fw-bold mb-0">Job Postings</h2>
     <a href="{{ url_for('employer.post_job') }}" class="btn btn-sm btn-primary">
@@ -149,43 +152,111 @@
     <a href="{{ url_for('employer.post_job') }}" class="btn btn-primary btn-rounded">Post your first job</a>
 </div>
 {% else %}
-<div class="job-grid">
-    {% for job in jobs %}
-    <div class="job-tile">
-        <div class="d-flex justify-content-between align-items-start gap-2">
-            <span class="badge-status {{ job.status }}">{{ job.status|capitalize }}</span>
-            <span class="badge-status applied" style="flex-shrink:0;">{{ job.category }}</span>
-        </div>
 
-        <div>
-            <p class="job-tile-title">{{ job.title }}</p>
-            <p class="job-tile-meta mb-0">{{ job.location or "Remote" }} &middot; {{ job.employment_type or "Full-time" }}</p>
-            {% if job.salary_usd %}
-            <p class="job-tile-meta mb-0" style="color:var(--success); font-weight:600;">
-                <i class="fas fa-dollar-sign" style="font-size:0.7rem;"></i> ${{ "{:,.0f}".format(job.salary_usd) }}/yr
-            </p>
-            {% endif %}
-        </div>
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4" id="jobTabs" role="tablist" style="border-bottom: 2px solid var(--border);">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-live" data-bs-toggle="tab" data-bs-target="#pane-live" type="button" role="tab">
+            Live
+            {% if live_jobs %}<span class="badge bg-primary ms-1" style="font-size:0.65rem;">{{ live_jobs|length }}</span>{% endif %}
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-drafts" data-bs-toggle="tab" data-bs-target="#pane-drafts" type="button" role="tab">
+            Drafts
+            {% if draft_jobs %}<span class="badge ms-1" style="font-size:0.65rem;background:var(--warning);color:#fff;">{{ draft_jobs|length }}</span>{% endif %}
+        </button>
+    </li>
+</ul>
 
-        <div class="d-flex gap-3 align-items-center text-muted" style="font-size:0.78rem;">
-            <span><i class="fas fa-users me-1"></i>{{ applicant_counts.get(job.id, 0) }} applicant{{ 's' if applicant_counts.get(job.id, 0) != 1 }}</span>
-            {% set h = hired_counts.get(job.id, 0) %}
-            {% if h > 0 %}
-            <span style="color:var(--success); font-weight:600;"><i class="fas fa-trophy me-1"></i>{{ h }} hired</span>
-            {% endif %}
+<div class="tab-content">
+    <!-- Live jobs pane -->
+    <div class="tab-pane fade show active" id="pane-live" role="tabpanel">
+        {% if not live_jobs %}
+        <div class="empty-state" style="padding:32px;">
+            <p class="text-muted mb-2">No live jobs yet.</p>
+            <a href="{{ url_for('employer.post_job') }}" class="btn btn-sm btn-primary">Post a job</a>
         </div>
-
-        <div class="job-tile-actions">
-            <a href="{{ url_for('employer.applicants', job_id=job.id) }}" class="btn btn-outline-primary btn-sm flex-grow-1">
-                View Applicants
-            </a>
-            <a href="{{ url_for('employer.edit_job', job_id=job.id) }}" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-pen"></i>
-            </a>
+        {% else %}
+        <div class="job-grid">
+            {% for job in live_jobs %}
+            <div class="job-tile">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="badge-status {{ job.status }}">{{ job.status|capitalize }}</span>
+                    <span class="badge-status applied" style="flex-shrink:0;">{{ job.category }}</span>
+                </div>
+                <div>
+                    <p class="job-tile-title">{{ job.title }}</p>
+                    <p class="job-tile-meta mb-0">{{ job.location or "Remote" }} &middot; {{ job.employment_type or "Full-time" }}</p>
+                    {% set sal = job|salary_range %}
+                    {% if sal %}
+                    <p class="job-tile-meta mb-0" style="color:var(--success); font-weight:600;">
+                        <i class="fas fa-dollar-sign" style="font-size:0.7rem;"></i> {{ sal }}
+                    </p>
+                    {% endif %}
+                </div>
+                <div class="d-flex gap-3 align-items-center text-muted" style="font-size:0.78rem;">
+                    <span><i class="fas fa-users me-1"></i>{{ applicant_counts.get(job.id, 0) }} applicant{{ 's' if applicant_counts.get(job.id, 0) != 1 }}</span>
+                    {% set h = hired_counts.get(job.id, 0) %}
+                    {% if h > 0 %}
+                    <span style="color:var(--success); font-weight:600;"><i class="fas fa-trophy me-1"></i>{{ h }} hired</span>
+                    {% endif %}
+                </div>
+                <div class="job-tile-actions">
+                    <a href="{{ url_for('employer.applicants', job_id=job.id) }}" class="btn btn-outline-primary btn-sm flex-grow-1">
+                        View Applicants
+                    </a>
+                    <a href="{{ url_for('employer.edit_job', job_id=job.id) }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-pen"></i>
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
         </div>
+        {% endif %}
     </div>
-    {% endfor %}
+
+    <!-- Drafts pane -->
+    <div class="tab-pane fade" id="pane-drafts" role="tabpanel">
+        {% if not draft_jobs %}
+        <div class="empty-state" style="padding:32px;">
+            <p class="text-muted mb-0">No drafts saved.</p>
+        </div>
+        {% else %}
+        <div class="job-grid">
+            {% for job in draft_jobs %}
+            <div class="job-tile">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="badge-status draft">Draft</span>
+                    <span class="badge-status applied" style="flex-shrink:0;">{{ job.category }}</span>
+                </div>
+                <div>
+                    <p class="job-tile-title">{{ job.title }}</p>
+                    <p class="job-tile-meta mb-0">{{ job.location or "Remote" }} &middot; {{ job.employment_type or "Full-time" }}</p>
+                    {% set sal = job|salary_range %}
+                    {% if sal %}
+                    <p class="job-tile-meta mb-0" style="color:var(--success); font-weight:600;">
+                        <i class="fas fa-dollar-sign" style="font-size:0.7rem;"></i> {{ sal }}
+                    </p>
+                    {% endif %}
+                </div>
+                <div class="job-tile-actions">
+                    <form method="POST" action="{{ url_for('employer.publish_job', job_id=job.id) }}" class="flex-grow-1">
+                        <button type="submit" class="btn btn-primary btn-sm w-100">
+                            <i class="fas fa-rocket me-1"></i> Publish
+                        </button>
+                    </form>
+                    <a href="{{ url_for('employer.edit_job', job_id=job.id) }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-pen"></i>
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
 </div>
+
 {% endif %}
 
 {% endblock %}

@@ -1,7 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Company Settings — {{ company.name }}{% endblock %}
+{% block title %}Company Settings | {{ company.name }}{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
 <style>
     .settings-nav .settings-nav-item {
         display: flex;
@@ -41,7 +42,18 @@
         font-weight: 800;
         font-size: 1.6rem;
         flex-shrink: 0;
+        overflow: hidden;
     }
+    .company-logo-preview img { width: 100%; height: 100%; object-fit: cover; }
+    .logo-upload-zone {
+        border: 2px dashed var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+    }
+    .logo-upload-zone:hover { border-color: var(--primary); background: var(--primary-soft); }
     .member-row {
         display: flex;
         align-items: center;
@@ -112,14 +124,80 @@
                     <i class="fas fa-building me-2"></i>Company Profile
                 </div>
                 <div class="card-body p-4">
+                    <!-- Logo header -->
                     <div class="d-flex align-items-center gap-4 mb-4 pb-4" style="border-bottom:1px solid var(--border);">
-                        <div class="company-logo-preview">{{ company.name[0]|upper }}</div>
-                        <div>
+                        <div class="company-logo-preview">
+                            {% if company.logo_filename %}
+                                <img src="{{ url_for('static', filename='logos/' + company.logo_filename) }}?v={{ company.logo_version or 0 }}" alt="{{ company.name }} logo">
+                            {% else %}
+                                {{ company.name[0]|upper }}
+                            {% endif %}
+                        </div>
+                        <div class="flex-grow-1">
                             <div class="fw-bold mb-1">{{ company.name }}</div>
-                            <div class="text-muted small">{{ company.industry or "Industry not set" }} &middot; {{ company.location or "Location not set" }}</div>
+                            <div class="text-muted small mb-2">{{ company.industry or "Industry not set" }} &middot; {{ company.location or "Location not set" }}</div>
                             <a href="{{ url_for('employer.company_page', company_id=company.id) }}" target="_blank" class="small text-primary text-decoration-none">
                                 <i class="fas fa-external-link me-1" style="font-size:0.7rem;"></i>View public page
                             </a>
+                        </div>
+                    </div>
+
+                    <!-- Logo upload -->
+                    <div class="mb-4 pb-4" style="border-bottom:1px solid var(--border);">
+                        <div class="section-label">Company Logo</div>
+                        <div class="d-flex align-items-start gap-3 flex-wrap">
+                            <label class="logo-upload-zone flex-grow-1" for="logoFileInput" style="min-width:200px; cursor:pointer;">
+                                <i class="fas fa-image text-muted mb-2" style="font-size:1.4rem;display:block;"></i>
+                                <div class="fw-semibold" style="font-size:0.88rem;">Click to upload &amp; adjust logo</div>
+                                <div class="text-muted" style="font-size:0.78rem;">PNG, JPG, HEIC, WebP &middot; Crop &amp; reposition before saving</div>
+                                <input type="file" id="logoFileInput" name="logo" accept="image/*" class="d-none">
+                            </label>
+                            {% if company.logo_filename %}
+                            <div>
+                                <img src="{{ url_for('static', filename='logos/' + company.logo_filename) }}?v={{ company.logo_version or 0 }}"
+                                     alt="Current logo" style="width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid var(--border);">
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% if company.logo_filename %}
+                        <form method="POST" class="mt-2">
+                            <input type="hidden" name="action" value="remove_logo">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="fas fa-trash me-1"></i> Remove logo
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+
+                    <!-- Crop modal -->
+                    <div class="modal fade" id="cropModal" tabindex="-1" aria-labelledby="cropModalLabel" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered" style="max-width:520px;">
+                            <div class="modal-content">
+                                <div class="modal-header" style="border-bottom:1px solid var(--border);">
+                                    <h5 class="modal-title fw-bold" id="cropModalLabel"><i class="fas fa-crop-simple me-2 text-primary"></i>Adjust Logo</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body p-0" style="background:#1a1a2e;">
+                                    <div style="max-height:520px; overflow:hidden; display:flex; align-items:center; justify-content:center;">
+                                        <img id="cropImg" style="max-width:100%; display:block;">
+                                    </div>
+                                </div>
+                                <div class="modal-footer d-flex justify-content-between align-items-center flex-wrap gap-2" style="border-top:1px solid var(--border);">
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-sm btn-outline-secondary" id="cropZoomIn" title="Zoom in"><i class="fas fa-magnifying-glass-plus"></i></button>
+                                        <button class="btn btn-sm btn-outline-secondary" id="cropZoomOut" title="Zoom out"><i class="fas fa-magnifying-glass-minus"></i></button>
+                                        <button class="btn btn-sm btn-outline-secondary" id="cropRotate" title="Rotate 90°"><i class="fas fa-rotate-right"></i></button>
+                                        <button class="btn btn-sm btn-outline-secondary" id="cropReset" title="Reset"><i class="fas fa-arrows-rotate"></i></button>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                        <button id="saveCropBtn" class="btn btn-primary"><i class="fas fa-check me-1"></i> Save Logo</button>
+                                    </div>
+                                </div>
+                                <div id="cropSaving" style="display:none;" class="text-center py-2 text-muted small">
+                                    <i class="fas fa-spinner fa-spin me-1"></i> Saving…
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -164,8 +242,22 @@
                         <div class="mb-4">
                             <label class="form-label fw-semibold">About the Company</label>
                             <textarea name="description" class="form-control" rows="5"
-                                placeholder="Describe your company — mission, culture, what you build, who you're looking for...">{{ company.description or '' }}</textarea>
+                                placeholder="Describe your company: mission, culture, what you build, who you're looking for...">{{ company.description or '' }}</textarea>
                             <div class="form-text">This appears on your public company page visible to candidates.</div>
+                        </div>
+
+                        <!-- Blind Hiring Mode -->
+                        <div class="mb-4 p-3" style="background:var(--primary-soft);border-radius:var(--radius);border:1px solid rgba(99,102,241,0.18);">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="flex-grow-1">
+                                    <div class="fw-bold" style="font-size:0.9rem;"><i class="fas fa-eye-slash me-2" style="color:var(--primary);"></i>Blind Hiring Mode</div>
+                                    <div class="text-muted small mt-1">Hide candidate names and emails from your applicant pipeline. You'll see only match scores, interview performance, and skills. Helps reduce unconscious bias and focus on merit.</div>
+                                </div>
+                                <div class="form-check form-switch mt-1 flex-shrink-0">
+                                    <input class="form-check-input" type="checkbox" name="blind_mode_enabled" id="blindModeToggle" role="switch"
+                                           {{ 'checked' if company.blind_mode_enabled }} style="cursor:pointer;">
+                                </div>
+                            </div>
                         </div>
 
                         <div class="d-flex gap-2">
@@ -234,7 +326,7 @@
                     {% for invite in pending_invites %}
                     <div class="invite-row">
                         <i class="fas fa-envelope"></i>
-                        <span class="flex-grow-1"><strong>{{ invite.email }}</strong> — invite sent {{ invite.created_at.strftime('%b %d') if invite.created_at else '' }}</span>
+                        <span class="flex-grow-1"><strong>{{ invite.email }}</strong>, invited {{ invite.created_at.strftime('%b %d') if invite.created_at else '' }}</span>
                         <span class="text-muted small">Waiting for them to sign up &amp; accept</span>
                     </div>
                     {% endfor %}
@@ -250,7 +342,7 @@
                 <div class="card-body p-4">
                     <p class="text-muted small mb-3">
                         Invite a colleague by email. They'll receive a link to create an employer account (or log in)
-                        and join your company — giving them access to all your job postings and applicants.
+                        and join your company, giving them access to all your job postings and applicants.
                     </p>
                     <form action="{{ url_for('employer.invite_member') }}" method="POST">
                         <div class="d-flex gap-2">
@@ -276,6 +368,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
 <script>
 function showSection(name, el) {
     document.querySelectorAll('[id^="section-"]').forEach(s => s.style.display = 'none');
@@ -291,5 +384,69 @@ if (hash) {
     const el = document.querySelector(`.settings-nav-item[href="#${hash}"]`);
     if (el) showSection(hash, el);
 }
+
+// ── Logo crop ──────────────────────────────────────────────────────────
+let cropper = null;
+const cropModal = new bootstrap.Modal(document.getElementById('cropModal'));
+const cropImg   = document.getElementById('cropImg');
+
+document.getElementById('logoFileInput').addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+        cropImg.src = ev.target.result;
+        cropModal.show();
+    };
+    reader.readAsDataURL(file);
+    // Reset so re-picking the same file fires change again
+    this.value = '';
+});
+
+document.getElementById('cropModal').addEventListener('shown.bs.modal', () => {
+    if (cropper) { cropper.destroy(); cropper = null; }
+    cropper = new Cropper(cropImg, {
+        aspectRatio: NaN,
+        viewMode: 1,
+        dragMode: 'move',
+        cropBoxResizable: true,
+        autoCropArea: 1,
+        background: false,
+    });
+});
+
+document.getElementById('cropModal').addEventListener('hidden.bs.modal', () => {
+    if (cropper) { cropper.destroy(); cropper = null; }
+});
+
+document.getElementById('cropZoomIn').addEventListener('click',  () => cropper && cropper.zoom(0.1));
+document.getElementById('cropZoomOut').addEventListener('click', () => cropper && cropper.zoom(-0.1));
+document.getElementById('cropRotate').addEventListener('click',  () => cropper && cropper.rotate(90));
+document.getElementById('cropReset').addEventListener('click',   () => cropper && cropper.reset());
+
+document.getElementById('saveCropBtn').addEventListener('click', () => {
+    if (!cropper) return;
+    const saveBtn   = document.getElementById('saveCropBtn');
+    const savingMsg = document.getElementById('cropSaving');
+    saveBtn.disabled = true;
+    savingMsg.style.display = 'block';
+
+    cropper.getCroppedCanvas({ maxWidth: 800, maxHeight: 800, imageSmoothingQuality: 'high' })
+        .toBlob(blob => {
+            const fd = new FormData();
+            fd.append('logo', blob, 'logo.png');
+            fetch('{{ url_for("employer.upload_logo") }}', { method: 'POST', body: fd })
+                .then(res => {
+                    if (res.ok || res.redirected) {
+                        window.location.reload(true);
+                    } else {
+                        saveBtn.disabled = false;
+                        savingMsg.style.display = 'none';
+                        alert('Upload failed. Please try again.');
+                    }
+                })
+                .catch(() => { saveBtn.disabled = false; savingMsg.style.display = 'none'; });
+        }, 'image/png');
+});
 </script>
 {% endblock %}

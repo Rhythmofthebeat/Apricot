@@ -76,7 +76,15 @@
 
                 <!-- Header -->
                 <div class="company-badge">
-                    <div class="company-icon">{{ job.company.name[0]|upper }}</div>
+                    {% if job.company.logo_filename %}
+                        <img src="{{ url_for('static', filename='logos/' + job.company.logo_filename) }}?v={{ job.company.logo_version or 0 }}"
+                             alt="{{ job.company.name }}"
+                             style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="company-icon" style="display:none;">{{ job.company.name[0]|upper }}</div>
+                    {% else %}
+                        <div class="company-icon">{{ job.company.name[0]|upper }}</div>
+                    {% endif %}
                     <div>
                         <a href="{{ url_for('employer.company_page', company_id=job.company.id) }}"
                            class="fw-bold text-decoration-none text-reset" style="font-size:0.95rem;">
@@ -94,6 +102,7 @@
                 </div>
 
                 <h1 class="h2 fw-bold mb-2">{{ job.title }}</h1>
+                <p class="text-muted small mb-3">Posted {{ job.created_at|time_ago }}</p>
 
                 <div class="d-flex flex-wrap gap-2 mb-4">
                     {% if job.location %}
@@ -104,6 +113,12 @@
                     {% endif %}
                     {% if job.category %}
                         <span class="jd-meta-pill"><i class="fas fa-tag"></i> {{ job.category }}</span>
+                    {% endif %}
+                    {% set salary_str = job|salary_range %}
+                    {% if salary_str %}
+                        <span class="jd-meta-pill" style="color:var(--success);border-color:var(--success);background:var(--success-soft);">
+                            <i class="fas fa-dollar-sign" style="color:var(--success);"></i> {{ salary_str }}
+                        </span>
                     {% endif %}
                 </div>
 
@@ -159,7 +174,7 @@
                 <!-- About Avants AI -->
                 <div class="jd-section" style="padding-top:12px; border-top: 1px solid var(--border);">
                     <div class="jd-section-label">About Avants AI</div>
-                    <p style="font-size:0.88rem; color:var(--text-muted);">Avants AI partners with companies to vet candidates with AI-powered interviews and match scoring &mdash; so every application in our pipeline is already screened before a human reads it. We consider all qualified applicants without regard to legally protected characteristics.</p>
+                    <p style="font-size:0.88rem; color:var(--text-muted);">Avants AI partners with companies to vet candidates with AI-powered interviews and match scoring. Every application in our pipeline is already screened before a human reads it. We consider all qualified applicants without regard to legally protected characteristics.</p>
                 </div>
 
             </div>
@@ -171,26 +186,61 @@
         <div class="jd-sidebar">
             <div class="card jd-apply-card mb-3">
                 <div class="card-body p-4 text-center">
-                    {% if existing %}
+                    {% if existing and not existing.withdrawn %}
                         <div class="mb-2">
                             <span class="badge-status {{ existing.status }}">{{ existing.status }}</span>
                         </div>
-                        <p class="text-muted small mb-0">You already applied to this role.</p>
-                        {% if existing.match_score is not none %}
-                            <p class="text-muted small mt-1">Match score: <strong>{{ existing.match_score }}</strong></p>
+                        <p class="text-muted small mb-1">You applied <strong>{{ existing.created_at|time_ago }}</strong>.</p>
+                        {% if existing.interview_transcript %}
+                        <a href="{{ url_for('candidate.interview_coaching', application_id=existing.id) }}" class="btn btn-outline-primary btn-sm mt-2 w-100">
+                            <i class="fas fa-chart-line me-1"></i> View Interview Coaching
+                        </a>
                         {% endif %}
+                        <a href="{{ url_for('candidate.dashboard') }}" class="btn btn-outline-secondary btn-sm mt-1 w-100">View application</a>
+                    {% elif not current_user.is_authenticated %}
+                        <h5 class="fw-bold mb-1">Interested in this role?</h5>
+                        <p class="text-muted small mb-3">Create a free account to apply in minutes.</p>
+                        <a href="{{ url_for('auth.sign_up') }}?next={{ request.path }}" class="btn btn-primary w-100 mb-2">
+                            <i class="fas fa-user-plus me-1"></i> Sign Up to Apply
+                        </a>
+                        <a href="{{ url_for('auth.login') }}?next={{ request.path }}" class="btn btn-outline-secondary w-100 btn-sm">
+                            Already have an account? Log in
+                        </a>
                     {% else %}
                         <h5 class="fw-bold mb-1">Ready to apply?</h5>
-                        <p class="text-muted small mb-3">AI-scored &amp; AI-interviewed &mdash; you'll hear back faster.</p>
+                        <p class="text-muted small mb-3">AI-scored and AI-interviewed. You'll hear back faster.</p>
                         <a href="{{ url_for('candidate.apply', job_id=job.id) }}" class="btn btn-primary w-100">
                             <i class="fas fa-paper-plane me-1"></i> Apply Now
                         </a>
+                        {% if current_user.is_authenticated %}
+                        <a href="{{ url_for('candidate.practice_interview', job_id=job.id) }}" class="btn btn-outline-secondary w-100 mt-2" style="font-size:0.85rem;">
+                            <i class="fas fa-dumbbell me-1"></i> Practice Interview First
+                        </a>
+                        {% endif %}
                         <div class="fee-notice">
                             <i class="fas fa-circle-info me-1"></i>
-                            Avants charges a <strong>12.5% placement fee</strong> of first-year compensation upon hire. <a href="/faq#fee" class="text-decoration-none">Learn more</a>
+                            Free to apply. Avants charges <strong>10–15%</strong> to the hiring company on hire, never to you.
                         </div>
                     {% endif %}
                 </div>
+            </div>
+
+            <!-- Share button -->
+            <div class="card mb-3">
+                <div class="card-body p-3 d-flex align-items-center justify-content-between">
+                    <span class="small text-muted">Share this role</span>
+                    <button id="shareBtn" class="btn btn-sm btn-outline-secondary" onclick="copyJobLink()">
+                        <i class="fas fa-link me-1"></i> Copy link
+                    </button>
+                </div>
+            </div>
+
+            <!-- Similar Jobs -->
+            <div class="card mb-3" id="similarJobsCard" style="display:none;">
+                <div class="card-header" style="font-size:0.8rem; font-weight:700;">
+                    <i class="fas fa-layer-group me-2" style="color:var(--primary);"></i>Similar Roles
+                </div>
+                <div id="similarJobsList" class="card-body p-0"></div>
             </div>
 
             <div class="card">
@@ -217,4 +267,37 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyJobLink() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+        const btn = document.getElementById('shareBtn');
+        btn.innerHTML = '<i class="fas fa-check me-1"></i> Copied!';
+        btn.classList.replace('btn-outline-secondary', 'btn-success');
+        setTimeout(() => {
+            btn.innerHTML = '<i class="fas fa-link me-1"></i> Copy link';
+            btn.classList.replace('btn-success', 'btn-outline-secondary');
+        }, 2000);
+    });
+}
+
+(async () => {
+    try {
+        const r = await fetch("{{ url_for('candidate.similar_jobs', job_id=job.id) }}");
+        const data = await r.json();
+        if (!data.similar || data.similar.length === 0) return;
+        const list = document.getElementById('similarJobsList');
+        list.innerHTML = data.similar.map((s, i) => `
+            <div style="padding:12px 16px;${i < data.similar.length - 1 ? 'border-bottom:1px solid var(--border);' : ''}">
+                <a href="${s.url}" class="fw-bold text-decoration-none" style="font-size:0.88rem;color:var(--text);">${s.title}</a>
+                <div class="text-muted" style="font-size:0.76rem;">${s.company}</div>
+                <div class="text-muted mt-1" style="font-size:0.75rem;line-height:1.4;">${s.reason}</div>
+            </div>
+        `).join('');
+        document.getElementById('similarJobsCard').style.display = '';
+    } catch (_) {}
+})();
+</script>
 {% endblock %}

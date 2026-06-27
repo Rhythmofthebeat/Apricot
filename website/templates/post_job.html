@@ -15,19 +15,52 @@
     .question-row input { flex: 1; }
     .question-row .remove-question-btn { color: var(--text-muted); background: none; border: none; cursor: pointer; }
     .question-row .remove-question-btn:hover { color: var(--danger); }
+    .section-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+    }
+    .section-divider {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 24px 0;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-7">
+<div class="row justify-content-center g-4">
+    <!-- JD Quality Analyzer sidebar -->
+    <div class="col-lg-4 order-lg-2">
+        <div class="card sticky-top" style="top:80px;">
+            <div class="card-header fw-bold" style="font-size:0.85rem;">
+                <i class="fas fa-magnifying-glass-chart me-2" style="color:var(--primary);"></i>JD Quality Analyzer
+            </div>
+            <div class="card-body p-3">
+                <p class="text-muted small mb-3">Let AI review your job post before you publish it.</p>
+                <button type="button" class="btn btn-outline-primary w-100 btn-sm" id="analyzeJdBtn" onclick="analyzeJD()">
+                    <i class="fas fa-wand-magic-sparkles me-1"></i> Analyze Description
+                </button>
+                <div id="jdAnalysisResult" class="mt-3" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8 order-lg-1">
         <div class="card">
             <div class="card-header"><i class="fas {{ 'fa-pen' if job else 'fa-plus' }} me-2"></i>{{ 'Edit Job' if job else 'Post a Job' }}</div>
             <div class="card-body p-4">
                 <form method="POST" id="postJobForm" action="{{ url_for('employer.edit_job', job_id=job.id) if job else url_for('employer.post_job') }}">
+
+                    <!-- Basics -->
                     <div class="mb-3">
                         <label class="form-label fw-bold">Job Title</label>
-                        <input type="text" class="form-control" name="title" id="jobTitle" value="{{ job.title if job else '' }}" placeholder="e.g. Senior Backend Engineer" required>
+                        <input type="text" class="form-control" name="title" id="jobTitle"
+                               value="{{ job.title if job else '' }}"
+                               placeholder="e.g. Senior Backend Engineer" required>
                     </div>
 
                     <div class="row">
@@ -55,23 +88,93 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">Compensation <span class="text-muted fw-normal" style="font-size:0.8rem;">optional</span></label>
+                            <select class="form-select mb-2" name="pay_type" id="payType" onchange="updateSalaryHints()">
+                                {% set pt = job.pay_type if job and job.pay_type else 'yearly' %}
+                                <option value="yearly"   {{ 'selected' if pt == 'yearly' }}>Per year (salary)</option>
+                                <option value="hourly"   {{ 'selected' if pt == 'hourly' }}>Per hour</option>
+                                <option value="monthly"  {{ 'selected' if pt == 'monthly' }}>Per month</option>
+                                <option value="stipend"  {{ 'selected' if pt == 'stipend' }}>Stipend (fixed)</option>
+                                <option value="contract" {{ 'selected' if pt == 'contract' }}>Project / contract</option>
+                            </select>
+                            <div class="d-flex gap-2">
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="salary_usd" id="salaryMin" min="0"
+                                           value="{{ job.salary_usd if job and job.salary_usd else '' }}"
+                                           placeholder="Min">
+                                </div>
+                                <div class="input-group" id="salaryMaxGroup">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="salary_max_usd" id="salaryMax" min="0"
+                                           value="{{ job.salary_max_usd if job and job.salary_max_usd else '' }}"
+                                           placeholder="Max">
+                                </div>
+                            </div>
+                            <p class="preview-note mt-1" id="salaryHint"></p>
+                        </div>
                     </div>
 
                     {% if job %}
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Status</label>
-                            <select class="form-control" name="status">
-                                <option value="open" {{ 'selected' if job.status == 'open' }}>Open</option>
-                                <option value="closed" {{ 'selected' if job.status == 'closed' }}>Closed</option>
-                            </select>
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Status</label>
+                        <select class="form-control" name="status">
+                            <option value="open" {{ 'selected' if job.status == 'open' }}>Open</option>
+                            <option value="closed" {{ 'selected' if job.status == 'closed' }}>Closed</option>
+                        </select>
+                    </div>
                     {% endif %}
 
-                    <div class="mb-4">
-                        <label class="form-label fw-bold">Job Description</label>
-                        <textarea class="form-control" name="description" id="jobDescription" rows="8" placeholder="Responsibilities, requirements, what success looks like..." required>{{ job.description if job else '' }}</textarea>
+                    <hr class="section-divider">
+
+                    <!-- Structured Description -->
+                    <p class="fw-bold mb-1">Job Description</p>
+                    <p class="text-muted small mb-4">Fill in the sections below. Candidates will see these exactly as shown.</p>
+
+                    <!-- Pre-populate from existing JSON or plain text -->
+                    {% set secs = job.description_sections if job else none %}
+
+                    <div class="mb-3">
+                        <div class="section-label"><i class="fas fa-info-circle me-1"></i> About the Role</div>
+                        <textarea class="form-control desc-section" id="sec_about" rows="4"
+                                  placeholder="Overview of the role, its purpose, and why it matters...">{{ secs.about if secs else (job.description if job and not secs else '') }}</textarea>
                     </div>
 
+                    <div class="mb-3">
+                        <div class="section-label"><i class="fas fa-check-circle me-1"></i> Requirements <span class="text-muted fw-normal">(must have)</span></div>
+                        <textarea class="form-control desc-section" id="sec_requirements" rows="4"
+                                  placeholder="Years of experience, specific skills, certifications...">{{ secs.requirements if secs else '' }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="section-label"><i class="fas fa-star me-1"></i> Preferred <span class="text-muted fw-normal">(nice to have)</span></div>
+                        <textarea class="form-control desc-section" id="sec_preferred" rows="3"
+                                  placeholder="Advanced degree, extra tools, bonus experience...">{{ secs.preferred if secs else '' }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="section-label"><i class="fas fa-list-check me-1"></i> What You'll Do</div>
+                        <textarea class="form-control desc-section" id="sec_what_you_do" rows="4"
+                                  placeholder="Day-to-day responsibilities and deliverables...">{{ secs.what_you_do if secs else '' }}</textarea>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="section-label"><i class="fas fa-file-contract me-1"></i> Contract &amp; Payment Terms</div>
+                        <textarea class="form-control desc-section" id="sec_contract_terms" rows="3"
+                                  placeholder="Pay rate, payment schedule, contract type, remote details...">{{ secs.contract_terms if secs else '' }}</textarea>
+                        <p class="preview-note mt-1">
+                            <i class="fas fa-circle-info me-1"></i>
+                            Upon hire, Avants charges the company a placement fee of <strong>10–15% of first-year compensation</strong>, with the exact rate confirmed before payment. Candidates pay nothing.
+                        </p>
+                    </div>
+
+                    <!-- Hidden field that holds the JSON blob submitted to Flask -->
+                    <input type="hidden" name="description" id="descriptionField">
+
+                    <hr class="section-divider">
+
+                    <!-- AI Interview Settings -->
                     <h6 class="fw-bold">AI Interview Settings</h6>
                     <p class="text-muted small">Every applicant takes this AI interview before you review them. Adjust how long it runs and what it should make sure to ask.</p>
 
@@ -87,7 +190,8 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Guidance for the AI Interviewer (optional)</label>
-                        <textarea class="form-control" name="interview_focus" id="interviewFocus" rows="3" placeholder="e.g. I want to know if they've shipped to production solo, not just contributed to a team effort. If they mention managing people, find out how many reports and how they handled a tough performance conversation.">{{ job.interview_focus if job else '' }}</textarea>
+                        <textarea class="form-control" name="interview_focus" id="interviewFocus" rows="3"
+                                  placeholder="e.g. I want to know if they've shipped to production solo, not just contributed to a team effort.">{{ job.interview_focus if job else '' }}</textarea>
                         <p class="preview-note mt-1">Topics to make sure get covered, things to listen for, or what to do if a candidate brings up something specific.</p>
                     </div>
 
@@ -96,13 +200,20 @@
                     </button>
                     <div id="previewError"></div>
                     <div class="preview-questions" id="previewQuestionsBox" style="display:{{ 'block' if job and job.interview_questions else 'none' }};">
-                        <p class="preview-note mb-2"><i class="fas fa-circle-info me-1"></i> Edit, remove, or add questions as needed &mdash; the AI will make sure to ask these, plus natural follow-ups based on each candidate's answers.</p>
+                        <p class="preview-note mb-2"><i class="fas fa-circle-info me-1"></i> Edit, remove, or add questions as needed. The AI will make sure to ask these, plus natural follow-ups.</p>
                         <div id="questionsList"></div>
                         <button type="button" class="btn btn-outline-secondary btn-sm" id="addQuestionBtn"><i class="fas fa-plus"></i> Add Question</button>
                     </div>
                     <input type="hidden" name="interview_questions" id="interviewQuestionsField">
 
-                    <button type="submit" class="btn btn-primary w-100 mt-4">{{ 'Save Changes' if job else 'Post Job' }}</button>
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary flex-grow-1">
+                            {% if job and job.status == 'draft' %}Publish Job{% elif job %}Save Changes{% else %}Post Job{% endif %}
+                        </button>
+                        <button type="submit" name="save_as_draft" value="1" class="btn btn-outline-secondary">
+                            <i class="fas fa-floppy-disk me-1"></i> Save Draft
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -114,6 +225,27 @@
 <script>
 const existingQuestions = {{ interview_questions|tojson }};
 const questionsList = document.getElementById("questionsList");
+
+function buildDescriptionJSON() {
+    return JSON.stringify({
+        about:          document.getElementById("sec_about").value.trim(),
+        requirements:   document.getElementById("sec_requirements").value.trim(),
+        preferred:      document.getElementById("sec_preferred").value.trim(),
+        what_you_do:    document.getElementById("sec_what_you_do").value.trim(),
+        contract_terms: document.getElementById("sec_contract_terms").value.trim(),
+    });
+}
+
+function buildDescriptionText() {
+    const sections = [
+        ["About the Role",            document.getElementById("sec_about").value.trim()],
+        ["Requirements",              document.getElementById("sec_requirements").value.trim()],
+        ["Preferred Qualifications",  document.getElementById("sec_preferred").value.trim()],
+        ["What You'll Do",            document.getElementById("sec_what_you_do").value.trim()],
+        ["Contract & Payment Terms",  document.getElementById("sec_contract_terms").value.trim()],
+    ];
+    return sections.filter(([_, v]) => v).map(([label, v]) => `${label}:\n${v}`).join("\n\n");
+}
 
 function addQuestionRow(text) {
     const row = document.createElement("div");
@@ -144,14 +276,14 @@ document.getElementById("addQuestionBtn").addEventListener("click", () => addQue
 document.getElementById("previewQuestionsBtn").addEventListener("click", async () => {
     const btn = document.getElementById("previewQuestionsBtn");
     const title = document.getElementById("jobTitle").value.trim();
-    const description = document.getElementById("jobDescription").value.trim();
+    const descText = buildDescriptionText();
     const interviewLength = document.getElementById("interviewLength").value;
     const interviewFocus = document.getElementById("interviewFocus").value.trim();
     const errorEl = document.getElementById("previewError");
 
     errorEl.innerHTML = "";
-    if (!title || !description) {
-        errorEl.innerHTML = '<div class="error-message" style="color: var(--danger); background: var(--danger-soft); padding: 10px 14px; border-radius: var(--radius);">Fill in the job title and description first.</div>';
+    if (!title || !descText) {
+        errorEl.innerHTML = '<div class="error-message" style="color:var(--danger);background:var(--danger-soft);padding:10px 14px;border-radius:var(--radius);">Fill in the job title and at least one description section first.</div>';
         return;
     }
 
@@ -162,7 +294,7 @@ document.getElementById("previewQuestionsBtn").addEventListener("click", async (
         const response = await fetch("/employer/preview-interview-questions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title, description, interview_length: interviewLength, interview_focus: interviewFocus })
+            body: JSON.stringify({ title, description: descText, interview_length: interviewLength, interview_focus: interviewFocus })
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Failed to generate questions.");
@@ -171,18 +303,100 @@ document.getElementById("previewQuestionsBtn").addEventListener("click", async (
         result.questions.forEach(addQuestionRow);
         document.getElementById("previewQuestionsBox").style.display = "block";
     } catch (e) {
-        errorEl.innerHTML = `<div class="error-message" style="color: var(--danger); background: var(--danger-soft); padding: 10px 14px; border-radius: var(--radius);">${e.message}</div>`;
+        errorEl.innerHTML = `<div class="error-message" style="color:var(--danger);background:var(--danger-soft);padding:10px 14px;border-radius:var(--radius);">${e.message}</div>`;
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-magic"></i> Regenerate Interview Questions';
     }
 });
 
+async function analyzeJD() {
+    const btn = document.getElementById("analyzeJdBtn");
+    const resultEl = document.getElementById("jdAnalysisResult");
+    const title = document.getElementById("jobTitle").value.trim();
+    if (!title) {
+        resultEl.innerHTML = '<p class="text-danger small">Enter a job title first.</p>';
+        resultEl.style.display = 'block';
+        return;
+    }
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Analyzing...';
+    resultEl.style.display = 'none';
+
+    try {
+        const secs = JSON.parse(buildDescriptionJSON());
+        const r = await fetch("{{ url_for('employer.analyze_jd') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title,
+                about: secs.about || '',
+                requirements: secs.requirements || '',
+                preferred: secs.preferred || '',
+                what_you_do: secs.what_you_do || '',
+                contract_terms: secs.contract_terms || '',
+                salary_usd: document.querySelector('[name=salary_usd]').value || '',
+                category: document.querySelector('[name=category]').value || '',
+            }),
+        });
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+
+        const score = data.score;
+        const color = score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--danger)';
+        const levelIcon = { error: '🔴', warning: '🟡', tip: '🔵' };
+
+        resultEl.innerHTML = `
+            <div style="text-align:center;margin-bottom:12px;">
+                <span style="font-size:2rem;font-weight:800;color:${color};">${score}</span>
+                <span style="font-size:0.8rem;color:var(--text-muted);display:block;">Quality Score</span>
+            </div>
+            <div style="font-size:0.8rem;">
+                ${data.issues.map(i => `
+                    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:flex-start;">
+                        <span style="flex-shrink:0;">${levelIcon[i.level] || '🔵'}</span>
+                        <span style="color:var(--text);">${i.text}</span>
+                    </div>
+                `).join('')}
+            </div>`;
+        resultEl.style.display = 'block';
+    } catch (e) {
+        resultEl.innerHTML = '<p class="text-danger small">Analysis failed. Please try again.</p>';
+        resultEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-wand-magic-sparkles me-1"></i> Analyze Again';
+    }
+}
+
 document.getElementById("postJobForm").addEventListener("submit", () => {
+    document.getElementById("descriptionField").value = buildDescriptionJSON();
     const questions = Array.from(document.querySelectorAll(".question-input"))
         .map(input => input.value.trim())
         .filter(text => text);
     document.getElementById("interviewQuestionsField").value = JSON.stringify(questions);
 });
+
+const PAY_CONFIG = {
+    yearly:   { step: 1000, minPh: 'e.g. 80000', maxPh: 'e.g. 120000', hint: 'Displayed as $80K–$120K/yr', showMax: true },
+    hourly:   { step: 1,    minPh: 'e.g. 25',    maxPh: 'e.g. 40',     hint: 'Displayed as $25–$40/hr',    showMax: true },
+    monthly:  { step: 100,  minPh: 'e.g. 5000',  maxPh: 'e.g. 8000',   hint: 'Displayed as $5K–$8K/mo',   showMax: true },
+    stipend:  { step: 100,  minPh: 'e.g. 2000',  maxPh: '',            hint: 'Displayed as $2K stipend',   showMax: false },
+    contract: { step: 1000, minPh: 'e.g. 10000', maxPh: 'e.g. 20000',  hint: 'Displayed as $10K–$20K (project)', showMax: true },
+};
+
+function updateSalaryHints() {
+    const pt = document.getElementById('payType').value;
+    const cfg = PAY_CONFIG[pt] || PAY_CONFIG.yearly;
+    const minInput = document.getElementById('salaryMin');
+    const maxGroup = document.getElementById('salaryMaxGroup');
+    minInput.step = cfg.step;
+    minInput.placeholder = cfg.minPh;
+    document.getElementById('salaryMax').placeholder = cfg.maxPh;
+    maxGroup.style.display = cfg.showMax ? '' : 'none';
+    document.getElementById('salaryHint').textContent = cfg.hint;
+}
+
+updateSalaryHints();
 </script>
 {% endblock %}

@@ -71,7 +71,7 @@
                     </div>
                     <div id="dashSuggestedList"></div>
                     <div id="dashSuggestedEmpty" class="text-muted small p-4" style="display:none;">
-                        No open roles match your profile right now — check back as new jobs are posted.
+                        No open roles match your profile right now. Check back as new jobs are posted.
                     </div>
                 {% else %}
                     <div class="p-4">
@@ -94,26 +94,38 @@
             </a>
         </div>
 
+        {% set active_apps = applications | rejectattr('withdrawn') | list %}
+        {% set withdrawn_apps = applications | selectattr('withdrawn') | list %}
+
         {% if not applications %}
         <div class="empty-state">
             <i class="fas fa-inbox empty-icon"></i>
             <h4 class="fw-bold mb-2">No applications yet</h4>
-            <p class="text-muted mb-4">Browse open roles and apply in minutes — AI scores your match before you even submit.</p>
+            <p class="text-muted mb-4">Browse open roles and apply in minutes. AI scores your match before you even submit.</p>
             <a href="{{ url_for('candidate.browse_jobs') }}" class="btn btn-primary btn-rounded">Browse Jobs</a>
         </div>
         {% else %}
-            {% for app in applications %}
+            {% for app in active_apps %}
             <div class="app-row">
-
-                <div class="app-company-dot">{{ app.job.company.name[0]|upper }}</div>
+                <!-- Company logo / initial -->
+                {% if app.job.company.logo_filename %}
+                    <img src="{{ url_for('static', filename='logos/' + app.job.company.logo_filename) }}?v={{ app.job.company.logo_version or 0 }}"
+                         alt="{{ app.job.company.name }}"
+                         style="width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;">
+                {% else %}
+                    <div class="app-company-dot">{{ app.job.company.name[0]|upper }}</div>
+                {% endif %}
 
                 <div class="flex-grow-1 min-width-0">
-                    <div class="app-title">{{ app.job.title }}</div>
+                    <div class="app-title">
+                        <a href="{{ url_for('candidate.job_detail', job_id=app.job_id) }}" class="text-decoration-none text-reset">{{ app.job.title }}</a>
+                    </div>
                     <div class="app-meta">
                         <a href="{{ url_for('employer.company_page', company_id=app.job.company.id) }}"
                            class="text-muted fw-semibold text-decoration-none">{{ app.job.company.name }}</a>
-                        &middot; Applied {{ app.created_at.strftime('%b %d, %Y') if app.created_at else '' }}
+                        &middot; Applied {{ app.created_at|time_ago }}
                     </div>
+
 
                     {% set meeting = meetings.get(app.id) %}
                     {% if meeting %}
@@ -122,32 +134,49 @@
                         {{ 'Video call' if meeting.type == 'virtual' else 'In-person' }}
                         on {{ meeting.date }} at {{ meeting.time }}
                         {% if meeting.type == 'virtual' %}
-                            &mdash; <a href="{{ meeting.location_or_url }}" target="_blank" rel="noopener">Join link</a>
+                            , <a href="{{ meeting.location_or_url }}" target="_blank" rel="noopener">Join link</a>
                         {% else %}
-                            &mdash; {{ meeting.location_or_url }}
+                            , {{ meeting.location_or_url }}
                         {% endif %}
                     </div>
                     {% endif %}
                 </div>
 
-                <!-- Score -->
-                <div class="text-center flex-shrink-0">
-                    {% set score = app.match_score or 0 %}
-                    <span class="score-pill {{ 'high' if score >= 70 else ('mid' if score >= 40 else 'low') }}">{{ score }}</span>
-                    <div class="text-muted" style="font-size:0.65rem; margin-top:2px; font-weight:500;">MATCH</div>
+
+                <!-- Skills Gap Roadmap (shown for low-scoring apps) -->
+                {% set roadmap = roadmaps.get(app.id) %}
+                {% if roadmap and app.status not in ('hired', 'withdrawn') %}
+                <details class="mt-2 w-100">
+                    <summary style="font-size:0.78rem;color:var(--primary);cursor:pointer;font-weight:600;list-style:none;">
+                        <i class="fas fa-map-signs me-1"></i>30-Day Skills Roadmap to close your gap
+                    </summary>
+                    <div class="mt-2" style="background:var(--bg);border-radius:var(--radius);padding:12px 14px;border:1px solid var(--border);">
+                        {% for step in roadmap %}
+                        <div style="display:flex;gap:10px;margin-bottom:10px;{% if not loop.last %}padding-bottom:10px;border-bottom:1px solid var(--border);{% endif %}">
+                            <div style="background:var(--primary);color:white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;margin-top:2px;">{{ loop.index }}</div>
+                            <div>
+                                <div class="fw-semibold" style="font-size:0.82rem;">{{ step.step }}</div>
+                                <div class="text-muted" style="font-size:0.78rem;">{{ step.description }}</div>
+                                {% if step.timeline %}<div style="font-size:0.72rem;color:var(--primary);margin-top:2px;">{{ step.timeline }}</div>{% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </details>
+                {% endif %}
+
+                <!-- Rejection feedback (shown inline if available) -->
+                {% if app.status == 'rejected' and app.candidate_feedback %}
+                <div class="mt-2 w-100" style="background:var(--bg);border-left:3px solid var(--primary);border-radius:4px;padding:10px 14px;font-size:0.82rem;color:var(--text-muted);">
+                    <div class="fw-semibold mb-1" style="color:var(--text);font-size:0.78rem;text-transform:uppercase;letter-spacing:0.04em;"><i class="fas fa-comment-dots me-1" style="color:var(--primary);"></i>Feedback from {{ app.job.company.name }}</div>
+                    {{ app.candidate_feedback }}
                 </div>
+                {% endif %}
 
                 <!-- Status + actions -->
                 <div class="d-flex flex-wrap gap-2 align-items-center flex-shrink-0">
                     {% if app.status == 'hired' %}
                         <span class="badge-status hired"><i class="fas fa-trophy me-1"></i> Hired</span>
-                        {% if app.stripe_payment_link and not app.fee_paid %}
-                            <a href="{{ app.stripe_payment_link }}" target="_blank" class="btn btn-warning btn-sm" style="font-size:0.75rem;">
-                                <i class="fas fa-credit-card me-1"></i> Pay Fee
-                            </a>
-                        {% elif app.fee_paid %}
-                            <span class="badge-status hired"><i class="fas fa-circle-check me-1"></i> Fee Paid</span>
-                        {% endif %}
                     {% elif app.status == 'rejected' %}
                         <span class="badge-status rejected">Not selected</span>
                     {% else %}
@@ -156,17 +185,49 @@
                             <span class="badge-status {{ 'hired' if 'Yes' in app.interview_verdict else 'rejected' }}">
                                 <i class="fas fa-robot me-1" style="font-size:0.65rem;"></i>AI: {{ app.interview_verdict }}
                             </span>
-                        {% elif app.status == 'applied' %}
+                        {% elif app.status == 'applied' and not app.interview_transcript %}
                             <a href="{{ url_for('candidate.interview', job_id=app.job_id, application_id=app.id) }}"
                                class="btn btn-primary btn-sm">
                                 <i class="fas fa-microphone me-1"></i> Start Interview
                             </a>
                         {% endif %}
                     {% endif %}
+                    {% if app.interview_transcript %}
+                    <a href="{{ url_for('candidate.interview_coaching', application_id=app.id) }}"
+                       class="btn btn-sm btn-outline-primary" title="View interview coaching report">
+                        <i class="fas fa-chart-line"></i>
+                    </a>
+                    {% endif %}
+
+                    {% if app.status != 'hired' %}
+                    <form method="POST" action="{{ url_for('candidate.withdraw_application', application_id=app.id) }}"
+                          onsubmit="return confirm('Withdraw this application? This can\'t be undone.')">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Withdraw application">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </form>
+                    {% endif %}
                 </div>
 
             </div>
             {% endfor %}
+
+            {% if withdrawn_apps %}
+            <details class="mt-3">
+                <summary class="text-muted small" style="cursor:pointer; user-select:none;">
+                    {{ withdrawn_apps|length }} withdrawn application{{ 's' if withdrawn_apps|length != 1 }}
+                </summary>
+                {% for app in withdrawn_apps %}
+                <div class="app-row mt-2" style="opacity:0.5;">
+                    <div class="app-company-dot">{{ app.job.company.name[0]|upper }}</div>
+                    <div class="flex-grow-1">
+                        <div class="app-title">{{ app.job.title }}</div>
+                        <div class="app-meta">{{ app.job.company.name }} &middot; Withdrawn</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </details>
+            {% endif %}
         {% endif %}
     </div>
 

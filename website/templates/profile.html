@@ -247,7 +247,7 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
         status.className = 'small text-success';
         setTimeout(() => { status.textContent = ''; }, 3000);
     } catch (_) {
-        status.textContent = 'Save failed — please try again.';
+        status.textContent = 'Save failed. Please try again.';
         status.className = 'small text-danger';
     } finally {
         btn.disabled = false;

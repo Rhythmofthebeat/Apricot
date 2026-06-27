@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Hiring Analytics | {{ company.name }}{% endblock %}
+
+{% block head %}
+<style>
+    .metric-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 24px;
+        text-align: center;
+    }
+    .metric-value {
+        font-size: 2.2rem;
+        font-weight: 800;
+        color: var(--primary);
+        line-height: 1;
+        margin-bottom: 4px;
+    }
+    .metric-label {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .funnel-bar {
+        height: 36px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        padding: 0 14px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        color: white;
+        margin-bottom: 8px;
+        position: relative;
+        transition: width 0.4s ease;
+    }
+    .funnel-label {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        margin-bottom: 12px;
+        display: flex;
+        justify-content: space-between;
+    }
+    .job-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .job-row:last-child { border-bottom: none; }
+    .benchmark-note {
+        background: var(--primary-soft);
+        border-radius: var(--radius);
+        padding: 14px 18px;
+        font-size: 0.83rem;
+        color: var(--primary);
+        border: 1px solid rgba(99,102,241,0.15);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h4 fw-bold mb-1">Hiring Analytics</h1>
+        <p class="text-muted small mb-0">Pipeline performance across all your jobs</p>
+    </div>
+    <a href="{{ url_for('employer.dashboard') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i> Dashboard
+    </a>
+</div>
+
+{% if not stats or stats.total == 0 %}
+<div class="card">
+    <div class="card-body text-center p-5">
+        <i class="fas fa-chart-bar text-muted mb-3" style="font-size:2.5rem; opacity:0.3; display:block;"></i>
+        <h4 class="fw-bold mb-2">No data yet</h4>
+        <p class="text-muted mb-4">Analytics will appear once you have applications on your jobs.</p>
+        <a href="{{ url_for('employer.post_job') }}" class="btn btn-primary">Post a Job</a>
+    </div>
+</div>
+{% else %}
+
+<!-- Key metrics -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="metric-card">
+            <div class="metric-value">{{ stats.total }}</div>
+            <div class="metric-label">Total Applications</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="metric-card">
+            <div class="metric-value">{{ stats.interview_rate }}%</div>
+            <div class="metric-label">Interview Rate</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="metric-card">
+            <div class="metric-value">{{ stats.hire_rate }}%</div>
+            <div class="metric-label">Hire Rate</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="metric-card">
+            <div class="metric-value">{{ stats.avg_score if stats.avg_score else '—' }}</div>
+            <div class="metric-label">Avg Match Score</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Funnel -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header fw-bold"><i class="fas fa-filter me-2" style="color:var(--primary);"></i>Hiring Funnel</div>
+            <div class="card-body p-4">
+                {% set total = stats.total %}
+                {% macro funnel_pct(n) %}{{ ((n / total * 100) | round | int) if total else 0 }}{% endmacro %}
+
+                <div class="funnel-label">
+                    <span>Applications received</span>
+                    <span class="fw-bold">{{ total }}</span>
+                </div>
+                <div class="funnel-bar" style="background:var(--primary); width:100%;">{{ total }}</div>
+
+                <div class="funnel-label">
+                    <span>Completed AI interview</span>
+                    <span class="fw-bold">{{ stats.interviewed }} ({{ funnel_pct(stats.interviewed) }}%)</span>
+                </div>
+                <div class="funnel-bar" style="background:#8b5cf6; width:{{ funnel_pct(stats.interviewed) }}%; min-width:40px;">{{ stats.interviewed }}</div>
+
+                <div class="funnel-label">
+                    <span>Hired</span>
+                    <span class="fw-bold">{{ stats.hired }} ({{ funnel_pct(stats.hired) }}%)</span>
+                </div>
+                <div class="funnel-bar" style="background:var(--success); width:{{ [funnel_pct(stats.hired), 5] | max }}%; min-width:40px;">{{ stats.hired }}</div>
+
+                <hr class="my-3">
+                <div class="d-flex justify-content-between small text-muted">
+                    <span><i class="fas fa-times-circle me-1 text-danger"></i>Rejected: <strong>{{ stats.rejected }}</strong></span>
+                    <span><i class="fas fa-briefcase me-1" style="color:var(--primary);"></i>Open jobs: <strong>{{ stats.open_jobs }}</strong></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Per-job breakdown -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header fw-bold"><i class="fas fa-list me-2" style="color:var(--primary);"></i>By Job</div>
+            <div class="card-body p-4">
+                {% if top_jobs %}
+                {% for j in top_jobs %}
+                <div class="job-row">
+                    <div class="flex-grow-1 min-width-0">
+                        <div class="fw-semibold text-truncate" style="font-size:0.9rem;">{{ j.title }}</div>
+                        <div class="text-muted small">{{ j.total }} applicant{{ 's' if j.total != 1 }}</div>
+                    </div>
+                    <div class="d-flex gap-3 flex-shrink-0 text-center">
+                        <div>
+                            <div class="fw-bold" style="font-size:0.95rem; color:var(--primary);">{{ j.interviewed }}</div>
+                            <div class="text-muted" style="font-size:0.65rem;">Interviewed</div>
+                        </div>
+                        <div>
+                            <div class="fw-bold" style="font-size:0.95rem; color:var(--success);">{{ j.hired }}</div>
+                            <div class="text-muted" style="font-size:0.65rem;">Hired</div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p class="text-muted small mb-0">No job data yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Benchmark card -->
+    <div class="col-12">
+        <div class="benchmark-note">
+            <strong><i class="fas fa-lightbulb me-2"></i>How you compare to industry averages</strong><br>
+            <div class="row mt-2 g-2">
+                <div class="col-md-4 small">
+                    <strong>Interview completion rate:</strong> Industry avg is ~45%.
+                    {% if stats.interview_rate >= 45 %}
+                        <span class="text-success fw-semibold">You're above average at {{ stats.interview_rate }}%.</span>
+                    {% else %}
+                        <span>You're at {{ stats.interview_rate }}% — consider sharing the interview link more prominently.</span>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 small">
+                    <strong>Hire rate:</strong> Platforms average 2–4%.
+                    {% if stats.hire_rate >= 2 %}
+                        <span class="text-success fw-semibold">You're converting well at {{ stats.hire_rate }}%.</span>
+                    {% else %}
+                        <span>At {{ stats.hire_rate }}%, you may need more applicants or broader requirements.</span>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 small">
+                    <strong>Avg match score:</strong> Top platforms see ~65–70 for quality pipelines.
+                    {% if stats.avg_score %}
+                        {% if stats.avg_score >= 65 %}
+                            <span class="text-success fw-semibold">Your avg of {{ stats.avg_score }} shows strong candidate fit.</span>
+                        {% else %}
+                            <span>Your avg of {{ stats.avg_score }} suggests your job description may need more specificity to attract better-matched candidates.</span>
+                        {% endif %}
+                    {% else %}
+                        <span>No match score data yet.</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}

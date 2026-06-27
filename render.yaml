@@ -22,3 +22,7 @@ services:
         value: "587"
       - key: GOOGLE_APPLICATION_CREDENTIALS
         value: /etc/secrets/google-credentials.json
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false

@@ -149,20 +149,41 @@
 
 {% if not jobs %}
     <div class="card">
-        <div class="card-body text-center p-5 text-muted">No open roles match your filters yet.</div>
+        <div class="card-body text-center p-5">
+            <i class="fas fa-briefcase text-muted mb-3" style="font-size:2.5rem; opacity:0.3; display:block;"></i>
+            <p class="fw-semibold mb-1">No roles match your filters</p>
+            <p class="text-muted small mb-3">Try clearing your filters or check back soon. New jobs are added regularly.</p>
+            <a href="{{ url_for('candidate.browse_jobs') }}" class="btn btn-outline-secondary btn-sm">Clear filters</a>
+        </div>
     </div>
 {% else %}
     <div class="row g-3">
         {% for job in jobs %}
             <div class="col-md-6 col-lg-4 col-xl-3">
-                <div class="job-card compact" role="button" style="cursor:pointer;"
+                <div class="job-card compact" role="button" style="cursor:pointer; position:relative;"
                      onclick="window.location='{{ url_for('candidate.job_detail', job_id=job.id) }}'">
                     <div class="d-flex justify-content-between align-items-start mb-2">
-                        <span class="badge-status applied">{{ job.category }}</span>
-                        {% set hired_n = job.applications | selectattr('status', 'equalto', 'hired') | list | length %}
-                        {% if hired_n > 0 %}
-                            <span class="hired-badge"><i class="fas fa-trophy" style="font-size:0.65rem;color:#059669;"></i> {{ hired_n }} hired</span>
+                        {% if job.company.logo_filename %}
+                            <img src="{{ url_for('static', filename='logos/' + job.company.logo_filename) }}?v={{ job.company.logo_version or 0 }}"
+                                 alt="{{ job.company.name }}"
+                                 style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0;"
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
+                            <span class="badge-status applied" style="display:none;">{{ job.category }}</span>
+                        {% else %}
+                            <span class="badge-status applied">{{ job.category }}</span>
                         {% endif %}
+                        <div class="d-flex gap-1 align-items-center">
+                            {% if job.id in applied_job_ids %}
+                                <span class="hired-badge" style="background:var(--primary-soft);color:var(--primary);border-color:var(--primary);">
+                                    <i class="fas fa-check" style="font-size:0.6rem;"></i> Applied
+                                </span>
+                            {% else %}
+                                {% set hired_n = job.applications | selectattr('status', 'equalto', 'hired') | list | length %}
+                                {% if hired_n > 0 %}
+                                    <span class="hired-badge"><i class="fas fa-trophy" style="font-size:0.65rem;color:#059669;"></i> {{ hired_n }} hired</span>
+                                {% endif %}
+                            {% endif %}
+                        </div>
                     </div>
                     <h3>{{ job.title }}</h3>
                     <p class="text-muted job-card-meta mb-2">
@@ -172,11 +193,13 @@
                            onclick="event.stopPropagation();">{{ job.company.name }}</a>
                         &middot; {{ job.location or "Remote" }} &middot; {{ job.employment_type or "Full-time" }}
                     </p>
-                    {% if job.salary_usd %}
-                        <span class="salary-badge"><i class="fas fa-dollar-sign"></i> ${{ "{:,.0f}".format(job.salary_usd) }}/yr</span>
+                    {% set salary_str = job|salary_range %}
+                    {% if salary_str %}
+                        <span class="salary-badge"><i class="fas fa-dollar-sign"></i> {{ salary_str }}</span>
                     {% endif %}
                     {% set preview = job.description_text %}
                     <p class="job-card-desc mb-0 mt-2">{{ preview[:110] }}{{ '...' if preview|length > 110 else '' }}</p>
+                    <p class="text-muted mt-2 mb-0" style="font-size:0.72rem;">{{ job.created_at|time_ago }}</p>
                 </div>
             </div>
         {% endfor %}

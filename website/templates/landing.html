@@ -1,257 +1,525 @@
 {% extends "base.html" %}
-{% block title %}Hire smarter with AI — Avants{% endblock %}
+{% block title %}AI-Powered Hiring | Avants{% endblock %}
 
 {% block head %}
 <style>
+    /* ── Hero ── */
     .hero-wrap {
-        background: linear-gradient(160deg, #f8f7ff 0%, #f4f5f7 100%);
+        background: #fff;
         border-bottom: 1px solid var(--border);
-        padding: 80px 0 72px;
+        padding: 96px 20px 80px;
         margin: -28px -20px 0;
+        text-align: center;
     }
-    .hero-label {
+    .hero-badge {
         display: inline-flex;
         align-items: center;
         gap: 6px;
         background: var(--primary-soft);
         color: var(--primary);
-        font-size: 0.78rem;
+        font-size: 0.75rem;
         font-weight: 700;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.07em;
         text-transform: uppercase;
         border-radius: 999px;
         padding: 5px 14px;
-        margin-bottom: 20px;
+        margin-bottom: 24px;
     }
     .hero-title {
-        font-size: clamp(2rem, 5vw, 3.2rem);
+        font-size: clamp(2.4rem, 6vw, 3.8rem);
         font-weight: 800;
-        letter-spacing: -0.04em;
-        line-height: 1.1;
+        letter-spacing: -0.05em;
+        line-height: 1.08;
+        color: var(--text);
         margin-bottom: 20px;
     }
+    .hero-title span { color: var(--primary); }
     .hero-sub {
-        font-size: 1.05rem;
+        font-size: 1.1rem;
         line-height: 1.7;
         color: var(--text-muted);
-        max-width: 520px;
-        margin: 0 auto 32px;
+        max-width: 540px;
+        margin: 0 auto 36px;
     }
     .hero-cta-group { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
-    .btn-hero {
-        padding: 13px 28px;
+    .btn-hero-primary {
+        background: var(--primary);
+        color: #fff;
+        border: none;
+        border-radius: 50px;
+        padding: 14px 32px;
         font-size: 0.95rem;
         font-weight: 700;
-        border-radius: 50px;
         letter-spacing: -0.01em;
+        text-decoration: none;
+        transition: background 0.13s, transform 0.1s;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
     }
-    .how-it-works { padding: 64px 0 48px; }
-    .step-card {
+    .btn-hero-primary:hover { background: var(--primary-dark); color: #fff; transform: translateY(-1px); }
+    .btn-hero-outline {
+        background: transparent;
+        color: var(--text);
+        border: 1.5px solid var(--border);
+        border-radius: 50px;
+        padding: 14px 32px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        text-decoration: none;
+        transition: border-color 0.13s;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .btn-hero-outline:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+        padding: 20px 0;
+        margin: 0 -20px;
+    }
+    .stats-bar-inner {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0;
+    }
+    .stat-item {
+        padding: 4px 36px;
+        border-right: 1px solid var(--border);
+        text-align: center;
+    }
+    .stat-item:last-child { border-right: none; }
+    .stat-val { font-size: 1.45rem; font-weight: 800; color: var(--text); line-height: 1; }
+    .stat-lbl { font-size: 0.75rem; color: var(--text-muted); font-weight: 500; margin-top: 3px; }
+
+    /* ── Differentiators ── */
+    .diff-section {
+        padding: 72px 20px 48px;
+        background: var(--bg);
+        margin: 0 -20px;
+    }
+    .diff-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    .diff-card {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius);
         padding: 28px 24px;
-        height: 100%;
-        position: relative;
     }
-    .step-num {
-        width: 36px; height: 36px;
-        border-radius: 10px;
+    .diff-icon {
+        width: 44px; height: 44px;
+        border-radius: 12px;
         background: var(--primary-soft);
-        color: var(--primary);
-        font-weight: 800;
-        font-size: 0.95rem;
         display: flex; align-items: center; justify-content: center;
+        font-size: 1.1rem;
+        color: var(--primary);
         margin-bottom: 16px;
     }
-    .step-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
-    .step-card p { font-size: 0.88rem; color: var(--text-muted); margin: 0; line-height: 1.65; }
-    .step-connector {
-        position: absolute;
-        right: -20px; top: 36px;
-        color: var(--border);
-        font-size: 1.1rem;
-        z-index: 1;
+    .diff-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 8px; }
+    .diff-card p { font-size: 0.85rem; color: var(--text-muted); line-height: 1.65; margin: 0; }
+    .diff-tag {
+        display: inline-block;
+        background: #dcfce7;
+        color: #15803d;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        border-radius: 999px;
+        padding: 2px 10px;
+        margin-bottom: 10px;
     }
-    .value-strip {
+
+    /* ── Latest roles ── */
+    .roles-section { padding: 64px 0 48px; }
+    .roles-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 24px;
+    }
+    .roles-header h2 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.03em; margin: 0; }
+    .roles-header a { font-size: 0.88rem; color: var(--primary); font-weight: 600; text-decoration: none; }
+    .roles-header a:hover { text-decoration: underline; }
+    .roles-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+    }
+    .role-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        transition: border-color 0.13s, box-shadow 0.13s;
+        text-decoration: none;
+        color: inherit;
+    }
+    .role-card:hover {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(79,70,229,0.07);
+        color: inherit;
+    }
+    .role-company {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .role-title { font-size: 0.97rem; font-weight: 700; line-height: 1.3; }
+    .role-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+    .role-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        background: var(--bg);
+        border-radius: 6px;
+        padding: 3px 8px;
+    }
+    .role-salary {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--success);
+    }
+    .role-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: auto;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+    }
+    .avatar-stack { display: flex; }
+    .avatar-dot {
+        width: 22px; height: 22px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.6rem;
+        font-weight: 800;
+        color: #fff;
+        margin-left: -6px;
+    }
+    .avatar-dot:first-child { margin-left: 0; }
+    .applied-count {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+    .role-apply-btn {
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--primary);
+        text-decoration: none;
+    }
+
+    /* ── How it works ── */
+    .hiw-section {
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+        padding: 72px 20px;
+        margin: 0 -20px;
+    }
+    .hiw-steps {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1px;
+        background: var(--border);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        margin-top: 40px;
+    }
+    .hiw-step {
+        background: var(--surface);
+        padding: 28px 24px;
+    }
+    .hiw-num {
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--primary);
+        margin-bottom: 12px;
+    }
+    .hiw-step h3 { font-size: 0.97rem; font-weight: 700; margin-bottom: 8px; }
+    .hiw-step p { font-size: 0.85rem; color: var(--text-muted); line-height: 1.6; margin: 0; }
+
+    /* ── Two-col value ── */
+    .value-section { padding: 72px 0 48px; }
+    .value-col {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius);
         padding: 32px;
-        margin-bottom: 24px;
+        height: 100%;
     }
-    .value-strip h2 { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 8px; }
-    .check-list { list-style: none; padding: 0; margin: 16px 0 24px; }
-    .check-list li {
-        display: flex; align-items: flex-start; gap: 10px;
-        font-size: 0.9rem; margin-bottom: 10px; color: var(--text);
-    }
-    .check-list li i { color: var(--success); flex-shrink: 0; margin-top: 2px; }
-    .fee-callout {
-        background: var(--primary-soft);
-        border-radius: var(--radius);
-        padding: 20px 24px;
-        margin-top: 16px;
-        font-size: 0.85rem;
-        color: var(--primary);
-        display: flex; align-items: flex-start; gap: 10px;
-    }
-    .fee-callout i { flex-shrink: 0; margin-top: 2px; }
-    .social-proof {
-        background: var(--bg);
-        border-top: 1px solid var(--border);
-        border-bottom: 1px solid var(--border);
-        padding: 24px 0;
-        text-align: center;
-        margin: 0 -20px;
-    }
-    .proof-stat { font-size: 1.5rem; font-weight: 800; color: var(--text); }
-    .proof-label { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; margin-top: 2px; }
-    .section-eyebrow {
-        font-size: 0.72rem;
+    .value-col h2 { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 8px; }
+    .value-col .eyebrow {
+        font-size: 0.7rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.08em;
         color: var(--primary);
-        margin-bottom: 8px;
+        margin-bottom: 6px;
     }
-    @media (max-width: 768px) {
-        .hero-wrap { padding: 56px 20px 48px; margin: -14px -14px 0; }
-        .step-connector { display: none; }
+    .check-list { list-style: none; padding: 0; margin: 16px 0 24px; }
+    .check-list li {
+        display: flex; align-items: flex-start; gap: 10px;
+        font-size: 0.88rem; margin-bottom: 10px; color: var(--text);
+    }
+    .check-list li i { color: var(--success); flex-shrink: 0; margin-top: 2px; }
+
+    /* ── Bottom CTA ── */
+    .bottom-cta {
+        background: var(--primary);
+        padding: 72px 20px;
+        margin: 0 -20px -28px;
+        text-align: center;
+    }
+    .bottom-cta h2 { color: #fff; font-weight: 800; font-size: 2rem; letter-spacing: -0.04em; margin-bottom: 12px; }
+    .bottom-cta p { color: rgba(255,255,255,0.75); font-size: 1rem; margin-bottom: 28px; }
+    .btn-cta-white {
+        background: #fff;
+        color: var(--primary);
+        border: none;
+        border-radius: 50px;
+        padding: 14px 32px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: transform 0.1s;
+    }
+    .btn-cta-white:hover { color: var(--primary-dark); transform: translateY(-1px); }
+
+    @media (max-width: 992px) {
+        .roles-grid { grid-template-columns: repeat(2, 1fr); }
+        .diff-grid { grid-template-columns: 1fr; }
+        .hiw-steps { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 576px) {
+        .hero-wrap { padding: 64px 20px 56px; }
+        .roles-grid { grid-template-columns: 1fr; }
+        .hiw-steps { grid-template-columns: 1fr; }
+        .stat-item { border-right: none; border-bottom: 1px solid var(--border); padding: 12px 24px; }
+        .stat-item:last-child { border-bottom: none; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<!-- ====== HERO ====== -->
+<!-- ── HERO ── -->
 <div class="hero-wrap">
-    <div class="container text-center">
-        <div class="hero-label"><i class="fas fa-bolt"></i> AI-Powered Hiring</div>
-        <h1 class="hero-title">The faster way<br>to hire and get hired</h1>
-        <p class="hero-sub">
-            Avants AI scores every resume, runs a structured interview, and surfaces only the best candidates —
-            so employers hire in days, not weeks.
-        </p>
-        <div class="hero-cta-group">
-            <a href="/sign-up" class="btn btn-primary btn-hero">
-                <i class="fas fa-search me-2"></i>Find a Job
-            </a>
-            <a href="/sign-up" class="btn btn-outline-primary btn-hero">
-                <i class="fas fa-briefcase me-2"></i>Post a Role
-            </a>
+    <div class="hero-badge"><i class="fas fa-microphone-lines"></i> Voice AI Interviews, Not Just Resume Screening</div>
+    <h1 class="hero-title">Apply once.<br><span>Get a real answer.</span></h1>
+    <p class="hero-sub">
+        Avants AI scores your resume, runs your interview, and puts you at the top of the employer's shortlist
+        so you hear back in hours, not weeks.
+    </p>
+    <div class="hero-cta-group">
+        <a href="/sign-up" class="btn-hero-primary">
+            <i class="fas fa-search"></i> Browse open roles
+        </a>
+        <a href="/sign-up?role=employer" class="btn-hero-outline">
+            <i class="fas fa-briefcase"></i> I'm hiring
+        </a>
+    </div>
+</div>
+
+<!-- ── STATS BAR ── -->
+<div class="stats-bar">
+    <div class="stats-bar-inner">
+        <div class="stat-item">
+            <div class="stat-val">{{ open_job_count if open_job_count else '—' }}</div>
+            <div class="stat-lbl">Open roles</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-val">{{ candidate_count if candidate_count else '—' }}</div>
+            <div class="stat-lbl">Candidates</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-val">{{ company_count if company_count else '—' }}</div>
+            <div class="stat-lbl">Companies hiring</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-val">&lt;48h</div>
+            <div class="stat-lbl">Avg. decision time</div>
         </div>
     </div>
 </div>
 
-<!-- ====== SOCIAL PROOF STRIP ====== -->
-<div class="social-proof">
+<!-- ── WHAT MAKES US DIFFERENT ── -->
+<div class="diff-section">
     <div class="container">
-        <div class="row g-0 justify-content-center">
-            <div class="col-4 col-md-2">
-                <div class="proof-stat">AI</div>
-                <div class="proof-label">Resume Scoring</div>
+        <div class="text-center mb-4">
+            <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--primary);margin-bottom:8px;">Why Avants</div>
+            <h2 style="font-size:1.6rem;font-weight:800;letter-spacing:-0.03em;margin:0;">Not another job board.</h2>
+        </div>
+        <div class="diff-grid">
+            <div class="diff-card">
+                <div class="diff-tag">Only on Avants</div>
+                <div class="diff-icon"><i class="fas fa-microphone"></i></div>
+                <h3>Voice AI interview</h3>
+                <p>Every candidate completes a structured voice interview tailored to the role before employers read a single resume. Your answers matter more than your formatting.</p>
             </div>
-            <div class="col-4 col-md-2">
-                <div class="proof-stat">0–100</div>
-                <div class="proof-label">Match Score</div>
+            <div class="diff-card">
+                <div class="diff-tag">Only on Avants</div>
+                <div class="diff-icon"><i class="fas fa-chart-bar"></i></div>
+                <h3>See your match score first</h3>
+                <p>Before you hit submit, Avants AI scores your resume 0–100 against the job description with a clear breakdown. Know your odds before you apply.</p>
             </div>
-            <div class="col-4 col-md-2">
-                <div class="proof-stat">Voice</div>
-                <div class="proof-label">AI Interviews</div>
-            </div>
-            <div class="col-4 col-md-2 mt-3 mt-md-0">
-                <div class="proof-stat">&lt;24h</div>
-                <div class="proof-label">Avg. Screen Time</div>
-            </div>
-            <div class="col-4 col-md-2 mt-3 mt-md-0">
-                <div class="proof-stat">12.5%</div>
-                <div class="proof-label">Placement Fee</div>
+            <div class="diff-card">
+                <div class="diff-tag">Only on Avants</div>
+                <div class="diff-icon"><i class="fas fa-bolt"></i></div>
+                <h3>Employers get verdicts, not piles</h3>
+                <p>Employers receive candidates ranked by AI score and interview verdict, not a pile of PDFs. Faster decisions, real feedback, and no 3-month silence.</p>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ====== HOW IT WORKS ====== -->
-<div class="how-it-works">
+<!-- ── LATEST ROLES ── -->
+{% if job_data %}
+<div class="roles-section">
     <div class="container">
-        <div class="text-center mb-5">
-            <div class="section-eyebrow">How it works</div>
-            <h2 class="h2 fw-bold" style="letter-spacing:-0.03em;">From application to offer in&nbsp;hours</h2>
+        <div class="roles-header">
+            <h2>Latest roles</h2>
+            <a href="/sign-up">View all <i class="fas fa-arrow-right ms-1"></i></a>
         </div>
+        <div class="roles-grid">
+            {% for item in job_data %}
+            {% set job = item.job %}
+            <a href="/sign-up" class="role-card">
+                <div>
+                    <div class="role-company">{{ job.company.name if job.company else 'Company' }}</div>
+                    <div class="role-title">{{ job.title }}</div>
+                </div>
+                <div class="role-meta">
+                    {% if job.location %}
+                    <span class="role-tag"><i class="fas fa-location-dot"></i> {{ job.location }}</span>
+                    {% endif %}
+                    {% if job.employment_type %}
+                    <span class="role-tag">{{ job.employment_type }}</span>
+                    {% endif %}
+                    {% if job.category %}
+                    <span class="role-tag">{{ job.category }}</span>
+                    {% endif %}
+                </div>
+                {% if job.salary_usd %}
+                <div class="role-salary">${{ "{:,}".format(job.salary_usd) }}/yr</div>
+                {% endif %}
+                <div class="role-footer">
+                    <div class="d-flex align-items-center gap-2">
+                        {% if item.avatars %}
+                        <div class="avatar-stack">
+                            {% for av in item.avatars %}
+                            <div class="avatar-dot" style="background:{{ av.color }};">{{ av.letter }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        <span class="applied-count">
+                            {% if item.app_count == 0 %}Be first to apply
+                            {% elif item.app_count == 1 %}1 applied
+                            {% else %}{{ item.app_count }} applied{% endif %}
+                        </span>
+                    </div>
+                    <span class="role-apply-btn">Apply <i class="fas fa-arrow-right"></i></span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
 
-        <div class="row g-3 mb-5">
-            <div class="col-md-3 position-relative">
-                <div class="step-card">
-                    <div class="step-num">1</div>
-                    <h3>Apply in minutes</h3>
-                    <p>Upload your resume or paste LinkedIn text. Our AI reads it and extracts your experience automatically.</p>
-                </div>
-                <div class="step-connector d-none d-md-block"><i class="fas fa-chevron-right"></i></div>
+<!-- ── HOW IT WORKS ── -->
+<div class="hiw-section">
+    <div class="container">
+        <div class="text-center">
+            <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--primary);margin-bottom:8px;">How it works</div>
+            <h2 style="font-size:1.6rem;font-weight:800;letter-spacing:-0.03em;margin:0;">From application to offer in hours</h2>
+        </div>
+        <div class="hiw-steps">
+            <div class="hiw-step">
+                <div class="hiw-num">Step 01</div>
+                <h3>Apply in minutes</h3>
+                <p>Upload your resume or paste LinkedIn text. AI extracts your experience automatically. No long forms.</p>
             </div>
-            <div class="col-md-3 position-relative">
-                <div class="step-card">
-                    <div class="step-num">2</div>
-                    <h3>Get AI-scored</h3>
-                    <p>Your resume is matched against the job description and scored 0–100 with a clear breakdown of strengths and gaps.</p>
-                </div>
-                <div class="step-connector d-none d-md-block"><i class="fas fa-chevron-right"></i></div>
+            <div class="hiw-step">
+                <div class="hiw-num">Step 02</div>
+                <h3>See your match score</h3>
+                <p>Your resume is scored 0–100 against the job. You see the breakdown: strengths, gaps, before you submit.</p>
             </div>
-            <div class="col-md-3 position-relative">
-                <div class="step-card">
-                    <div class="step-num">3</div>
-                    <h3>Voice AI interview</h3>
-                    <p>Complete a structured voice interview tailored to the role. The AI gives a verdict — so employers get context, not just a score.</p>
-                </div>
-                <div class="step-connector d-none d-md-block"><i class="fas fa-chevron-right"></i></div>
+            <div class="hiw-step">
+                <div class="hiw-num">Step 03</div>
+                <h3>Complete the AI interview</h3>
+                <p>A structured voice interview tailored to the role. The AI listens, asks follow-ups, and generates a verdict employers trust.</p>
             </div>
-            <div class="col-md-3">
-                <div class="step-card">
-                    <div class="step-num">4</div>
-                    <h3>Employer decides</h3>
-                    <p>Employers review a ranked, pre-screened pipeline and move fast — no inbox full of unreviewed applications.</p>
-                </div>
+            <div class="hiw-step">
+                <div class="hiw-num">Step 04</div>
+                <h3>Get a real decision</h3>
+                <p>Employers receive a ranked, pre-screened pipeline and move fast. You get a real answer, not silence.</p>
             </div>
         </div>
+    </div>
+</div>
 
-        <!-- For candidates vs employers -->
+<!-- ── FOR CANDIDATES / EMPLOYERS ── -->
+<div class="value-section">
+    <div class="container">
         <div class="row g-4">
             <div class="col-md-6">
-                <div class="value-strip">
-                    <div class="section-eyebrow"><i class="fas fa-user me-1"></i> For candidates</div>
-                    <h2>Stand out with every application</h2>
-                    <p class="text-muted" style="font-size:0.9rem;">Traditional applications disappear into a pile. Avants AI makes sure yours is seen, scored, and seriously considered.</p>
+                <div class="value-col">
+                    <div class="eyebrow"><i class="fas fa-user me-1"></i> For candidates</div>
+                    <h2>Stop disappearing into the pile</h2>
+                    <p class="text-muted" style="font-size:0.88rem;">Traditional applications get ignored. Avants makes sure your skills are seen, scored, and seriously considered.</p>
                     <ul class="check-list">
-                        <li><i class="fas fa-check-circle"></i> Know your match score before you submit</li>
-                        <li><i class="fas fa-check-circle"></i> AI coaching on how to improve your application</li>
-                        <li><i class="fas fa-check-circle"></i> Structured interview — no ghosting after you finish</li>
+                        <li><i class="fas fa-check-circle"></i> Know your match score before you hit submit</li>
+                        <li><i class="fas fa-check-circle"></i> AI coaching on how to close your skill gaps</li>
+                        <li><i class="fas fa-check-circle"></i> Voice interview that proves your skills beyond the resume</li>
+                        <li><i class="fas fa-check-circle"></i> Real feedback, not automated rejection 3 months later</li>
                         <li><i class="fas fa-check-circle"></i> Track all your applications in one dashboard</li>
-                        <li><i class="fas fa-check-circle"></i> Build your resume from LinkedIn in seconds</li>
                     </ul>
                     <a href="/sign-up" class="btn btn-primary btn-rounded">
                         <i class="fas fa-search me-1"></i> Browse open roles
                     </a>
-                    <div class="fee-callout mt-3">
-                        <i class="fas fa-circle-info"></i>
-                        <span>A <strong>12.5% placement fee</strong> of first-year compensation is charged to candidates upon hire.
-                        <a href="/faq#fee" class="text-primary fw-semibold text-decoration-none">Learn more</a></span>
-                    </div>
                 </div>
             </div>
-
             <div class="col-md-6">
-                <div class="value-strip">
-                    <div class="section-eyebrow"><i class="fas fa-building me-1"></i> For employers</div>
-                    <h2>A pre-screened pipeline, not a pile</h2>
-                    <p class="text-muted" style="font-size:0.9rem;">Post a role in minutes. Every applicant is scored and interviewed by AI before you read a single resume.</p>
+                <div class="value-col">
+                    <div class="eyebrow"><i class="fas fa-building me-1"></i> For employers</div>
+                    <h2>A ranked shortlist, not a pile of PDFs</h2>
+                    <p class="text-muted" style="font-size:0.88rem;">Post a role in minutes. Every applicant is AI-scored and voice-interviewed before you read a single resume.</p>
                     <ul class="check-list">
-                        <li><i class="fas fa-check-circle"></i> AI ranks applicants by match score</li>
-                        <li><i class="fas fa-check-circle"></i> Voice interview with verdict before human review</li>
+                        <li><i class="fas fa-check-circle"></i> AI ranks applicants by match score automatically</li>
+                        <li><i class="fas fa-check-circle"></i> Read the AI interview verdict before committing time</li>
                         <li><i class="fas fa-check-circle"></i> Structured job description builder with AI assist</li>
-                        <li><i class="fas fa-check-circle"></i> Schedule meetings and update status in one place</li>
-                        <li><i class="fas fa-check-circle"></i> Company page — team members, public profile</li>
+                        <li><i class="fas fa-check-circle"></i> Schedule, message, and update status in one place</li>
+                        <li><i class="fas fa-check-circle"></i> Company page with team members and public profile</li>
                     </ul>
-                    <a href="/sign-up" class="btn btn-primary btn-rounded">
+                    <a href="/sign-up?role=employer" class="btn btn-primary btn-rounded">
                         <i class="fas fa-briefcase me-1"></i> Post a job for free
                     </a>
                 </div>
@@ -260,17 +528,13 @@
     </div>
 </div>
 
-<!-- ====== BOTTOM CTA ====== -->
-<div style="background: var(--primary); padding: 64px 0; margin: 0 -20px -28px; text-align: center;">
+<!-- ── BOTTOM CTA ── -->
+<div class="bottom-cta">
     <div class="container">
-        <h2 style="color:#fff; font-weight:800; font-size:1.8rem; letter-spacing:-0.03em; margin-bottom:12px;">
-            Ready to get started?
-        </h2>
-        <p style="color: rgba(255,255,255,0.75); font-size:1rem; margin-bottom:28px;">
-            Join candidates and companies using Avants AI to hire and get hired — faster.
-        </p>
-        <a href="/sign-up" class="btn btn-hero" style="background:#fff; color:var(--primary); border:none;">
-            Create a free account <i class="fas fa-arrow-right ms-2"></i>
+        <h2>Stop applying into the void.</h2>
+        <p>Join candidates and companies using Avants AI to hire and get hired, with real AI interviews, real scores, and real answers.</p>
+        <a href="/sign-up" class="btn-cta-white">
+            Create a free account <i class="fas fa-arrow-right"></i>
         </a>
     </div>
 </div>

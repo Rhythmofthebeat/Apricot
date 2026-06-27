@@ -6,7 +6,8 @@ import uuid
 
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, abort, send_from_directory, Response
 from flask_login import login_required, current_user
-from sqlalchemy import or_
+from datetime import datetime, timedelta
+from sqlalchemy import or_, func
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import getSampleStyleSheet
@@ -22,6 +23,9 @@ from ai_services import (
     synthesize_speech,
     generate_resume_from_profile,
     suggest_jobs_for_profile,
+    find_similar_jobs,
+    generate_interview_coaching,
+    generate_skills_roadmap,
 )
 
 candidate = Blueprint('candidate', __name__)
@@ -57,11 +61,11 @@ def _extract_score(result_text):
 
 
 @candidate.route('/jobs')
-@login_required
 def browse_jobs():
     query = request.args.get('q', '').strip()
     category = request.args.get('category', '').strip()
     location = request.args.get('location', '').strip()
+    sort = request.args.get('sort', 'newest').strip()
 
     jobs_query = Job.query.filter_by(status='open')
     if query:
@@ -73,24 +77,77 @@ def browse_jobs():
     if location in JOB_LOCATIONS:
         jobs_query = jobs_query.filter_by(location=location)
 
-    jobs = jobs_query.order_by(Job.created_at.desc()).all()
+    if sort == 'priority':
+        applicant_count_subq = (
+            db.session.query(func.count(Application.id))
+            .filter(Application.job_id == Job.id)
+            .correlate(Job)
+            .scalar_subquery()
+        )
+        jobs_query = jobs_query.order_by(applicant_count_subq.desc())
+    elif sort == 'trending':
+        week_ago = datetime.utcnow() - timedelta(days=7)
+        recent_count_subq = (
+            db.session.query(func.count(Application.id))
+            .filter(Application.job_id == Job.id, Application.created_at >= week_ago)
+            .correlate(Job)
+            .scalar_subquery()
+        )
+        jobs_query = jobs_query.order_by(recent_count_subq.desc())
+    elif sort == 'pay':
+        jobs_query = jobs_query.order_by(Job.salary_usd.desc().nullslast())
+    else:
+        jobs_query = jobs_query.order_by(Job.created_at.desc())
+
+    jobs = jobs_query.all()
+
+    applied_job_ids = set()
+    if current_user.is_authenticated and current_user.role == 'candidate':
+        applied_job_ids = {
+            a.job_id for a in Application.query.filter_by(
+                candidate_user_id=current_user.id, withdrawn=False
+            ).with_entities(Application.job_id).all()
+        }
+
     return render_template(
         "jobs_browse.html",
         jobs=jobs,
         query=query,
         category=category,
         location=location,
+        sort=sort,
         categories=JOB_CATEGORIES,
         locations=JOB_LOCATIONS,
+        applied_job_ids=applied_job_ids,
     )
 
 
 @candidate.route('/jobs/<int:job_id>')
-@login_required
 def job_detail(job_id):
     job = Job.query.get_or_404(job_id)
-    existing = Application.query.filter_by(job_id=job.id, candidate_user_id=current_user.id).first()
-    return render_template("job_detail.html", job=job, existing=existing)
+    existing = (
+        Application.query.filter_by(job_id=job.id, candidate_user_id=current_user.id).first()
+        if current_user.is_authenticated else None
+    )
+
+    # Compute live rank for this candidate
+    rank = None
+    total_applicants = 0
+    percentile = None
+    if existing and not existing.withdrawn and existing.match_score is not None:
+        all_apps = (
+            Application.query.filter_by(job_id=job.id, withdrawn=False)
+            .with_entities(Application.match_score)
+            .all()
+        )
+        scores = sorted([a.match_score or 0 for a in all_apps], reverse=True)
+        total_applicants = len(scores)
+        my_score = existing.match_score
+        rank = next((i + 1 for i, s in enumerate(scores) if s <= my_score), total_applicants)
+        percentile = round((total_applicants - rank) / total_applicants * 100) if total_applicants > 1 else 100
+
+    return render_template("job_detail.html", job=job, existing=existing,
+                           rank=rank, total_applicants=total_applicants, percentile=percentile)
 
 
 @candidate.route('/jobs/<int:job_id>/apply', methods=['GET'])
@@ -136,7 +193,7 @@ def preview_match(job_id):
         return jsonify({"error": "Add your resume content first."}), 400
 
     try:
-        result = compare_resume_to_job(job.description, resume_text)
+        result = compare_resume_to_job(job.description_text, resume_text)
     except Exception:
         return jsonify({"error": "Failed to score your resume. Please try again."}), 500
 
@@ -160,7 +217,7 @@ def submit_application(job_id):
     if not resume_text:
         return jsonify({"error": "Add your resume content first."}), 400
 
-    result = compare_resume_to_job(job.description, resume_text)
+    result = compare_resume_to_job(job.description_text, resume_text)
     score = _extract_score(result)
 
     application = Application(
@@ -203,7 +260,28 @@ def interview(job_id, application_id):
     if application.candidate_user_id != current_user.id:
         abort(403)
     job = Job.query.get_or_404(job_id)
-    return render_template("ai_interview.html", job=job, application=application)
+    already_done = bool(application.interview_transcript)
+    saved_session = None
+    if not already_done and application.interview_saved_session:
+        try:
+            saved_session = json.loads(application.interview_saved_session)
+        except (ValueError, TypeError):
+            pass
+    return render_template("ai_interview.html", job=job, application=application,
+                           already_done=already_done, saved_session=saved_session)
+
+
+@candidate.route('/jobs/<int:job_id>/apply/<int:application_id>/save-session', methods=['POST'])
+@login_required
+def save_interview_session(job_id, application_id):
+    application = Application.query.get_or_404(application_id)
+    if application.candidate_user_id != current_user.id:
+        abort(403)
+    data = request.get_json() or {}
+    history = data.get('history', [])
+    application.interview_saved_session = json.dumps(history)
+    db.session.commit()
+    return jsonify({'status': 'saved'})
 
 
 @candidate.route('/jobs/<int:job_id>/apply/<int:application_id>/interview-chat', methods=['POST'])
@@ -234,7 +312,7 @@ def interview_chat(job_id, application_id):
     try:
         interview_questions = json.loads(job.interview_questions) if job.interview_questions else None
         reply = run_interview_turn(
-            job.title, job.description, user_message, history, force_conclude=wrap_up,
+            job.title, job.description_text, user_message, history, force_conclude=wrap_up,
             interview_length=job.interview_length, interview_focus=job.interview_focus,
             interview_questions=interview_questions,
         )
@@ -260,6 +338,7 @@ def interview_chat(job_id, application_id):
         transcript_lines = [f"{m.get('role')}: {m.get('content')}" for m in history]
         transcript_lines.append(f"assistant: {reply}")
         application.interview_transcript = "\n".join(transcript_lines)
+        application.interview_saved_session = None  # clear saved session on completion
         verdict = verdict_match.group(1).title()
         application.interview_verdict = verdict
         application.status = 'interviewing'
@@ -309,6 +388,36 @@ def dashboard():
         app.id: json.loads(app.scheduled_meeting) if app.scheduled_meeting else None
         for app in applications
     }
+
+    # Lazily generate skills roadmap for low-scoring applications that don't have one yet
+    roadmaps_generated = False
+    for app in applications:
+        if (app.match_score is not None and app.match_score < 65
+                and not app.skills_roadmap and app.status != 'hired'):
+            try:
+                secs = app.job.description_sections or {}
+                steps = generate_skills_roadmap(
+                    job_title=app.job.title,
+                    match_explanation=app.match_explanation or '',
+                    match_score=app.match_score,
+                    requirements=secs.get('requirements', ''),
+                )
+                app.skills_roadmap = json.dumps(steps)
+                roadmaps_generated = True
+            except Exception:
+                pass
+    if roadmaps_generated:
+        db.session.commit()
+
+    # Parse roadmaps for template
+    roadmaps = {}
+    for app in applications:
+        if app.skills_roadmap:
+            try:
+                roadmaps[app.id] = json.loads(app.skills_roadmap)
+            except Exception:
+                pass
+
     candidate_profile = CandidateProfile.query.filter_by(user_id=current_user.id).first()
     has_profile = bool(candidate_profile and (candidate_profile.resume_text or '').strip())
     return render_template(
@@ -316,6 +425,7 @@ def dashboard():
         applications=applications,
         meetings=meetings,
         has_profile=has_profile,
+        roadmaps=roadmaps,
     )
 
 
@@ -422,7 +532,7 @@ def suggested_jobs():
             "title": job.title,
             "company": job.company.name,
             "category": job.category,
-            "description": job.description,
+            "description": job.description_text,
         }
         for job in open_jobs
     ]
@@ -448,6 +558,177 @@ def suggested_jobs():
         })
 
     return jsonify({"suggestions": suggestions})
+
+
+SIMILAR_JOB_POOL = 50
+
+@candidate.route('/jobs/<int:job_id>/similar')
+def similar_jobs(job_id):
+    """AI-powered similar jobs based on role title + description, not category."""
+    current_job = Job.query.get_or_404(job_id)
+
+    other_jobs = (
+        Job.query.filter(Job.status == 'open', Job.id != job_id)
+        .order_by(Job.created_at.desc())
+        .limit(SIMILAR_JOB_POOL)
+        .all()
+    )
+    if not other_jobs:
+        return jsonify({"similar": []})
+
+    current_payload = {
+        "id": current_job.id,
+        "title": current_job.title,
+        "description": current_job.description_text,
+    }
+    others_payload = [
+        {
+            "id": j.id,
+            "title": j.title,
+            "company": j.company.name,
+            "description": j.description_text,
+        }
+        for j in other_jobs
+    ]
+
+    try:
+        ranked = find_similar_jobs(current_payload, others_payload)
+    except Exception:
+        return jsonify({"similar": []})
+
+    jobs_by_id = {j.id: j for j in other_jobs}
+    similar = []
+    for item in ranked:
+        job = jobs_by_id.get(item["job_id"])
+        if not job:
+            continue
+        similar.append({
+            "job_id": job.id,
+            "title": job.title,
+            "company": job.company.name,
+            "similarity": item["similarity"],
+            "reason": item["reason"],
+            "url": url_for('candidate.job_detail', job_id=job.id),
+            "salary": None,
+        })
+
+    return jsonify({"similar": similar})
+
+
+@candidate.route('/applications/<int:application_id>/coaching')
+@login_required
+def interview_coaching(application_id):
+    """Post-interview coaching report — private to the candidate."""
+    application = Application.query.get_or_404(application_id)
+    if application.candidate_user_id != current_user.id:
+        abort(403)
+    if not application.interview_transcript:
+        flash("Complete your AI interview first to unlock the coaching report.", "info")
+        return redirect(url_for('candidate.dashboard'))
+    job = Job.query.get_or_404(application.job_id)
+    secs = job.description_sections or {}
+    try:
+        coaching = generate_interview_coaching(
+            transcript=application.interview_transcript,
+            job_title=job.title,
+            requirements=secs.get('requirements', ''),
+            verdict=application.interview_verdict,
+            match_score=application.match_score,
+        )
+    except Exception:
+        flash("Coaching report temporarily unavailable. Please try again.", "error")
+        return redirect(url_for('candidate.dashboard'))
+    return render_template('interview_coaching.html', application=application, job=job, coaching=coaching)
+
+
+@candidate.route('/jobs/<int:job_id>/practice')
+@login_required
+def practice_interview(job_id):
+    """Practice the AI interview for a job without it counting as your real attempt."""
+    job = Job.query.get_or_404(job_id)
+    if job.status != 'open':
+        flash("This job is no longer accepting applications.", "info")
+        return redirect(url_for('candidate.browse_jobs'))
+    return render_template('practice_interview.html', job=job)
+
+
+@candidate.route('/jobs/<int:job_id>/practice-chat', methods=['POST'])
+@login_required
+def practice_interview_chat(job_id):
+    """Stateless practice interview turn — no DB writes, returns coaching at conclusion."""
+    job = Job.query.get_or_404(job_id)
+
+    history = json.loads(request.form.get("history", "[]"))
+    wrap_up = request.form.get("wrap_up", "false").lower() == "true"
+    answer_audio = request.files.get("answer_audio")
+    text_answer = (request.form.get("text_answer") or "").strip()
+
+    user_message = text_answer  # text mode takes priority if provided
+    if not user_message and answer_audio and answer_audio.filename:
+        try:
+            import tempfile, os as _os
+            with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+                tmp.write(answer_audio.read())
+                tmp_path = tmp.name
+            user_message = transcribe_audio(tmp_path)
+            _os.unlink(tmp_path)
+        except Exception:
+            return jsonify({"error": "Couldn't transcribe your answer. Please try again."}), 500
+
+    try:
+        # Never pass the real employer questions — practice uses generated ones
+        # so the actual interview remains a surprise for the candidate.
+        reply = run_interview_turn(
+            job.title, job.description_text, user_message, history, force_conclude=wrap_up,
+            interview_length=job.interview_length, interview_focus=job.interview_focus,
+            interview_questions=None,
+        )
+    except Exception:
+        return jsonify({"error": "Failed to get a response. Please try again."}), 500
+
+    verdict_match = re.search(r"Verdict:\s*(Strong Yes|Yes|No|Strong No)", reply, re.IGNORECASE)
+    should_conclude = bool(verdict_match)
+
+    coaching = None
+    if should_conclude:
+        transcript_lines = [f"{m.get('role')}: {m.get('content')}" for m in history]
+        transcript_lines.append(f"assistant: {reply}")
+        full_transcript = "\n".join(transcript_lines)
+        secs = job.description_sections or {}
+        try:
+            coaching = generate_interview_coaching(
+                transcript=full_transcript,
+                job_title=job.title,
+                requirements=secs.get('requirements', ''),
+                verdict=None,
+                match_score=None,
+            )
+        except Exception:
+            coaching = None
+
+    return jsonify({
+        "reply": reply,
+        "reply_audio_url": None,
+        "transcribed_answer": user_message,
+        "text_answer": text_answer,
+        "concluded": should_conclude,
+        "coaching": coaching,
+    })
+
+
+@candidate.route('/applications/<int:application_id>/withdraw', methods=['POST'])
+@login_required
+def withdraw_application(application_id):
+    application = Application.query.get_or_404(application_id)
+    if application.candidate_user_id != current_user.id:
+        abort(403)
+    if application.status == 'hired':
+        flash("You can't withdraw from a position you've already been hired for.", "error")
+        return redirect(url_for('candidate.dashboard'))
+    application.withdrawn = True
+    db.session.commit()
+    flash("Application withdrawn.", "success")
+    return redirect(url_for('candidate.dashboard'))
 
 
 @candidate.route('/notifications')
