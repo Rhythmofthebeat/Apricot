@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}{{ task.title }}{% endblock %}
+
+{% block head %}
+<style>
+    .option-card {
+        border: 2px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+        height: 100%;
+    }
+    .option-card:hover { border-color: var(--primary); background: var(--primary-soft); }
+    input[type="radio"]:checked + .option-card {
+        border-color: var(--primary);
+        background: var(--primary-soft);
+    }
+    input[type="radio"] { display: none; }
+    .rating-btn {
+        width: 44px; height: 44px; border-radius: 50%;
+        border: 2px solid var(--border);
+        background: var(--surface);
+        font-weight: 700; font-size: 0.9rem;
+        cursor: pointer; transition: all 0.12s;
+    }
+    .rating-btn:hover, .rating-btn.selected { border-color: var(--primary); background: var(--primary); color: white; }
+    .pay-banner {
+        background: #ecfdf5; border: 1px solid #a7f3d0;
+        border-radius: var(--radius); padding: 12px 18px;
+        display: flex; align-items: center; gap: 10px;
+        font-size: 0.88rem; font-weight: 600; color: #059669;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-lg-8">
+
+    <a href="{{ url_for('earn.tasks') }}" class="btn btn-sm btn-outline-secondary mb-4">
+        <i class="fas fa-arrow-left me-1"></i> Back to tasks
+    </a>
+
+    <div class="pay-banner mb-4">
+        <i class="fas fa-circle-dollar-to-slot"></i>
+        Complete this task to earn <strong>${{ "%.2f"|format(task.pay_cents / 100) }}</strong>
+        &nbsp;&middot;&nbsp; ~{{ task.estimated_minutes }} min
+        {% if task.domain %}&nbsp;&middot;&nbsp; {{ task.domain }}{% endif %}
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body p-4">
+            <h1 class="h5 fw-bold mb-2">{{ task.title }}</h1>
+            <p class="text-muted" style="font-size:0.9rem;">{{ task.description }}</p>
+        </div>
+    </div>
+
+    <form method="POST">
+
+        {# ---- RANKING task ---- #}
+        {% if task.task_type == 'ranking' %}
+        <p class="fw-semibold mb-3">Which response is better? Select one:</p>
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <label style="display:block;height:100%;">
+                    <input type="radio" name="response" value="A" required>
+                    <div class="option-card">
+                        <div class="fw-bold mb-2 text-primary">Response A</div>
+                        <div style="font-size:0.88rem;line-height:1.6;white-space:pre-wrap;">{{ task.option_a }}</div>
+                    </div>
+                </label>
+            </div>
+            <div class="col-md-6">
+                <label style="display:block;height:100%;">
+                    <input type="radio" name="response" value="B" required>
+                    <div class="option-card">
+                        <div class="fw-bold mb-2 text-primary">Response B</div>
+                        <div style="font-size:0.88rem;line-height:1.6;white-space:pre-wrap;">{{ task.option_b }}</div>
+                    </div>
+                </label>
+            </div>
+        </div>
+        <div class="col-md-4 ms-0">
+            <label style="display:block;">
+                <input type="radio" name="response" value="tie">
+                <div class="option-card text-center">
+                    <i class="fas fa-equals text-muted mb-1" style="font-size:1.2rem;"></i>
+                    <div class="fw-semibold" style="font-size:0.85rem;">About equal</div>
+                </div>
+            </label>
+        </div>
+
+        {# ---- RATING task ---- #}
+        {% elif task.task_type == 'rating' %}
+        <div class="card mb-4">
+            <div class="card-body p-4">
+                <p class="fw-semibold mb-2">AI Response to evaluate:</p>
+                <div style="background:var(--bg);border-radius:8px;padding:16px;font-size:0.88rem;line-height:1.6;white-space:pre-wrap;">{{ task.content }}</div>
+            </div>
+        </div>
+        <p class="fw-semibold mb-3">Rate the quality of this response (1 = poor, 5 = excellent):</p>
+        <div class="d-flex gap-2 mb-4" id="ratingBtns">
+            {% for i in range(1, 6) %}
+            <button type="button" class="rating-btn" data-val="{{ i }}" onclick="selectRating({{ i }})">{{ i }}</button>
+            {% endfor %}
+        </div>
+        <input type="hidden" name="response" id="ratingInput" required>
+
+        {# ---- FACTCHECK task ---- #}
+        {% elif task.task_type == 'factcheck' %}
+        <div class="card mb-4">
+            <div class="card-body p-4">
+                <p class="fw-semibold mb-2">AI Response to fact-check:</p>
+                <div style="background:var(--bg);border-radius:8px;padding:16px;font-size:0.88rem;line-height:1.6;white-space:pre-wrap;">{{ task.content }}</div>
+            </div>
+        </div>
+        <p class="fw-semibold mb-3">Is this response factually accurate?</p>
+        <div class="d-flex gap-3 mb-4 flex-wrap">
+            {% for val, label, icon in [('accurate','Accurate','fa-check'), ('mostly','Mostly accurate','fa-circle-half-stroke'), ('inaccurate','Inaccurate','fa-xmark')] %}
+            <label>
+                <input type="radio" name="response" value="{{ val }}" required>
+                <div class="option-card text-center px-4 py-3">
+                    <i class="fas {{ icon }} mb-1" style="font-size:1.2rem;"></i>
+                    <div class="fw-semibold" style="font-size:0.85rem;">{{ label }}</div>
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+
+        {# ---- WRITING task ---- #}
+        {% elif task.task_type == 'writing' %}
+        <div class="mb-4">
+            <label class="fw-semibold mb-2 d-block">Your response:</label>
+            <textarea class="form-control" name="response" rows="8"
+                placeholder="Write a high-quality example response..." required
+                style="font-size:0.9rem;"></textarea>
+        </div>
+        {% endif %}
+
+        <!-- Explanation (optional for all types) -->
+        <div class="mb-4">
+            <label class="form-label fw-semibold" style="font-size:0.85rem;">
+                Explain your reasoning <span class="text-muted fw-normal">(optional but helpful)</span>
+            </label>
+            <textarea class="form-control" name="explanation" rows="3"
+                placeholder="Why did you choose this? What made one better than the other?"
+                style="font-size:0.88rem;"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="padding:10px 28px;">
+            <i class="fas fa-check me-2"></i>Submit and earn ${{ "%.2f"|format(task.pay_cents / 100) }}
+        </button>
+    </form>
+
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function selectRating(val) {
+    document.getElementById('ratingInput').value = val;
+    document.querySelectorAll('.rating-btn').forEach(b => {
+        b.classList.toggle('selected', parseInt(b.dataset.val) === val);
+    });
+}
+</script>
+{% endblock %}

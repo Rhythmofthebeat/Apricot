@@ -106,7 +106,7 @@ def create_app():
     
     os.makedirs(upload_path, exist_ok=True)
 
-    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite
+    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission
 
     with app.app_context():
         db.create_all()
@@ -116,11 +116,13 @@ def create_app():
     from .auth import auth
     from .employer import employer
     from .candidate import candidate
+    from .earn import earn
 
-    app.register_blueprint(views, url_prefix = '/')
-    app.register_blueprint(auth, url_prefix = '/')
-    app.register_blueprint(employer, url_prefix = '/')
-    app.register_blueprint(candidate, url_prefix = '/')
+    app.register_blueprint(views, url_prefix='/')
+    app.register_blueprint(auth, url_prefix='/')
+    app.register_blueprint(employer, url_prefix='/')
+    app.register_blueprint(candidate, url_prefix='/')
+    app.register_blueprint(earn, url_prefix='/')
 
     from datetime import datetime, timezone
 

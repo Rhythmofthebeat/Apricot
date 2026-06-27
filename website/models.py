@@ -213,6 +213,40 @@ class CompanyMember(db.Model):
     __table_args__ = (db.UniqueConstraint("company_id", "user_id"),)
 
 
+class EarnTask(db.Model):
+    """A task posted for professionals to complete and earn money."""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    task_type = db.Column(db.String(30), nullable=False, default='ranking')  # ranking | rating | factcheck | writing
+    domain = db.Column(db.String(100))  # e.g. "Legal", "Software", "Healthcare"
+    pay_cents = db.Column(db.Integer, nullable=False, default=500)  # payment in cents
+    estimated_minutes = db.Column(db.Integer, default=5)
+    status = db.Column(db.String(20), nullable=False, default='open')  # open | closed
+    # For ranking tasks: two AI responses to compare
+    option_a = db.Column(db.Text)
+    option_b = db.Column(db.Text)
+    # For rating/factcheck tasks: single AI response
+    content = db.Column(db.Text)
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    submissions = db.relationship('TaskSubmission', backref='task', lazy=True)
+
+
+class TaskSubmission(db.Model):
+    """A professional's completed response to an EarnTask."""
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('earn_task.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    response = db.Column(db.Text)        # chosen option / rating / written response
+    explanation = db.Column(db.Text)     # optional explanation
+    earnings_cents = db.Column(db.Integer, nullable=False, default=0)
+    paid_out = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    user = db.relationship('User', backref='task_submissions')
+
+
 class CompanyInvite(db.Model):
     """Pending invitation for someone to join a company as a team member."""
     id = db.Column(db.Integer, primary_key=True)

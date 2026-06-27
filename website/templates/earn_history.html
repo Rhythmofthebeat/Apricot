@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}My Earnings{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h4 fw-bold mb-0">My Earnings</h1>
+    <a href="{{ url_for('earn.tasks') }}" class="btn btn-sm btn-primary">
+        <i class="fas fa-plus me-1"></i> Find tasks
+    </a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card text-center p-3">
+            <div class="fw-800" style="font-size:1.6rem;font-weight:800;">${{ "%.2f"|format(total / 100) }}</div>
+            <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Total Earned</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center p-3">
+            <div style="font-size:1.6rem;font-weight:800;color:#059669;">${{ "%.2f"|format(pending / 100) }}</div>
+            <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Pending Payout</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center p-3">
+            <div style="font-size:1.6rem;font-weight:800;">{{ submissions|length }}</div>
+            <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Tasks Done</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header fw-semibold">Completed Tasks</div>
+    {% if not submissions %}
+    <div class="card-body text-center p-5 text-muted">
+        <i class="fas fa-inbox mb-3" style="font-size:2rem;opacity:0.3;display:block;"></i>
+        No tasks completed yet. <a href="{{ url_for('earn.tasks') }}">Browse available tasks</a>
+    </div>
+    {% else %}
+    <div class="card-body p-0">
+        {% for sub in submissions %}
+        <div class="d-flex align-items-center gap-3 px-4 py-3" style="border-bottom:1px solid var(--border);">
+            <div class="flex-grow-1">
+                <div class="fw-semibold" style="font-size:0.9rem;">{{ sub.task.title }}</div>
+                <div class="text-muted" style="font-size:0.78rem;">{{ sub.created_at|time_ago }}</div>
+            </div>
+            <div class="fw-bold" style="color:#059669;">${{ "%.2f"|format(sub.earnings_cents / 100) }}</div>
+            {% if sub.paid_out %}
+                <span class="badge bg-success">Paid</span>
+            {% else %}
+                <span class="badge bg-warning text-dark">Pending</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<div class="card mt-3" style="background:var(--bg);">
+    <div class="card-body p-4" style="font-size:0.82rem;color:var(--text-muted);">
+        <i class="fas fa-circle-info me-1"></i>
+        Payouts are processed monthly. Pending earnings will be sent to your account on file at the end of each month.
+    </div>
+</div>
+{% endblock %}
