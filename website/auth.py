@@ -198,67 +198,97 @@ def sign_up():
             flash("Please sign up with your company email address, not a personal email provider.", "error")
         else:
             try:
-                # Attempt signup
+                confirm_url = request.host_url.rstrip("/") + "/auth/confirm"
                 res = supabase.auth.sign_up({
                     "email": email,
                     "password": password1,
-                    "options": {"data": {"full_name": first_name}}
+                    "options": {
+                        "data": {"full_name": first_name, "role": role, "company_name": company_name},
+                        "email_redirect_to": confirm_url,
+                    }
                 })
 
-                if res.user:
-                    # Signup successful
-                    flash("Account created successfully!", "success")
-                    supa_user = res.user
-                else:
-                    # If no user returned, fallback to generic error
+                if not res.user:
                     flash("Something went wrong. Try again.", "error")
                     return redirect(url_for("auth.sign_up"))
 
-                # Ensure local Flask-Login user exists
-                local_user = User.query.filter_by(email=email).first()
-                if not local_user:
-                    local_user = User(
-                        email=email,
-                        first_name=supa_user.user_metadata.get("full_name", first_name),
-                        password=None,
-                        role=role,
-                        email_verified=(role != 'employer'),
-                    )
-                    db.session.add(local_user)
-                    db.session.commit()
-
-                    if role == 'employer':
-                        company = Company(owner_user_id=local_user.id, name=company_name)
-                        db.session.add(company)
-                        db.session.commit()
-
-                        try:
-                            send_verification_email(local_user)
-                            flash("Account created! Check your company email to verify your account before posting jobs.", "success")
-                        except Exception as e:
-                            print("Verification email send failed:", e)
-                            flash(
-                                "Account created, but the verification email couldn't be sent right now. "
-                                "You'll need to verify your email before posting jobs — try resending it from your dashboard.",
-                                "error",
-                            )
-
-                # Log in the user
-                login_user(local_user, remember=True)
-                return redirect(url_for('views.home'))
+                flash("Check your email and click the confirmation link to finish creating your account.", "success")
+                return redirect(url_for("auth.login"))
 
             except Exception as e:
-                # Detect "already registered" from Supabase
                 if "already registered" in str(e):
                     flash("Email already exists. Try logging in instead.", "error")
                     return redirect(url_for("auth.login"))
 
-                # Other unexpected errors
                 print("Signup/login unexpected error:", e)
                 flash("Something went wrong. Try again.", "error")
                 return redirect(url_for("auth.sign_up"))
 
     return render_template("sign_up.html")
+
+# ------------------------------------------------ #
+# --------- SUPABASE EMAIL CONFIRMATION ----------- #
+# ------------------------------------------------ #
+
+@auth.route("/auth/confirm")
+def auth_confirm():
+    code = request.args.get("code")
+    if not code:
+        flash("Invalid confirmation link.", "error")
+        return redirect(url_for("auth.login"))
+
+    try:
+        res = supabase.auth.exchange_code_for_session({"auth_code": code})
+        supa_user = res.user
+        if not supa_user:
+            flash("Confirmation failed. Please try signing up again.", "error")
+            return redirect(url_for("auth.sign_up"))
+
+        email = supa_user.email
+        meta = supa_user.user_metadata or {}
+        role = meta.get("role", "candidate")
+        first_name = meta.get("full_name", "")
+        company_name = meta.get("company_name", "").strip()
+        email_domain = email.split('@')[-1].lower() if '@' in email else ''
+
+        local_user = User.query.filter_by(email=email).first()
+        is_new = local_user is None
+
+        if not local_user:
+            if role == 'employer' and email_domain in FREE_EMAIL_DOMAINS:
+                role = 'candidate'
+
+            local_user = User(
+                email=email,
+                first_name=first_name,
+                password=None,
+                role=role,
+                email_verified=True,
+            )
+            db.session.add(local_user)
+            db.session.commit()
+
+            if role == 'employer' and company_name:
+                company = Company(owner_user_id=local_user.id, name=company_name)
+                db.session.add(company)
+                db.session.commit()
+        else:
+            local_user.email_verified = True
+            db.session.commit()
+
+        login_user(local_user, remember=True)
+        flash("Email confirmed! Welcome to Avants.", "success")
+
+        if is_new and local_user.role == 'employer' and not Company.query.filter_by(owner_user_id=local_user.id).first():
+            return redirect(url_for("auth.complete_employer_profile"))
+
+        return redirect(url_for("views.home"))
+
+    except Exception as e:
+        print("Email confirmation error:", e)
+        flash("Confirmation failed. Try signing in directly.", "error")
+        return redirect(url_for("auth.login"))
+
 
 # ------------------------------------------------ #
 # ------------- EMAIL VERIFICATION ---------------- #
