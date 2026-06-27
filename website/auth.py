@@ -41,30 +41,11 @@ def forgot_password():
 
 @auth.route("/reset-password", methods=["GET"])
 def reset_password():
-    # Supabase redirects here from email
-    return """
-<script>
-const hash = window.location.hash.substring(1);
-const params = new URLSearchParams(hash);
-
-const access_token = params.get("access_token");
-const refresh_token = params.get("refresh_token");
-
-if (!access_token || !refresh_token) {
-  alert("Invalid or expired reset link.");
-  window.location = "/login";
-} else {
-  fetch("/reset-password/store", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ access_token, refresh_token })
-  }).then(() => {
-    window.location = "/reset-password/form";
-  });
-}
-</script>
-
-"""
+    return render_template(
+        "reset_password.html",
+        supabase_url=os.environ["SUPABASE_URL"],
+        supabase_anon_key=os.environ["SUPABASE_ANON_KEY"],
+    )
 
 
 @auth.route("/reset-password/store", methods=["POST"])

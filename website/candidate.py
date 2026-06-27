@@ -319,10 +319,8 @@ def interview_chat(job_id, application_id):
     except Exception:
         return jsonify({"error": "Failed to get a response. Please try again."}), 500
 
-    # The AI decides for itself when it has enough signal — conclusion is
-    # detected from what it actually said, not from a precomputed flag.
     verdict_match = re.search(r"Verdict:\s*(Strong Yes|Yes|No|Strong No)", reply, re.IGNORECASE)
-    should_conclude = bool(verdict_match)
+    should_conclude = bool(verdict_match) or wrap_up
 
     question_filename = f"q_{len(audio_log) + 1}.mp3"
     try:
@@ -339,7 +337,7 @@ def interview_chat(job_id, application_id):
         transcript_lines.append(f"assistant: {reply}")
         application.interview_transcript = "\n".join(transcript_lines)
         application.interview_saved_session = None  # clear saved session on completion
-        verdict = verdict_match.group(1).title()
+        verdict = verdict_match.group(1).title() if verdict_match else "Pending"
         application.interview_verdict = verdict
         application.status = 'interviewing'
 

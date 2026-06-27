@@ -181,7 +181,7 @@
                         <span class="badge-status rejected">Not selected</span>
                     {% else %}
                         <span class="badge-status {{ app.status }}">{{ app.status }}</span>
-                        {% if app.interview_verdict %}
+                        {% if app.interview_verdict and app.interview_verdict != 'Pending' %}
                             <span class="badge-status {{ 'hired' if 'Yes' in app.interview_verdict else 'rejected' }}">
                                 <i class="fas fa-robot me-1" style="font-size:0.65rem;"></i>AI: {{ app.interview_verdict }}
                             </span>
@@ -201,7 +201,9 @@
 
                     {% if app.status != 'hired' %}
                     <form method="POST" action="{{ url_for('candidate.withdraw_application', application_id=app.id) }}"
-                          onsubmit="return confirm('Withdraw this application? This can\'t be undone.')">
+                          data-confirm-title="Withdraw application?"
+                          data-confirm-message="Your application will be removed. This cannot be undone."
+                          data-confirm-btn="Yes, withdraw">
                         <button type="submit" class="btn btn-sm btn-outline-danger" title="Withdraw application">
                             <i class="fas fa-times"></i>
                         </button>
