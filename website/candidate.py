@@ -75,8 +75,8 @@ def browse_jobs():
         )
     if category in JOB_CATEGORIES:
         jobs_query = jobs_query.filter_by(category=category)
-    if location in JOB_LOCATIONS:
-        jobs_query = jobs_query.filter_by(location=location)
+    if location:
+        jobs_query = jobs_query.filter(Job.location.ilike(f"{location}%"))
 
     if sort == 'priority':
         applicant_count_subq = (
@@ -118,7 +118,7 @@ def browse_jobs():
         location=location,
         sort=sort,
         categories=JOB_CATEGORIES,
-        locations=JOB_LOCATIONS,
+        locations=["Remote (Worldwide)", "Remote (US Only)", "Hybrid", "On-site"],
         applied_job_ids=applied_job_ids,
     )
 

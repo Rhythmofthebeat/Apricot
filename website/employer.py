@@ -237,7 +237,12 @@ def post_job():
     if request.method == 'POST':
         title = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip()
-        location = request.form.get('location', '').strip()
+        work_type = request.form.get('work_type', 'Remote (Worldwide)').strip()
+        city = request.form.get('location_city', '').strip()
+        if work_type in ('Hybrid', 'On-site') and city:
+            location = f"{work_type} — {city}"
+        else:
+            location = work_type
         employment_type = request.form.get('employment_type', '').strip()
         category = request.form.get('category', 'Other')
         if category not in JOB_CATEGORIES:
@@ -330,9 +335,11 @@ def edit_job(job_id):
         pay_type = request.form.get('pay_type', 'yearly')
         if pay_type not in ('yearly', 'hourly', 'monthly', 'stipend', 'contract'):
             pay_type = 'yearly'
+        _edit_work_type = request.form.get('work_type', 'Remote (Worldwide)').strip()
+        _edit_city = request.form.get('location_city', '').strip()
         job.title = title
         job.description = description
-        job.location = request.form.get('location', '').strip()
+        job.location = f"{_edit_work_type} — {_edit_city}" if _edit_work_type in ('Hybrid', 'On-site') and _edit_city else _edit_work_type
         job.employment_type = request.form.get('employment_type', '').strip()
         job.category = category
         job.interview_length = interview_length

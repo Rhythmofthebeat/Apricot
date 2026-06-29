@@ -65,12 +65,31 @@
 
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            <label class="form-label fw-bold">Location</label>
-                            <select class="form-control" name="location">
-                                {% for loc in locations %}
-                                    <option value="{{ loc }}" {{ 'selected' if job and job.location == loc }}>{{ loc }}</option>
-                                {% endfor %}
+                            <label class="form-label fw-bold">Work Type</label>
+                            {% set _wt = '' %}
+                            {% if job and job.location %}
+                                {% if job.location.startswith('Remote (Worldwide)') %}{% set _wt = 'Remote (Worldwide)' %}
+                                {% elif job.location.startswith('Remote (US Only)') %}{% set _wt = 'Remote (US Only)' %}
+                                {% elif job.location.startswith('Hybrid') %}{% set _wt = 'Hybrid' %}
+                                {% elif job.location.startswith('On-site') %}{% set _wt = 'On-site' %}
+                                {% else %}{% set _wt = job.location %}{% endif %}
+                            {% endif %}
+                            <select class="form-control" name="work_type" id="workType" onchange="toggleCityInput()">
+                                <option value="Remote (Worldwide)" {{ 'selected' if _wt == 'Remote (Worldwide)' }}>Remote (Worldwide)</option>
+                                <option value="Remote (US Only)"  {{ 'selected' if _wt == 'Remote (US Only)' }}>Remote (US Only)</option>
+                                <option value="Hybrid"            {{ 'selected' if _wt == 'Hybrid' }}>Hybrid</option>
+                                <option value="On-site"           {{ 'selected' if _wt == 'On-site' }}>On-site</option>
                             </select>
+                        </div>
+                        <div class="col-md-4 mb-3" id="cityInputWrap">
+                            <label class="form-label fw-bold">City / Location</label>
+                            {% set _city = '' %}
+                            {% if job and job.location and ' — ' in job.location %}
+                                {% set _city = job.location.split(' — ', 1)[1] %}
+                            {% endif %}
+                            <input type="text" class="form-control" name="location_city" id="locationCity"
+                                   value="{{ _city }}"
+                                   placeholder="e.g. Austin, TX or London, UK">
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label fw-bold">Employment Type</label>
@@ -398,5 +417,14 @@ function updateSalaryHints() {
 }
 
 updateSalaryHints();
+
+function toggleCityInput() {
+    const wt = document.getElementById('workType').value;
+    const wrap = document.getElementById('cityInputWrap');
+    const needsCity = wt === 'Hybrid' || wt === 'On-site';
+    wrap.style.display = needsCity ? '' : 'none';
+    document.getElementById('locationCity').required = needsCity;
+}
+toggleCityInput();
 </script>
 {% endblock %}
