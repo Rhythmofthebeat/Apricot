@@ -67,8 +67,14 @@ def _run_migrations(db):
         "ALTER TABLE application ADD COLUMN ai_likelihood TEXT",
         # user — supabase auth uid for admin API calls
         "ALTER TABLE \"user\" ADD COLUMN supabase_uid VARCHAR(200)",
+        # candidate_profile — talent pool opt-in fields
+        "ALTER TABLE candidate_profile ADD COLUMN open_to_work BOOLEAN NOT NULL DEFAULT 0",
+        "ALTER TABLE candidate_profile ADD COLUMN skills TEXT",
+        "ALTER TABLE candidate_profile ADD COLUMN work_preference VARCHAR(50)",
+        "ALTER TABLE candidate_profile ADD COLUMN availability VARCHAR(50)",
+        "ALTER TABLE candidate_profile ADD COLUMN years_experience VARCHAR(20)",
+        "ALTER TABLE candidate_profile ADD COLUMN location VARCHAR(200)",
     ]
-    # SavedJob table is created via db.create_all() — no ALTER needed
     with db.engine.connect() as conn:
         for stmt in new_columns:
             try:

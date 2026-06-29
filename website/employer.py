@@ -19,7 +19,7 @@ except ImportError:
 from . import db
 from .models import (
     Company, Job, Application, Notification,
-    CompanyMember, CompanyInvite, CandidateProfile,
+    CompanyMember, CompanyInvite, CandidateProfile, User,
     JOB_CATEGORIES, JOB_LOCATIONS, COMPANY_SIZES, INDUSTRIES,
 )
 from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description
@@ -734,6 +734,52 @@ def analyze_jd():
     except Exception as e:
         print("JD analysis failed:", e)
         return jsonify({"error": "Analysis failed"}), 500
+
+
+@employer.route('/employer/talent')
+@login_required
+@employer_required
+def talent_pool():
+    import re as _re
+    company = get_owned_company()
+    open_jobs = Job.query.filter_by(company_id=company.id, status='open').all()
+
+    # Build keyword set from employer's open jobs
+    job_corpus = ' '.join(
+        f"{j.title} {j.category} {(j.description_text or '')[:300]}"
+        for j in open_jobs
+    ).lower()
+    job_words = set(_re.findall(r'\b\w{3,}\b', job_corpus))
+
+    # All open-to-work candidates
+    profiles = (
+        CandidateProfile.query
+        .filter_by(open_to_work=True)
+        .join(User, CandidateProfile.user_id == User.id)
+        .all()
+    )
+
+    def _score(prof):
+        text = ' '.join(filter(None, [
+            prof.skills, prof.target_roles, prof.headline
+        ])).lower()
+        words = set(_re.findall(r'\b\w{3,}\b', text))
+        if not words or not job_words:
+            return 0
+        return round(len(words & job_words) / len(words) * 100)
+
+    scored = sorted(
+        [{"profile": p, "score": _score(p)} for p in profiles],
+        key=lambda x: x["score"],
+        reverse=True,
+    )
+
+    return render_template(
+        "talent_pool.html",
+        scored=scored,
+        company=company,
+        open_jobs=open_jobs,
+    )
 
 
 @employer.route('/employer/analytics')

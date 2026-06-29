@@ -469,19 +469,23 @@ def profile():
 @login_required
 def save_profile():
     data = request.get_json() or {}
-    headline = (data.get('headline') or '').strip()
-    linkedin_url = (data.get('linkedin_url') or '').strip()
-    target_roles = (data.get('target_roles') or '').strip()
-    resume_text = (data.get('resume_text') or '').strip()
 
     candidate_profile = CandidateProfile.query.filter_by(user_id=current_user.id).first()
     if not candidate_profile:
         candidate_profile = CandidateProfile(user_id=current_user.id)
         db.session.add(candidate_profile)
 
-    candidate_profile.headline = headline or None
-    candidate_profile.linkedin_url = linkedin_url or None
-    candidate_profile.target_roles = target_roles or None
+    candidate_profile.headline       = (data.get('headline') or '').strip() or None
+    candidate_profile.linkedin_url   = (data.get('linkedin_url') or '').strip() or None
+    candidate_profile.target_roles   = (data.get('target_roles') or '').strip() or None
+    candidate_profile.skills         = (data.get('skills') or '').strip() or None
+    candidate_profile.work_preference = (data.get('work_preference') or '').strip() or None
+    candidate_profile.availability   = (data.get('availability') or '').strip() or None
+    candidate_profile.years_experience = (data.get('years_experience') or '').strip() or None
+    candidate_profile.location       = (data.get('location') or '').strip() or None
+    candidate_profile.open_to_work   = bool(data.get('open_to_work', False))
+
+    resume_text = (data.get('resume_text') or '').strip()
     if resume_text:
         candidate_profile.resume_text = resume_text
 
@@ -506,6 +510,46 @@ def generate_profile_resume():
         return jsonify({"error": "Failed to generate resume. Please try again."}), 500
 
     return jsonify({"resume_text": resume_text})
+
+
+@candidate.route('/candidates/<int:user_id>')
+def public_profile(user_id):
+    from .models import User
+    user = User.query.get_or_404(user_id)
+    prof = CandidateProfile.query.filter_by(user_id=user_id).first_or_404()
+    if not prof.open_to_work:
+        abort(404)
+
+    # employer invite-to-apply logic
+    employer_jobs = []
+    if current_user.is_authenticated and current_user.role == 'employer':
+        from .models import Company
+        company = Company.query.filter_by(owner_user_id=current_user.id).first()
+        if company:
+            employer_jobs = Job.query.filter_by(company_id=company.id, status='open').all()
+
+    return render_template("candidate_public.html", profile=prof, user=user, employer_jobs=employer_jobs)
+
+
+@candidate.route('/candidates/<int:user_id>/invite', methods=['POST'])
+@login_required
+def invite_candidate(user_id):
+    from .models import User, Company
+    if current_user.role != 'employer':
+        return jsonify({"error": "Employers only"}), 403
+    target_user = User.query.get_or_404(user_id)
+    job_id = request.get_json(silent=True, force=True).get('job_id') if request.data else None
+
+    company = Company.query.filter_by(owner_user_id=current_user.id).first()
+    company_name = company.name if company else "An employer"
+    job = Job.query.get(job_id) if job_id else None
+    msg = f"{company_name} is interested in your profile"
+    link = url_for('candidate.job_detail', job_id=job.id) if job else url_for('employer.company_page', company_id=company.id) if company else None
+    if job:
+        msg += f" and invited you to apply for {job.title}"
+    db.session.add(Notification(user_id=target_user.id, message=msg + ".", link=link))
+    db.session.commit()
+    return jsonify({"status": "invited"})
 
 
 @candidate.route('/profile/resume.pdf')

@@ -164,7 +164,16 @@ class CandidateProfile(db.Model):
     headline = db.Column(db.String(200))
     resume_text = db.Column(db.Text)
     linkedin_url = db.Column(db.String(300))
-    target_roles = db.Column(db.String(300))  # optional free text: roles/industries the candidate wants next
+    target_roles = db.Column(db.String(300))
+    # Talent pool fields
+    open_to_work = db.Column(db.Boolean, nullable=False, default=False)
+    skills = db.Column(db.Text)           # comma-separated
+    work_preference = db.Column(db.String(50))   # Remote / Hybrid / On-site / Any
+    availability = db.Column(db.String(50))      # Immediately / 2 weeks / 1 month / 3 months
+    years_experience = db.Column(db.String(20))  # 0-1 / 1-3 / 3-5 / 5-10 / 10+
+    location = db.Column(db.String(200))         # city / country they're based in
+
+    user = db.relationship("User", backref=db.backref("candidate_profile", uselist=False))
 
 
 class Application(db.Model):

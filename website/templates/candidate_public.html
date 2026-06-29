@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}{{ user.first_name }} — Avants AI{% endblock %}
+
+{% block head %}
+<style>
+    .prof-header {
+        display: flex; align-items: flex-start; gap: 20px;
+        margin-bottom: 24px;
+    }
+    .prof-avatar {
+        width: 72px; height: 72px; border-radius: 50%;
+        background: var(--primary);
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-size: 1.8rem; font-weight: 700;
+        flex-shrink: 0;
+    }
+    .skill-tag {
+        display: inline-block; background: var(--primary-soft); color: var(--primary);
+        border-radius: 999px; padding: 3px 12px; font-size: 0.78rem; font-weight: 600;
+        margin: 2px;
+    }
+    .meta-row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+    .meta-item { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text-muted); }
+    .meta-item i { color: var(--primary); width: 14px; text-align: center; }
+    .avail-badge {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: #d1fae5; color: #065f46;
+        border-radius: 999px; padding: 4px 14px; font-size: 0.8rem; font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <a href="javascript:history.back()" class="text-muted small text-decoration-none mb-3 d-inline-block">
+            <i class="fas fa-arrow-left me-1"></i> Back
+        </a>
+
+        <div class="card mb-4">
+            <div class="card-body p-4 p-md-5">
+                <div class="prof-header">
+                    <div class="prof-avatar">{{ user.first_name[0]|upper }}</div>
+                    <div>
+                        <h1 class="h3 fw-bold mb-1">{{ user.first_name }}{% if user.first_name and profile.location %} &middot; {% endif %}{{ profile.location or '' }}</h1>
+                        {% if profile.headline %}
+                            <p class="text-muted mb-2">{{ profile.headline }}</p>
+                        {% endif %}
+                        {% if profile.availability %}
+                            <span class="avail-badge">
+                                <i class="fas fa-circle" style="font-size:0.5rem;"></i>
+                                Available {{ profile.availability }}
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="meta-row">
+                    {% if profile.work_preference %}
+                        <span class="meta-item"><i class="fas fa-laptop-house"></i> {{ profile.work_preference }}</span>
+                    {% endif %}
+                    {% if profile.years_experience %}
+                        <span class="meta-item"><i class="fas fa-briefcase"></i> {{ profile.years_experience }} yrs experience</span>
+                    {% endif %}
+                    {% if profile.target_roles %}
+                        <span class="meta-item"><i class="fas fa-bullseye"></i> Interested in: {{ profile.target_roles }}</span>
+                    {% endif %}
+                    {% if profile.linkedin_url %}
+                        <a href="{{ profile.linkedin_url }}" target="_blank" class="meta-item text-decoration-none">
+                            <i class="fab fa-linkedin" style="color:#0a66c2;"></i> LinkedIn
+                        </a>
+                    {% endif %}
+                </div>
+
+                {% if profile.skills %}
+                    <div class="mb-4">
+                        <div class="text-muted small fw-semibold mb-2">SKILLS</div>
+                        {% for skill in profile.skills.split(',') %}
+                            <span class="skill-tag">{{ skill.strip() }}</span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+            </div>
+        </div>
+
+        {% if current_user.is_authenticated and current_user.role == 'employer' %}
+        <div class="card">
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-3">Invite to Apply</h5>
+                <p class="text-muted small mb-3">Send {{ user.first_name }} a notification to check out one of your open jobs.</p>
+                {% if employer_jobs %}
+                    <div class="d-flex flex-wrap gap-2" id="inviteBtns">
+                        {% for job in employer_jobs %}
+                            <button class="btn btn-outline-primary btn-sm"
+                                    onclick="inviteCandidate({{ user.id }}, {{ job.id }}, '{{ job.title|e }}', this)">
+                                <i class="fas fa-paper-plane me-1"></i> {{ job.title }}
+                            </button>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted small">You don't have any open jobs right now. <a href="{{ url_for('employer.post_job') }}">Post one</a> first.</p>
+                {% endif %}
+                <div id="inviteStatus" class="mt-2 small text-success" style="display:none;"></div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function inviteCandidate(userId, jobId, jobTitle, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-check me-1"></i> Invited';
+    btn.classList.replace('btn-outline-primary', 'btn-success');
+    await fetch(`/candidates/${userId}/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: jobId })
+    });
+    document.getElementById('inviteStatus').style.display = '';
+    document.getElementById('inviteStatus').textContent = `Invitation sent for "${jobTitle}"! ${`{{ user.first_name }}`} will be notified.`;
+}
+</script>
+{% endblock %}

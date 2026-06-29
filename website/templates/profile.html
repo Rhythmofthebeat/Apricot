@@ -104,6 +104,72 @@
                                value="{{ profile.target_roles if profile else '' }}">
                         <div class="form-text">Sharpens AI job suggestions beyond your resume.</div>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">Skills <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="text" class="form-control" id="skills"
+                               placeholder="e.g. Python, React, SQL, Project Management"
+                               value="{{ profile.skills if profile else '' }}">
+                        <div class="form-text">Comma-separated. Used for talent pool matching.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Based in <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="text" class="form-control" id="location"
+                               placeholder="e.g. Austin, TX or London, UK"
+                               value="{{ profile.location if profile else '' }}">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Open to Work card -->
+            <div class="card" style="border: 2px solid {% if profile and profile.open_to_work %}var(--primary){% else %}var(--border){% endif %};" id="openToWorkCard">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div>
+                            <div class="fw-bold" style="font-size:0.95rem;"><i class="fas fa-circle-check me-2" style="color:var(--primary);"></i>Open to Work</div>
+                            <div class="text-muted small mt-1">Let employers find and invite you to apply</div>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="openToWork" role="switch" style="width:2.5rem;height:1.3rem;"
+                                   {% if profile and profile.open_to_work %}checked{% endif %}>
+                        </div>
+                    </div>
+                    <div id="openToWorkFields" style="display:{% if profile and profile.open_to_work %}block{% else %}none{% endif %};">
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label">Work preference</label>
+                                <select class="form-select form-select-sm" id="workPreference">
+                                    {% set wp = profile.work_preference if profile else '' %}
+                                    <option value="" {{ 'selected' if not wp }}>Any</option>
+                                    <option value="Remote" {{ 'selected' if wp == 'Remote' }}>Remote</option>
+                                    <option value="Hybrid" {{ 'selected' if wp == 'Hybrid' }}>Hybrid</option>
+                                    <option value="On-site" {{ 'selected' if wp == 'On-site' }}>On-site</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Availability</label>
+                                <select class="form-select form-select-sm" id="availability">
+                                    {% set av = profile.availability if profile else '' %}
+                                    <option value="" {{ 'selected' if not av }}>Not specified</option>
+                                    <option value="Immediately" {{ 'selected' if av == 'Immediately' }}>Immediately</option>
+                                    <option value="2 weeks" {{ 'selected' if av == '2 weeks' }}>2 weeks</option>
+                                    <option value="1 month" {{ 'selected' if av == '1 month' }}>1 month</option>
+                                    <option value="3 months" {{ 'selected' if av == '3 months' }}>3 months</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Years of experience</label>
+                                <select class="form-select form-select-sm" id="yearsExperience">
+                                    {% set ye = profile.years_experience if profile else '' %}
+                                    <option value="" {{ 'selected' if not ye }}>Not specified</option>
+                                    <option value="0-1" {{ 'selected' if ye == '0-1' }}>0–1 years</option>
+                                    <option value="1-3" {{ 'selected' if ye == '1-3' }}>1–3 years</option>
+                                    <option value="3-5" {{ 'selected' if ye == '3-5' }}>3–5 years</option>
+                                    <option value="5-10" {{ 'selected' if ye == '5-10' }}>5–10 years</option>
+                                    <option value="10+" {{ 'selected' if ye == '10+' }}>10+ years</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -236,10 +302,16 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                headline:     document.getElementById("headline").value,
-                linkedin_url: document.getElementById("linkedinUrl").value,
-                target_roles: document.getElementById("targetRoles").value,
-                resume_text:  document.getElementById("resumeText").value,
+                headline:         document.getElementById("headline").value,
+                linkedin_url:     document.getElementById("linkedinUrl").value,
+                target_roles:     document.getElementById("targetRoles").value,
+                resume_text:      document.getElementById("resumeText").value,
+                skills:           document.getElementById("skills")?.value || '',
+                location:         document.getElementById("location")?.value || '',
+                open_to_work:     document.getElementById("openToWork")?.checked || false,
+                work_preference:  document.getElementById("workPreference")?.value || '',
+                availability:     document.getElementById("availability")?.value || '',
+                years_experience: document.getElementById("yearsExperience")?.value || '',
             })
         });
         if (!r.ok) throw new Error();
@@ -290,5 +362,16 @@ async function loadSuggestions() {
 
 // If URL has #suggested, switch tab
 if (window.location.hash === '#suggested-pane') switchTab('suggested');
+
+// Open to work toggle
+const otw = document.getElementById('openToWork');
+const otwFields = document.getElementById('openToWorkFields');
+const otwCard = document.getElementById('openToWorkCard');
+if (otw) {
+    otw.addEventListener('change', () => {
+        otwFields.style.display = otw.checked ? 'block' : 'none';
+        otwCard.style.borderColor = otw.checked ? 'var(--primary)' : 'var(--border)';
+    });
+}
 </script>
 {% endblock %}
