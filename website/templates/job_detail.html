@@ -1,7 +1,49 @@
 {% extends "base.html" %}
-{% block title %}{{ job.title }}{% endblock %}
+{% block title %}{{ job.title }} at {{ job.company.name }}{% endblock %}
 
 {% block head %}
+<!-- OpenGraph / social sharing -->
+<meta property="og:title" content="{{ job.title }} at {{ job.company.name }}">
+<meta property="og:description" content="{{ job.description_text[:200] }}">
+<meta property="og:url" content="{{ request.url }}">
+<meta property="og:type" content="website">
+<meta name="description" content="{{ job.title }} at {{ job.company.name }}{% if job.location %} · {{ job.location }}{% endif %}{% if job.employment_type %} · {{ job.employment_type }}{% endif %}. {{ job.description_text[:120] }}">
+<link rel="canonical" href="{{ request.url }}">
+
+<!-- Google Jobs / JSON-LD JobPosting schema -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org/",
+  "@type": "JobPosting",
+  "title": {{ job.title | tojson }},
+  "description": {{ job.description_text | tojson }},
+  "datePosted": "{{ job.created_at.strftime('%Y-%m-%d') if job.created_at else '' }}",
+  "hiringOrganization": {
+    "@type": "Organization",
+    "name": {{ job.company.name | tojson }},
+    "sameAs": {{ (job.company.website or '') | tojson }}
+  },
+  "jobLocation": {
+    "@type": "Place",
+    "address": {{ (job.location or 'Remote') | tojson }}
+  },
+  {% if 'Remote' in (job.location or '') %}"jobLocationType": "TELECOMMUTE",{% endif %}
+  "employmentType": {{ (job.employment_type or 'FULL_TIME') | upper | tojson }},
+  {% if job.salary_usd %}"baseSalary": {
+    "@type": "MonetaryAmount",
+    "currency": "USD",
+    "value": {
+      "@type": "QuantitativeValue",
+      "minValue": {{ job.salary_usd }},
+      {% if job.salary_max_usd %}"maxValue": {{ job.salary_max_usd }},{% endif %}
+      "unitText": "{{ job.pay_type | upper if job.pay_type else 'YEAR' }}"
+    }
+  },{% endif %}
+  "directApply": true,
+  "url": {{ request.url | tojson }}
+}
+</script>
+
 <style>
     .jd-section-label {
         font-size: 0.7rem;

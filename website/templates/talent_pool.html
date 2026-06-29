@@ -62,13 +62,13 @@
     <button class="pool-tab active" onclick="switchTab('suggested', this)">
         <i class="fas fa-star me-1"></i> Suggested
         <span class="badge rounded-pill ms-1" style="background:var(--primary);color:#fff;font-size:0.7rem;">
-            {{ scored | selectattr('score', 'gt', 0) | list | length }}
+            {{ suggested | length }}
         </span>
     </button>
     <button class="pool-tab" onclick="switchTab('all', this)">
         <i class="fas fa-users me-1"></i> All Candidates
         <span class="badge rounded-pill ms-1" style="background:var(--bg);color:var(--text-muted);font-size:0.7rem;">
-            {{ scored | length }}
+            {{ all_scored | length }}
         </span>
     </button>
 </div>
@@ -76,7 +76,7 @@
 {% macro candidate_card(item) %}
 {% set prof = item.profile %}
 {% set score = item.score %}
-{% set user = prof.user %}
+{% set user = item.user %}
 <a href="{{ url_for('candidate.public_profile', user_id=user.id) }}" class="candidate-card mb-3 d-flex">
     <div class="cand-avatar">{{ user.first_name[0]|upper if user.first_name else '?' }}</div>
     <div class="flex-grow-1 min-width-0">
@@ -129,36 +129,33 @@
             <p class="small">Once you have open positions, we'll score candidates against them.</p>
             <a href="{{ url_for('employer.post_job') }}" class="btn btn-primary btn-sm mt-2">Post a Job</a>
         </div>
-    {% elif not scored %}
+    {% elif not all_scored %}
         <div class="empty-state">
             <i class="fas fa-users d-block"></i>
             <p class="fw-semibold mb-1">No candidates are open to work yet</p>
             <p class="small">Check back as more candidates join and opt in.</p>
         </div>
+    {% elif suggested %}
+        {% for item in suggested %}{{ candidate_card(item) }}{% endfor %}
     {% else %}
-        {% set suggested = scored | selectattr('score', 'gt', 0) | list %}
-        {% if suggested %}
-            {% for item in suggested %}{{ candidate_card(item) }}{% endfor %}
-        {% else %}
-            <div class="empty-state">
-                <i class="fas fa-search d-block"></i>
-                <p class="fw-semibold mb-1">No strong keyword matches yet</p>
-                <p class="small">Try the All Candidates tab to browse everyone who's open to work.</p>
-            </div>
-        {% endif %}
+        <div class="empty-state">
+            <i class="fas fa-search d-block"></i>
+            <p class="fw-semibold mb-1">No strong keyword matches yet</p>
+            <p class="small">Try the All Candidates tab to browse everyone who's open to work.</p>
+        </div>
     {% endif %}
 </div>
 
 <!-- All tab -->
 <div id="pane-all" style="display:none;">
-    {% if not scored %}
+    {% if not all_scored %}
         <div class="empty-state">
             <i class="fas fa-users d-block"></i>
             <p class="fw-semibold mb-1">No candidates are open to work yet</p>
             <p class="small">Check back soon as the talent pool grows.</p>
         </div>
     {% else %}
-        {% for item in scored %}{{ candidate_card(item) }}{% endfor %}
+        {% for item in all_scored %}{{ candidate_card(item) }}{% endfor %}
     {% endif %}
 </div>
 

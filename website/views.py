@@ -1,6 +1,7 @@
 import stripe
-from flask import Blueprint, render_template, redirect, url_for, request, current_app
+from flask import Blueprint, render_template, redirect, url_for, request, current_app, Response
 from flask_login import current_user
+from datetime import timezone
 
 from . import db
 from .models import Application, Job, User, Company
@@ -89,3 +90,33 @@ def stripe_webhook():
                 db.session.commit()
 
     return "", 200
+
+
+@views.route('/sitemap.xml')
+def sitemap():
+    jobs = Job.query.filter_by(status='open').order_by(Job.created_at.desc()).all()
+    base = request.host_url.rstrip('/')
+
+    def _lastmod(job):
+        dt = job.created_at
+        if dt and dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.strftime('%Y-%m-%d') if dt else ''
+
+    urls = [
+        f"<url><loc>{base}/jobs</loc><changefreq>daily</changefreq><priority>0.9</priority></url>",
+        f"<url><loc>{base}/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>",
+    ]
+    for job in jobs:
+        loc = f"{base}/jobs/{job.id}"
+        lm = _lastmod(job)
+        urls.append(f"<url><loc>{loc}</loc>{'<lastmod>' + lm + '</lastmod>' if lm else ''}<changefreq>weekly</changefreq><priority>0.8</priority></url>")
+
+    xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ''.join(urls) + '</urlset>'
+    return Response(xml, mimetype='application/xml')
+
+
+@views.route('/robots.txt')
+def robots():
+    content = f"User-agent: *\nAllow: /\nDisallow: /employer/\nDisallow: /candidate/\nDisallow: /admin/\nSitemap: {request.host_url.rstrip('/')}/sitemap.xml\n"
+    return Response(content, mimetype='text/plain')

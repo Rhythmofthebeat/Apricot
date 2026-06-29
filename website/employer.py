@@ -751,11 +751,12 @@ def talent_pool():
     ).lower()
     job_words = set(_re.findall(r'\b\w{3,}\b', job_corpus))
 
-    # All open-to-work candidates
+    # Eagerly load users to avoid N+1 queries
+    from sqlalchemy.orm import joinedload
     profiles = (
         CandidateProfile.query
         .filter_by(open_to_work=True)
-        .join(User, CandidateProfile.user_id == User.id)
+        .options(joinedload(CandidateProfile.user))
         .all()
     )
 
@@ -768,15 +769,17 @@ def talent_pool():
             return 0
         return round(len(words & job_words) / len(words) * 100)
 
-    scored = sorted(
-        [{"profile": p, "score": _score(p)} for p in profiles],
+    all_scored = sorted(
+        [{"profile": p, "user": p.user, "score": _score(p)} for p in profiles if p.user],
         key=lambda x: x["score"],
         reverse=True,
     )
+    suggested = [x for x in all_scored if x["score"] > 0]
 
     return render_template(
         "talent_pool.html",
-        scored=scored,
+        all_scored=all_scored,
+        suggested=suggested,
         company=company,
         open_jobs=open_jobs,
     )
