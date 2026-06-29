@@ -91,9 +91,7 @@ def verify_verification_token(token):
 
 
 def send_verification_email(user):
-    """Raises if MAIL_USERNAME/MAIL_PASSWORD aren't configured or sending fails —
-    callers must catch this and tell the employer clearly rather than silently
-    pretending the email went out."""
+    """Raises if MAIL_USERNAME/MAIL_PASSWORD aren't configured or sending fails."""
     if not current_app.config.get("MAIL_USERNAME") or not current_app.config.get("MAIL_PASSWORD"):
         raise RuntimeError("Email sending is not configured (MAIL_USERNAME/MAIL_PASSWORD missing).")
 
@@ -102,15 +100,15 @@ def send_verification_email(user):
 
     send_branded_email(
         to_email=user.email,
-        subject="Verify your company email",
-        heading="Verify your company email",
+        subject="Confirm your email — Avants AI",
+        heading="Confirm your email address",
         body_html=(
-            f"Hi {user.first_name or ''},<br><br>"
-            "Confirm your company email to activate your employer account and start posting jobs."
+            f"Hi {user.first_name or 'there'},<br><br>"
+            "Click the button below to verify your email and activate your Avants account."
         ),
         plain_text=(
-            f"Hi {user.first_name or ''},\n\n"
-            f"Confirm your company email to activate your employer account:\n\n"
+            f"Hi {user.first_name or 'there'},\n\n"
+            f"Verify your email to activate your account:\n\n"
             f"{verify_url}\n\n"
             f"This link expires in 24 hours."
         ),

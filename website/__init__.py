@@ -65,6 +65,8 @@ def _run_migrations(db):
         "ALTER TABLE \"user\" ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE",
         # application — AI-generation likelihood score for candidate interview answers
         "ALTER TABLE application ADD COLUMN ai_likelihood TEXT",
+        # user — supabase auth uid for admin API calls
+        "ALTER TABLE \"user\" ADD COLUMN supabase_uid VARCHAR(200)",
     ]
     with db.engine.connect() as conn:
         for stmt in new_columns:

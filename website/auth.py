@@ -210,30 +210,51 @@ def sign_up():
             flash("Please sign up with your company email address, not a personal email provider.", "error")
         else:
             try:
-                confirm_url = request.host_url.rstrip("/") + "/auth/confirm"
-                res = supabase.auth.sign_up({
+                admin_supa = create_client(
+                    os.environ["SUPABASE_URL"],
+                    os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+                )
+                res = admin_supa.auth.admin.create_user({
                     "email": email,
                     "password": password1,
-                    "options": {
-                        "data": {"full_name": first_name, "role": role, "company_name": company_name},
-                        "email_redirect_to": confirm_url,
-                    }
+                    "user_metadata": {"full_name": first_name, "role": role, "company_name": company_name},
+                    "email_confirm": False,
                 })
 
                 if not res.user:
                     flash("Something went wrong. Try again.", "error")
                     return redirect(url_for("auth.sign_up"))
 
+                local_user = User(
+                    email=email,
+                    first_name=first_name,
+                    password=generate_password_hash(password1),
+                    role=role,
+                    email_verified=False,
+                    supabase_uid=res.user.id,
+                )
+                db.session.add(local_user)
+                if role == 'employer' and company_name and email_domain not in FREE_EMAIL_DOMAINS:
+                    company = Company(owner_user_id=local_user.id, name=company_name)
+                    db.session.add(company)
+                db.session.commit()
+
+                try:
+                    send_verification_email(local_user)
+                except Exception as mail_err:
+                    print("Verification email send failed:", mail_err)
+
                 resp = make_response(redirect(url_for("auth.verify_email_prompt")))
                 resp.set_cookie("pending_verify_email", email, max_age=900, httponly=True, samesite="Lax")
                 return resp
 
             except Exception as e:
-                if "already registered" in str(e):
+                err = str(e).lower()
+                if "already registered" in err or "already been registered" in err or "duplicate" in err:
                     flash("Email already exists. Try logging in instead.", "error")
                     return redirect(url_for("auth.login"))
 
-                print("Signup/login unexpected error:", e)
+                print("Signup unexpected error:", e)
                 flash("Something went wrong. Try again.", "error")
                 return redirect(url_for("auth.sign_up"))
 
@@ -253,11 +274,12 @@ def verify_email_prompt():
 def resend_verification():
     email = request.form.get("email", "").strip()
     if email:
-        try:
-            confirm_url = request.host_url.rstrip("/") + "/auth/confirm"
-            supabase.auth.resend({"type": "signup", "email": email, "options": {"email_redirect_to": confirm_url}})
-        except Exception:
-            pass
+        user = User.query.filter_by(email=email).first()
+        if user and not user.email_verified:
+            try:
+                send_verification_email(user)
+            except Exception:
+                pass
     flash("If that email is registered, a new confirmation link has been sent.", "success")
     resp = make_response(redirect(url_for("auth.verify_email_prompt")))
     resp.set_cookie("pending_verify_email", email, max_age=900, httponly=True, samesite="Lax")
@@ -335,17 +357,36 @@ def auth_confirm():
 def verify_email(token):
     email = verify_verification_token(token)
     if not email:
-        flash("That verification link is invalid or has expired. Request a new one from your dashboard.", "error")
-        return redirect(url_for("auth.login"))
+        flash("That verification link is invalid or has expired.", "error")
+        return redirect(url_for("auth.verify_email_prompt"))
 
     user = User.query.filter_by(email=email).first()
     if not user:
         flash("Account not found.", "error")
         return redirect(url_for("auth.login"))
 
-    user.email_verified = True
-    db.session.commit()
-    flash("Email verified! You can now post jobs.", "success")
+    if not user.email_verified:
+        try:
+            admin_supa = create_client(
+                os.environ["SUPABASE_URL"],
+                os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+            )
+            if user.supabase_uid:
+                admin_supa.auth.admin.update_user_by_id(
+                    user.supabase_uid, {"email_confirm": True}
+                )
+        except Exception as e:
+            print("Supabase email confirm error:", e)
+
+        user.email_verified = True
+        db.session.commit()
+
+    login_user(user, remember=True)
+    flash("Email verified! Welcome to Avants.", "success")
+
+    if user.role == 'employer' and not Company.query.filter_by(owner_user_id=user.id).first():
+        return redirect(url_for("auth.complete_employer_profile"))
+
     return redirect(url_for("views.home"))
 
 
@@ -410,7 +451,7 @@ def login_google_finish():
                 first_name=name,
                 password=None,
                 role=role,
-                email_verified=(role != 'employer'),
+                email_verified=True,
             )
             db.session.add(local_user)
             db.session.commit()
@@ -450,17 +491,7 @@ def complete_employer_profile():
         db.session.add(company)
         db.session.commit()
 
-        try:
-            send_verification_email(current_user)
-            flash("Almost there — check your company email to verify your account before posting jobs.", "success")
-        except Exception as e:
-            print("Verification email send failed:", e)
-            flash(
-                "Company saved, but the verification email couldn't be sent right now. "
-                "You'll need to verify your email before posting jobs — try resending it from your dashboard.",
-                "error",
-            )
-
+        flash("Company profile saved! You're all set.", "success")
         return redirect(url_for("views.home"))
 
     return render_template("complete_employer_profile.html")

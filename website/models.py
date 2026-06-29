@@ -85,9 +85,10 @@ class User(db.Model, UserMixin):
     password = db.Column(db.String(150))
     first_name = db.Column(db.String(150))
     role = db.Column(db.String(20), nullable=False, default="candidate")  # "candidate" | "employer"
-    email_verified = db.Column(db.Boolean, nullable=False, default=True)  # employers start False
+    email_verified = db.Column(db.Boolean, nullable=False, default=True)
     notifications_enabled = db.Column(db.Boolean, nullable=False, default=True)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
+    supabase_uid = db.Column(db.String(200), unique=True)
 
 
 class Company(db.Model):
