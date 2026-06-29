@@ -225,13 +225,42 @@
                 </div>
             </div>
 
-            <!-- Share button -->
+            <!-- Save + Share -->
             <div class="card mb-3">
-                <div class="card-body p-3 d-flex align-items-center justify-content-between">
-                    <span class="small text-muted">Share this role</span>
-                    <button id="shareBtn" class="btn btn-sm btn-outline-secondary" onclick="copyJobLink()">
-                        <i class="fas fa-link me-1"></i> Copy link
+                <div class="card-body p-3 d-flex gap-2">
+                    {% if current_user.is_authenticated %}
+                    <button id="saveBtn"
+                            onclick="toggleSave({{ job.id }})"
+                            class="btn btn-sm flex-fill {% if is_saved %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                            style="font-size:0.83rem;">
+                        <i class="{% if is_saved %}fas{% else %}far{% endif %} fa-bookmark me-1"></i>
+                        <span id="saveBtnLabel">{% if is_saved %}Saved{% else %}Save{% endif %}</span>
                     </button>
+                    {% endif %}
+                    <div class="dropdown flex-fill">
+                        <button class="btn btn-sm btn-outline-secondary w-100 dropdown-toggle" data-bs-toggle="dropdown" style="font-size:0.83rem;">
+                            <i class="fas fa-share-nodes me-1"></i> Share
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" style="min-width:180px;">
+                            <li>
+                                <a class="dropdown-item" href="https://wa.me/?text={{ (job.title + ' at ' + job.company.name + ' — ' + request.url)|urlencode }}" target="_blank">
+                                    <i class="fab fa-whatsapp me-2" style="color:#25d366;width:16px;"></i>WhatsApp
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="mailto:?subject={{ ('Job: ' + job.title + ' at ' + job.company.name)|urlencode }}&body={{ ('Check out this job on Avants: ' + request.url)|urlencode }}">
+                                    <i class="fas fa-envelope me-2" style="color:var(--text-muted);width:16px;"></i>Email
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <button class="dropdown-item" onclick="copyJobLink()">
+                                    <i class="fas fa-link me-2" style="color:var(--text-muted);width:16px;"></i>
+                                    <span id="copyLabel">Copy link</span>
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
@@ -273,14 +302,26 @@
 <script>
 function copyJobLink() {
     navigator.clipboard.writeText(window.location.href).then(() => {
-        const btn = document.getElementById('shareBtn');
-        btn.innerHTML = '<i class="fas fa-check me-1"></i> Copied!';
-        btn.classList.replace('btn-outline-secondary', 'btn-success');
-        setTimeout(() => {
-            btn.innerHTML = '<i class="fas fa-link me-1"></i> Copy link';
-            btn.classList.replace('btn-success', 'btn-outline-secondary');
-        }, 2000);
+        const lbl = document.getElementById('copyLabel');
+        lbl.textContent = 'Copied!';
+        setTimeout(() => { lbl.textContent = 'Copy link'; }, 2000);
     });
+}
+
+async function toggleSave(jobId) {
+    const btn = document.getElementById('saveBtn');
+    const lbl = document.getElementById('saveBtnLabel');
+    const r = await fetch(`/jobs/${jobId}/save`, { method: 'POST', headers: {'X-CSRFToken': ''} });
+    const data = await r.json();
+    if (data.saved) {
+        btn.className = btn.className.replace('btn-outline-secondary', 'btn-primary');
+        btn.querySelector('i').className = 'fas fa-bookmark me-1';
+        lbl.textContent = 'Saved';
+    } else {
+        btn.className = btn.className.replace('btn-primary', 'btn-outline-secondary');
+        btn.querySelector('i').className = 'far fa-bookmark me-1';
+        lbl.textContent = 'Save';
+    }
 }
 
 (async () => {

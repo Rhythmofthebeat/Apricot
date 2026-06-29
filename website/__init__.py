@@ -68,6 +68,7 @@ def _run_migrations(db):
         # user — supabase auth uid for admin API calls
         "ALTER TABLE \"user\" ADD COLUMN supabase_uid VARCHAR(200)",
     ]
+    # SavedJob table is created via db.create_all() — no ALTER needed
     with db.engine.connect() as conn:
         for stmt in new_columns:
             try:
@@ -112,7 +113,7 @@ def create_app():
     
     os.makedirs(upload_path, exist_ok=True)
 
-    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission
+    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission, SavedJob
 
     with app.app_context():
         db.create_all()

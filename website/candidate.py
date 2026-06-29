@@ -13,7 +13,7 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import getSampleStyleSheet
 
 from . import db
-from .models import Job, Application, CandidateProfile, Company, Notification, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
+from .models import Job, Application, CandidateProfile, Company, Notification, SavedJob, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
 
 from ai_services import (
     extract_text_from_file,
@@ -103,11 +103,15 @@ def browse_jobs():
     jobs = jobs_query.all()
 
     applied_job_ids = set()
+    saved_job_ids = set()
     if current_user.is_authenticated and current_user.role == 'candidate':
         applied_job_ids = {
             a.job_id for a in Application.query.filter_by(
                 candidate_user_id=current_user.id, withdrawn=False
             ).with_entities(Application.job_id).all()
+        }
+        saved_job_ids = {
+            s.job_id for s in SavedJob.query.filter_by(user_id=current_user.id).with_entities(SavedJob.job_id).all()
         }
 
     return render_template(
@@ -120,6 +124,7 @@ def browse_jobs():
         categories=JOB_CATEGORIES,
         locations=["Remote (Worldwide)", "Remote (US Only)", "Hybrid", "On-site"],
         applied_job_ids=applied_job_ids,
+        saved_job_ids=saved_job_ids,
     )
 
 
@@ -147,8 +152,28 @@ def job_detail(job_id):
         rank = next((i + 1 for i, s in enumerate(scores) if s <= my_score), total_applicants)
         percentile = round((total_applicants - rank) / total_applicants * 100) if total_applicants > 1 else 100
 
+    is_saved = (
+        SavedJob.query.filter_by(user_id=current_user.id, job_id=job.id).first() is not None
+        if current_user.is_authenticated else False
+    )
+
     return render_template("job_detail.html", job=job, existing=existing,
-                           rank=rank, total_applicants=total_applicants, percentile=percentile)
+                           rank=rank, total_applicants=total_applicants, percentile=percentile,
+                           is_saved=is_saved)
+
+
+@candidate.route('/jobs/<int:job_id>/save', methods=['POST'])
+@login_required
+def toggle_save_job(job_id):
+    job = Job.query.get_or_404(job_id)
+    saved = SavedJob.query.filter_by(user_id=current_user.id, job_id=job.id).first()
+    if saved:
+        db.session.delete(saved)
+        db.session.commit()
+        return jsonify({"saved": False})
+    db.session.add(SavedJob(user_id=current_user.id, job_id=job.id))
+    db.session.commit()
+    return jsonify({"saved": True})
 
 
 @candidate.route('/jobs/<int:job_id>/apply', methods=['GET'])

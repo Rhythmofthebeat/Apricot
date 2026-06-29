@@ -194,6 +194,14 @@ class Application(db.Model):
     candidate = db.relationship("User", backref="applications")
 
 
+class SavedJob(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    job_id = db.Column(db.Integer, db.ForeignKey("job.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+    __table_args__ = (db.UniqueConstraint("user_id", "job_id"),)
+
+
 class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)

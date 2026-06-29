@@ -183,6 +183,15 @@
                                     <span class="hired-badge"><i class="fas fa-trophy" style="font-size:0.65rem;color:#059669;"></i> {{ hired_n }} hired</span>
                                 {% endif %}
                             {% endif %}
+                            {% if current_user.is_authenticated %}
+                            <button class="btn btn-link p-0 border-0 save-card-btn"
+                                    data-job-id="{{ job.id }}"
+                                    onclick="event.stopPropagation(); toggleSaveCard(this, {{ job.id }})"
+                                    title="{{ 'Unsave' if job.id in saved_job_ids else 'Save for later' }}"
+                                    style="color:{% if job.id in saved_job_ids %}var(--primary){% else %}var(--text-muted){% endif %}; font-size:0.85rem; line-height:1;">
+                                <i class="{% if job.id in saved_job_ids %}fas{% else %}far{% endif %} fa-bookmark"></i>
+                            </button>
+                            {% endif %}
                         </div>
                     </div>
                     <h3>{{ job.title }}</h3>
@@ -227,5 +236,20 @@ document.querySelectorAll(".sort-option").forEach(option => {
 });
 
 document.addEventListener("click", () => sortMenu.classList.remove("open"));
+
+async function toggleSaveCard(btn, jobId) {
+    const r = await fetch(`/jobs/${jobId}/save`, { method: 'POST' });
+    const data = await r.json();
+    const icon = btn.querySelector('i');
+    if (data.saved) {
+        icon.className = 'fas fa-bookmark';
+        btn.style.color = 'var(--primary)';
+        btn.title = 'Unsave';
+    } else {
+        icon.className = 'far fa-bookmark';
+        btn.style.color = 'var(--text-muted)';
+        btn.title = 'Save for later';
+    }
+}
 </script>
 {% endblock %}
