@@ -1,10 +1,10 @@
 import stripe
-from flask import Blueprint, render_template, redirect, url_for, request, current_app, Response
-from flask_login import current_user
+from flask import Blueprint, render_template, redirect, url_for, request, current_app, Response, abort
+from flask_login import current_user, login_required
 from datetime import timezone
 
 from . import db
-from .models import Application, Job, User, Company
+from .models import Application, Job, User, Company, MeetingRoom, EmployerSubscription
 
 views = Blueprint('views', __name__)
 
@@ -82,12 +82,57 @@ def stripe_webhook():
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        app_id = (session.get("metadata") or {}).get("application_id")
+        meta = session.get("metadata") or {}
+
+        # One-time placement fee
+        app_id = meta.get("application_id")
         if app_id:
             application = Application.query.get(int(app_id))
             if application and not application.fee_paid:
                 application.fee_paid = True
                 db.session.commit()
+
+        # Subscription checkout
+        if session.get("mode") == "subscription":
+            plan = meta.get("plan")
+            company_id = meta.get("company_id")
+            if plan and company_id:
+                sub = EmployerSubscription.query.filter_by(company_id=int(company_id)).first()
+                if sub:
+                    sub.plan = plan
+                    sub.status = "active"
+                    sub.stripe_customer_id = session.get("customer")
+                    sub.stripe_subscription_id = session.get("subscription")
+                    db.session.commit()
+
+    elif event["type"] in ("customer.subscription.updated", "customer.subscription.created"):
+        stripe_sub = event["data"]["object"]
+        sub = EmployerSubscription.query.filter_by(
+            stripe_subscription_id=stripe_sub["id"]
+        ).first()
+        if sub:
+            sub.status = stripe_sub.get("status", "active")
+            db.session.commit()
+
+    elif event["type"] == "customer.subscription.deleted":
+        stripe_sub = event["data"]["object"]
+        sub = EmployerSubscription.query.filter_by(
+            stripe_subscription_id=stripe_sub["id"]
+        ).first()
+        if sub:
+            sub.plan = "free"
+            sub.status = "canceled"
+            sub.stripe_subscription_id = None
+            db.session.commit()
+
+    elif event["type"] == "invoice.payment_failed":
+        invoice = event["data"]["object"]
+        sub = EmployerSubscription.query.filter_by(
+            stripe_customer_id=invoice.get("customer")
+        ).first()
+        if sub:
+            sub.status = "past_due"
+            db.session.commit()
 
     return "", 200
 
@@ -114,6 +159,29 @@ def sitemap():
 
     xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ''.join(urls) + '</urlset>'
     return Response(xml, mimetype='application/xml')
+
+
+@views.route('/meeting/<room_name>')
+@login_required
+def join_meeting(room_name):
+    room = MeetingRoom.query.filter_by(room_name=room_name).first_or_404()
+    application = Application.query.get_or_404(room.application_id)
+
+    is_employer = False
+    if current_user.id == application.candidate_user_id:
+        is_employer = False
+    elif current_user.role == 'employer':
+        job = Job.query.get_or_404(application.job_id)
+        from .models import CompanyMember
+        owns = Company.query.filter_by(owner_user_id=current_user.id, id=job.company_id).first()
+        member = CompanyMember.query.filter_by(user_id=current_user.id, company_id=job.company_id).first()
+        if not owns and not member:
+            abort(403)
+        is_employer = True
+    else:
+        abort(403)
+
+    return render_template('meeting_room.html', room=room, application=application, is_employer=is_employer)
 
 
 @views.route('/robots.txt')

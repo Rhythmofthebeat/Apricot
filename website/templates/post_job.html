@@ -33,9 +33,28 @@
 
 {% block content %}
 <div class="row justify-content-center g-4">
-    <!-- JD Quality Analyzer sidebar -->
+    <!-- Sidebar: Completeness + JD Analyzer -->
     <div class="col-lg-4 order-lg-2">
-        <div class="card sticky-top" style="top:80px;">
+
+        <!-- Completeness checklist -->
+        <div class="card mb-3 sticky-top" style="top:80px;z-index:10;">
+            <div class="card-header fw-bold d-flex align-items-center justify-content-between" style="font-size:0.85rem;">
+                <span><i class="fas fa-list-check me-2" style="color:var(--primary);"></i>Post Checklist</span>
+                <span id="checklistScore" class="badge bg-secondary" style="font-size:0.7rem;">0 / 5</span>
+            </div>
+            <div class="card-body p-3">
+                <ul class="list-unstyled mb-0" id="checklistItems" style="font-size:0.83rem;">
+                    <li id="chk-title"       class="chk-row mb-2"><i class="fas fa-circle-xmark me-2 text-danger"></i>Job title <span class="text-danger fw-semibold" style="font-size:0.72rem;">required</span></li>
+                    <li id="chk-description" class="chk-row mb-2"><i class="fas fa-circle-xmark me-2 text-danger"></i>Description <span class="text-danger fw-semibold" style="font-size:0.72rem;">required</span></li>
+                    <li id="chk-salary"      class="chk-row mb-2"><i class="fas fa-circle-xmark me-2 text-danger"></i>Pay range <span class="text-muted" style="font-size:0.75rem;">recommended</span></li>
+                    <li id="chk-focus"       class="chk-row mb-2"><i class="fas fa-circle-xmark me-2 text-danger"></i>Interview focus <span class="text-muted" style="font-size:0.75rem;">recommended</span></li>
+                    <li id="chk-questions"   class="chk-row mb-0"><i class="fas fa-circle-xmark me-2 text-danger"></i>Custom questions <span class="text-muted" style="font-size:0.75rem;">optional</span></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- JD Quality Analyzer -->
+        <div class="card">
             <div class="card-header fw-bold" style="font-size:0.85rem;">
                 <i class="fas fa-magnifying-glass-chart me-2" style="color:var(--primary);"></i>JD Quality Analyzer
             </div>
@@ -408,12 +427,28 @@ function updateSalaryHints() {
     const pt = document.getElementById('payType').value;
     const cfg = PAY_CONFIG[pt] || PAY_CONFIG.yearly;
     const minInput = document.getElementById('salaryMin');
+    const maxInput = document.getElementById('salaryMax');
     const maxGroup = document.getElementById('salaryMaxGroup');
     minInput.step = cfg.step;
     minInput.placeholder = cfg.minPh;
-    document.getElementById('salaryMax').placeholder = cfg.maxPh;
+    maxInput.placeholder = cfg.maxPh;
     maxGroup.style.display = cfg.showMax ? '' : 'none';
-    document.getElementById('salaryHint').textContent = cfg.hint;
+
+    const minVal = parseFloat(minInput.value);
+    const maxVal = parseFloat(maxInput.value);
+    const hintEl = document.getElementById('salaryHint');
+    if (minVal) {
+        const fmt = n => (n >= 1000 && pt !== 'hourly') ? `$${Math.round(n / 1000)}K` : `$${Number(n).toLocaleString()}`;
+        const sfx = { yearly: '/yr', hourly: '/hr', monthly: '/mo', stipend: ' stipend', contract: ' (project)' }[pt] || '/yr';
+        let preview = fmt(minVal);
+        if (maxVal && maxVal > minVal && cfg.showMax) preview += `–${fmt(maxVal)}`;
+        hintEl.textContent = `Will display as: ${preview}${sfx}`;
+        hintEl.style.color = 'var(--primary)';
+    } else {
+        hintEl.textContent = cfg.hint;
+        hintEl.style.color = '';
+    }
+    updateChecklist();
 }
 
 updateSalaryHints();
@@ -426,5 +461,49 @@ function toggleCityInput() {
     document.getElementById('locationCity').required = needsCity;
 }
 toggleCityInput();
+
+// ── Post checklist ──────────────────────────────────────────────────────
+function updateChecklist() {
+    const checks = [
+        { id: 'chk-title',     ok: !!document.getElementById('jobTitle')?.value.trim() },
+        { id: 'chk-description', ok: !!(buildDescriptionText().trim()) },
+        { id: 'chk-salary',    ok: !!(document.getElementById('salaryMin')?.value.trim()) },
+        { id: 'chk-focus',     ok: !!(document.getElementById('interviewFocus')?.value.trim()) },
+        { id: 'chk-questions', ok: document.querySelectorAll('.question-input').length > 0 },
+    ];
+    let done = 0;
+    checks.forEach(({ id, ok }) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const icon = el.querySelector('i');
+        if (ok) {
+            icon.className = 'fas fa-circle-check me-2 text-success';
+            done++;
+        } else {
+            icon.className = 'fas fa-circle-xmark me-2 text-danger';
+        }
+    });
+    const score = document.getElementById('checklistScore');
+    score.textContent = `${done} / ${checks.length}`;
+    score.className = done === checks.length ? 'badge bg-success' : done >= 2 ? 'badge bg-warning text-dark' : 'badge bg-secondary';
+}
+
+// Hook into form inputs
+const jobTitleEl = document.getElementById('jobTitle');
+if (jobTitleEl) jobTitleEl.addEventListener('input', updateChecklist);
+// Salary inputs drive updateSalaryHints which calls updateChecklist
+['salaryMin','salaryMax'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateSalaryHints);
+});
+// Description is built from textareas
+document.querySelectorAll('.desc-section').forEach(ta => ta.addEventListener('input', updateChecklist));
+// Interview focus
+const focusEl = document.getElementById('interviewFocus');
+if (focusEl) focusEl.addEventListener('input', updateChecklist);
+// "Add question" button also triggers a checklist update
+document.getElementById('addQuestionBtn').addEventListener('click', () => setTimeout(updateChecklist, 0));
+
+updateChecklist();
 </script>
 {% endblock %}

@@ -63,6 +63,20 @@ JOB_LOCATIONS = [
     "Other",
 ]
 
+EARN_DOMAINS = [
+    "Software",
+    "Healthcare",
+    "Legal",
+    "Finance",
+    "Marketing",
+    "Sales",
+    "Design",
+    "Operations",
+    "Education",
+    "Science",
+    "Other",
+]
+
 COUNTRIES = [
     "United States", "Canada", "United Kingdom", "Ireland", "Australia",
     "New Zealand", "Germany", "France", "Spain", "Italy", "Netherlands",
@@ -243,6 +257,9 @@ class EarnTask(db.Model):
     pay_cents = db.Column(db.Integer, nullable=False, default=500)  # payment in cents
     estimated_minutes = db.Column(db.Integer, default=5)
     status = db.Column(db.String(20), nullable=False, default='open')  # open | closed
+    required_domains = db.Column(db.Text)   # JSON list; None means open to all domains
+    min_responses = db.Column(db.Integer, nullable=False, default=3)  # workers needed before consensus
+    consensus_answer = db.Column(db.Text)   # JSON {answer, total, distribution} — set once min_responses hit
     # For ranking tasks: two AI responses to compare
     option_a = db.Column(db.Text)
     option_b = db.Column(db.Text)
@@ -260,11 +277,91 @@ class TaskSubmission(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     response = db.Column(db.Text)        # chosen option / rating / written response
     explanation = db.Column(db.Text)     # optional explanation
+    agreement_score = db.Column(db.Float)  # 0–1; set when consensus is computed for this task
     earnings_cents = db.Column(db.Integer, nullable=False, default=0)
     paid_out = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     user = db.relationship('User', backref='task_submissions')
+
+
+class ContractorProfile(db.Model):
+    """Tracks a user's expertise domains and earn stats for the AI training contractor network."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, unique=True)
+    domains = db.Column(db.Text, nullable=False)         # JSON list of EARN_DOMAINS values
+    quality_score = db.Column(db.Float, nullable=False, default=1.0)   # 0–1; updated by consensus
+    tasks_completed = db.Column(db.Integer, nullable=False, default=0)
+    stripe_account_id = db.Column(db.String(100))        # Stripe Connect Express account ID
+    payout_enabled = db.Column(db.Boolean, nullable=False, default=False)  # True once Stripe onboarding complete
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    user = db.relationship("User", backref=db.backref("contractor_profile", uselist=False))
+
+
+class MeetingProposal(db.Model):
+    """Employer proposes 2-3 time slots; candidate picks one and the room is created."""
+    id = db.Column(db.Integer, primary_key=True)
+    application_id = db.Column(db.Integer, db.ForeignKey("application.id"), nullable=False)
+    employer_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    slots = db.Column(db.Text, nullable=False)        # JSON list of {date, time} dicts
+    notes = db.Column(db.Text)
+    status = db.Column(db.String(20), nullable=False, default='pending')  # pending | accepted | expired
+    accepted_slot = db.Column(db.Text)               # JSON {date, time} chosen by candidate
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    application = db.relationship("Application", backref=db.backref("meeting_proposals", lazy=True))
+    employer = db.relationship("User", foreign_keys=[employer_user_id])
+
+
+PLAN_LIMITS = {
+    'free':    {'jobs': 3,    'interviews_per_month': 20,  'talent_search': False},
+    'starter': {'jobs': 10,   'interviews_per_month': 150, 'talent_search': True},
+    'pro':     {'jobs': 9999, 'interviews_per_month': 9999, 'talent_search': True},
+}
+
+
+class Message(db.Model):
+    """In-app message between employer and candidate on a specific application."""
+    id = db.Column(db.Integer, primary_key=True)
+    application_id = db.Column(db.Integer, db.ForeignKey("application.id"), nullable=False)
+    sender_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    read = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    sender = db.relationship("User", foreign_keys=[sender_user_id])
+    application = db.relationship("Application", backref=db.backref("messages", lazy=True, order_by="Message.created_at"))
+
+
+class EmployerSubscription(db.Model):
+    """Stripe subscription plan for an employer company."""
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=False, unique=True)
+    plan = db.Column(db.String(20), nullable=False, default='free')   # free | starter | pro
+    stripe_customer_id = db.Column(db.String(100))
+    stripe_subscription_id = db.Column(db.String(100))
+    status = db.Column(db.String(20), nullable=False, default='active')  # active | canceled | past_due
+    current_period_end = db.Column(db.DateTime(timezone=True))
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    company = db.relationship("Company", backref=db.backref("subscription", uselist=False))
+
+
+class MeetingRoom(db.Model):
+    """An in-app video meeting room created via Daily.co for a specific application."""
+    id = db.Column(db.Integer, primary_key=True)
+    application_id = db.Column(db.Integer, db.ForeignKey("application.id"), nullable=False)
+    employer_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    room_name = db.Column(db.String(200), nullable=False, unique=True)
+    room_url = db.Column(db.String(500), nullable=False)
+    scheduled_date = db.Column(db.String(20))   # YYYY-MM-DD
+    scheduled_time = db.Column(db.String(10))   # HH:MM
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    application = db.relationship("Application", backref=db.backref("meeting_rooms", lazy=True))
+    employer = db.relationship("User", foreign_keys=[employer_user_id])
 
 
 class CompanyInvite(db.Model):

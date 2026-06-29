@@ -55,6 +55,57 @@
 {% endblock %}
 
 {% block content %}
+
+{% if pending_proposals %}
+<div class="card mb-3" style="border-color:#fde68a;background:#fffbeb;">
+    <div class="card-body p-3 d-flex align-items-center gap-3 flex-wrap">
+        <i class="fas fa-clock" style="color:#d97706;font-size:1.3rem;flex-shrink:0;"></i>
+        <div class="flex-grow-1">
+            <div class="fw-bold" style="font-size:0.9rem;color:#92400e;">
+                {{ pending_proposals }} employer{{ 's' if pending_proposals != 1 }} want{{ '' if pending_proposals != 1 else 's' }} to schedule an interview with you
+            </div>
+            <div style="font-size:0.82rem;color:#78350f;">Pick a time that works for you.</div>
+        </div>
+        <a href="{{ url_for('candidate.interviews') }}" class="btn btn-warning btn-sm fw-bold">
+            <i class="fas fa-calendar me-1"></i> Pick a time
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{% if upcoming_interviews %}
+<div class="card mb-4" style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);border:none;color:#fff;">
+    <div class="card-body p-4">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <div style="font-size:2rem;">🎉</div>
+            <div class="flex-grow-1">
+                {% set ir = upcoming_interviews[0] %}
+                <div class="fw-bold" style="font-size:1.05rem;">
+                    {{ ir.application.job.company.name }} wants to interview you!
+                </div>
+                <div style="opacity:0.85;font-size:0.88rem;margin-top:2px;">
+                    {{ ir.application.job.title }} ·
+                    <strong>{{ ir.scheduled_date }}{% if ir.scheduled_time %} at {{ ir.scheduled_time }}{% endif %}</strong>
+                    {% if upcoming_interviews|length > 1 %}
+                    · and {{ upcoming_interviews|length - 1 }} more
+                    {% endif %}
+                </div>
+            </div>
+            <a href="{{ url_for('views.join_meeting', room_name=ir.room_name) }}"
+               class="btn fw-bold"
+               style="background:#fff;color:#4f46e5;white-space:nowrap;">
+                <i class="fas fa-video me-1"></i> Join Interview
+            </a>
+            <a href="{{ url_for('candidate.interviews') }}"
+               class="btn btn-sm"
+               style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);">
+                View all
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="row g-4">
 
     <!-- Suggested Jobs -->
@@ -129,16 +180,28 @@
 
                     {% set meeting = meetings.get(app.id) %}
                     {% if meeting %}
-                    <div class="meeting-callout">
-                        <i class="fas {{ 'fa-video' if meeting.type == 'virtual' else 'fa-handshake' }}"></i>
-                        {{ 'Video call' if meeting.type == 'virtual' else 'In-person' }}
-                        on {{ meeting.date }} at {{ meeting.time }}
-                        {% if meeting.type == 'virtual' %}
-                            , <a href="{{ meeting.location_or_url }}" target="_blank" rel="noopener">Join link</a>
+                        {% if meeting.get('in_app') %}
+                        <div class="meeting-callout" style="background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;">
+                            <i class="fas fa-circle-dot" style="color:#059669;"></i>
+                            Interview on {{ meeting.date }} at {{ meeting.time }}
+                            &nbsp;
+                            <a href="{{ meeting.location_or_url }}" class="btn btn-sm btn-success fw-bold" style="padding:2px 12px;font-size:0.78rem;">
+                                <i class="fas fa-video me-1"></i> Join Interview
+                            </a>
+                        </div>
+                        {% elif meeting.type == 'virtual' %}
+                        <div class="meeting-callout">
+                            <i class="fas fa-video"></i>
+                            Video call on {{ meeting.date }} at {{ meeting.time }},
+                            <a href="{{ meeting.location_or_url }}" target="_blank" rel="noopener">Join link</a>
+                        </div>
                         {% else %}
-                            , {{ meeting.location_or_url }}
+                        <div class="meeting-callout">
+                            <i class="fas fa-handshake"></i>
+                            In-person on {{ meeting.date }} at {{ meeting.time }},
+                            {{ meeting.location_or_url }}
+                        </div>
                         {% endif %}
-                    </div>
                     {% endif %}
                 </div>
 
@@ -209,9 +272,32 @@
                         </button>
                     </form>
                     {% endif %}
+                    {% set unread_msgs = app.messages | rejectattr('read') | selectattr('sender_user_id', 'ne', current_user.id) | list %}
+                    <button class="btn btn-sm btn-outline-primary position-relative"
+                            onclick="toggleCandidateMsg({{ app.id }}, this)" title="Messages">
+                        <i class="fas fa-message"></i>
+                        {% if unread_msgs %}<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:0.55rem;">{{ unread_msgs|length }}</span>{% endif %}
+                    </button>
                 </div>
 
             </div>
+
+            <!-- Collapsible message thread -->
+            <div id="cdMsg-{{ app.id }}" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:6px;">
+                <div id="cdFeed-{{ app.id }}"
+                     style="max-height:260px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:0.85rem;">
+                    <div class="text-muted text-center py-3" style="font-size:0.82rem;">Loading…</div>
+                </div>
+                <div class="d-flex gap-2">
+                    <input type="text" id="cdInput-{{ app.id }}" class="form-control form-control-sm"
+                           placeholder="Reply to {{ app.job.company.name }}…"
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();cdSend({{ app.id }});}">
+                    <button class="btn btn-primary btn-sm px-3" onclick="cdSend({{ app.id }})">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+
             {% endfor %}
 
             {% if withdrawn_apps %}
@@ -270,4 +356,77 @@
 })();
 </script>
 {% endif %}
+
+<script>
+const _cdLoaded = new Set();
+
+function toggleCandidateMsg(appId, btn) {
+    const box = document.getElementById(`cdMsg-${appId}`);
+    const isOpen = box.style.display !== 'none';
+    box.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen && !_cdLoaded.has(appId)) cdLoad(appId, btn);
+}
+
+async function cdLoad(appId, btn) {
+    const feed = document.getElementById(`cdFeed-${appId}`);
+    try {
+        const res = await fetch(`/candidate/applications/${appId}/messages.json`);
+        const msgs = await res.json();
+        cdRender(appId, msgs);
+        _cdLoaded.add(appId);
+        // Clear badge
+        const badge = btn && btn.querySelector('.badge');
+        if (badge) badge.remove();
+    } catch(e) {
+        feed.innerHTML = `<div class="text-danger small">Failed to load.</div>`;
+    }
+}
+
+function cdRender(appId, msgs) {
+    const feed = document.getElementById(`cdFeed-${appId}`);
+    if (!msgs.length) {
+        feed.innerHTML = `<div class="text-muted text-center py-3" style="font-size:0.82rem;">No messages yet. The employer can initiate the conversation from their side.</div>`;
+        return;
+    }
+    feed.innerHTML = msgs.map(m => `
+        <div style="display:flex;justify-content:${m.is_mine ? 'flex-end' : 'flex-start'};margin-bottom:8px;">
+            <div style="max-width:72%;background:${m.is_mine ? 'var(--primary)' : 'var(--surface)'};
+                        color:${m.is_mine ? '#fff' : 'var(--text)'};
+                        border:1px solid ${m.is_mine ? 'var(--primary)' : 'var(--border)'};
+                        border-radius:12px;padding:8px 12px;font-size:0.85rem;">
+                <div>${cdEsc(m.body)}</div>
+                <div style="font-size:0.68rem;opacity:0.65;margin-top:3px;text-align:right;">${cdEsc(m.time)}</div>
+            </div>
+        </div>`).join('');
+    feed.scrollTop = feed.scrollHeight;
+}
+
+async function cdSend(appId) {
+    const input = document.getElementById(`cdInput-${appId}`);
+    const body = input.value.trim();
+    if (!body) return;
+    input.value = '';
+    try {
+        const res = await fetch(`/candidate/applications/${appId}/message`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({body}),
+        });
+        const msg = await res.json();
+        if (msg.error) { alert(msg.error); return; }
+        const feed = document.getElementById(`cdFeed-${appId}`);
+        const empty = feed.querySelector('.text-muted');
+        if (empty) empty.remove();
+        const el = document.createElement('div');
+        el.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:8px;';
+        el.innerHTML = `<div style="max-width:72%;background:var(--primary);color:#fff;border:1px solid var(--primary);border-radius:12px;padding:8px 12px;font-size:0.85rem;"><div>${cdEsc(msg.body)}</div><div style="font-size:0.68rem;opacity:0.65;margin-top:3px;text-align:right;">${cdEsc(msg.time)}</div></div>`;
+        feed.appendChild(el);
+        feed.scrollTop = feed.scrollHeight;
+    } catch(e) { alert('Failed to send.'); }
+}
+
+function cdEsc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
 {% endblock %}

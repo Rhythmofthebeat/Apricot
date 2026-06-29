@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Set Up Your Expertise — Earn{% endblock %}
+
+{% block head %}
+<style>
+    .onboard-wrap {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 48px 0 80px;
+    }
+    .onboard-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--primary-soft);
+        color: var(--primary);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        border-radius: 999px;
+        padding: 4px 14px;
+        margin-bottom: 18px;
+    }
+    .onboard-title {
+        font-size: clamp(1.7rem, 4vw, 2.4rem);
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        line-height: 1.1;
+        margin-bottom: 12px;
+    }
+    .onboard-sub {
+        color: var(--text-muted);
+        font-size: 0.97rem;
+        line-height: 1.6;
+        margin-bottom: 36px;
+    }
+    .domain-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 10px;
+        margin-bottom: 32px;
+    }
+    .domain-label { display: block; cursor: pointer; }
+    .domain-card {
+        border: 2px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 12px;
+        text-align: center;
+        transition: border-color 0.13s, background 0.13s;
+        user-select: none;
+    }
+    .domain-card:hover { border-color: #a5b4fc; background: var(--primary-soft); }
+    .domain-card .icon {
+        font-size: 1.5rem;
+        margin-bottom: 8px;
+        display: block;
+        color: var(--primary);
+        opacity: 0.8;
+    }
+    .domain-card .name {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--text);
+    }
+    input[type="checkbox"].domain-chk { display: none; }
+    input[type="checkbox"].domain-chk:checked + .domain-card {
+        border-color: var(--primary);
+        background: var(--primary-soft);
+    }
+    input[type="checkbox"].domain-chk:checked + .domain-card .icon { opacity: 1; }
+    .selected-count {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        margin-bottom: 20px;
+    }
+    .selected-count strong { color: var(--primary); }
+    .how-it-works {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        margin-bottom: 32px;
+    }
+    .how-step { display: flex; gap: 14px; align-items: flex-start; }
+    .how-step + .how-step { margin-top: 14px; }
+    .step-num {
+        width: 26px; height: 26px; border-radius: 50%;
+        background: var(--primary); color: #fff;
+        font-size: 0.72rem; font-weight: 800;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; margin-top: 1px;
+    }
+    .step-text { font-size: 0.88rem; color: var(--text-muted); line-height: 1.5; }
+    .step-text strong { color: var(--text); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="onboard-wrap">
+
+    <span class="onboard-badge"><i class="fas fa-brain me-1"></i>Contractor Setup</span>
+    <h1 class="onboard-title">What's your area<br>of expertise?</h1>
+    <p class="onboard-sub">
+        You'll be matched to AI training tasks in your fields. Pick everything that
+        applies — you can always update this later.
+    </p>
+
+    <!-- How it works -->
+    <div class="how-it-works mb-4">
+        <p class="fw-bold mb-3" style="font-size:0.85rem;">How it works</p>
+        <div class="how-step">
+            <div class="step-num">1</div>
+            <div class="step-text"><strong>Select your expertise</strong> — we surface tasks you're qualified to judge.</div>
+        </div>
+        <div class="how-step">
+            <div class="step-num">2</div>
+            <div class="step-text"><strong>Complete short tasks</strong> — rate, rank, or write AI training examples in ~5 minutes.</div>
+        </div>
+        <div class="how-step">
+            <div class="step-num">3</div>
+            <div class="step-text"><strong>Get paid</strong> — earnings accumulate and are paid out monthly.</div>
+        </div>
+    </div>
+
+    <form method="POST" id="onboardForm">
+        <p class="fw-semibold mb-2" style="font-size:0.9rem;">Select your expertise areas <span class="text-danger">*</span></p>
+        <p class="selected-count" id="countLabel">
+            <strong id="countNum">0</strong> selected
+        </p>
+
+        {% set icons = {
+            'Software':   'fa-code',
+            'Healthcare': 'fa-heart-pulse',
+            'Legal':      'fa-scale-balanced',
+            'Finance':    'fa-chart-line',
+            'Marketing':  'fa-bullhorn',
+            'Sales':      'fa-handshake',
+            'Design':     'fa-pen-ruler',
+            'Operations': 'fa-gears',
+            'Education':  'fa-graduation-cap',
+            'Science':    'fa-flask',
+            'Other':      'fa-ellipsis',
+        } %}
+
+        <div class="domain-grid">
+            {% for domain in domains %}
+            <label class="domain-label">
+                <input type="checkbox" name="domains" value="{{ domain }}"
+                       class="domain-chk" onchange="updateCount()">
+                <div class="domain-card">
+                    <span class="icon"><i class="fas {{ icons.get(domain, 'fa-star') }}"></i></span>
+                    <span class="name">{{ domain }}</span>
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100" id="submitBtn"
+                style="padding:13px;font-size:0.95rem;font-weight:700;" disabled>
+            <i class="fas fa-arrow-right me-2"></i>Start Earning
+        </button>
+        <p class="text-center text-muted mt-3" style="font-size:0.8rem;">
+            You can update your expertise at any time from the tasks page.
+        </p>
+    </form>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateCount() {
+    const checked = document.querySelectorAll('.domain-chk:checked').length;
+    document.getElementById('countLabel').innerHTML =
+        '<strong id="countNum">' + checked + '</strong> selected' +
+        (checked === 0 ? ' &nbsp;<span class="text-danger">(pick at least one)</span>' : '');
+    document.getElementById('submitBtn').disabled = checked === 0;
+}
+</script>
+{% endblock %}

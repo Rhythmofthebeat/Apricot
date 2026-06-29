@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Interview — {{ application.job.title }}{% endblock %}
+
+{% block head %}
+<style>
+    body, .main-container { background: #0f172a !important; }
+    .meeting-bar {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 12px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+    .meeting-bar .job-info { color: #e2e8f0; font-size: 0.9rem; font-weight: 600; }
+    .meeting-bar .job-meta { color: #94a3b8; font-size: 0.78rem; }
+    .live-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        background: rgba(5,150,105,0.2); color: #34d399;
+        border: 1px solid rgba(52,211,153,0.3);
+        border-radius: 999px; padding: 4px 12px;
+        font-size: 0.75rem; font-weight: 700;
+    }
+    .live-chip .dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: #34d399;
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+    #dailyFrame {
+        width: 100%; height: 700px;
+        border: none; border-radius: 12px;
+        background: #0f172a; display: block;
+    }
+    .rec-section {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        margin-top: 16px;
+        overflow: hidden;
+    }
+    .rec-section-header {
+        padding: 14px 18px;
+        display: flex; align-items: center; justify-content: space-between;
+        border-bottom: 1px solid #334155;
+        color: #e2e8f0; font-weight: 600; font-size: 0.9rem;
+    }
+    .rec-item {
+        display: flex; align-items: center; gap: 12px;
+        padding: 12px 18px; border-bottom: 1px solid #1e293b;
+        color: #e2e8f0;
+    }
+    .rec-item:last-child { border-bottom: none; }
+    .hint-bar {
+        margin-top: 10px; color: #64748b;
+        font-size: 0.75rem; text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Top bar -->
+<div class="meeting-bar">
+    <div>
+        <div class="job-info">
+            <i class="fas fa-circle-dot me-2" style="color:#818cf8;"></i>
+            {{ application.job.title }} — {{ application.job.company.name }}
+        </div>
+        {% if room.scheduled_date %}
+        <div class="job-meta mt-1">
+            <i class="fas fa-calendar me-1"></i>
+            {{ room.scheduled_date }}{% if room.scheduled_time %} at {{ room.scheduled_time }}{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <span class="live-chip"><span class="dot"></span> Live</span>
+        {% if is_employer %}
+        <a href="{{ url_for('employer.employer_meetings') }}"
+           class="btn btn-sm btn-outline-secondary"
+           style="background:transparent;border-color:#475569;color:#94a3b8;font-size:0.78rem;">
+            <i class="fas fa-list me-1"></i> All Meetings
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Daily.co iframe -->
+<iframe
+    id="dailyFrame"
+    src="{{ room.room_url }}"
+    allow="microphone; camera; autoplay; display-capture; clipboard-read; clipboard-write"
+    allowfullscreen
+></iframe>
+
+<p class="hint-bar">
+    <i class="fas fa-circle-info me-1"></i>
+    Allow camera &amp; microphone when prompted. Recording starts automatically when the meeting begins.
+</p>
+
+{% if is_employer %}
+<!-- Recordings panel -->
+<div class="rec-section">
+    <div class="rec-section-header">
+        <span><i class="fas fa-circle-play me-2" style="color:#818cf8;"></i>Recordings</span>
+        <button class="btn btn-sm btn-outline-primary" id="loadRecBtn" onclick="loadRecordings()" style="font-size:0.78rem;">
+            <i class="fas fa-rotate me-1"></i> Load recordings
+        </button>
+    </div>
+    <div id="recContainer" style="padding:18px;color:#64748b;font-size:0.85rem;text-align:center;">
+        Click "Load recordings" after the meeting ends — Daily.co takes a minute or two to process.
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if is_employer %}
+<script>
+async function loadRecordings() {
+    const btn = document.getElementById('loadRecBtn');
+    const container = document.getElementById('recContainer');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Loading…';
+
+    try {
+        const res = await fetch('{{ url_for("employer.room_recordings", room_id=room.id) }}');
+        const data = await res.json();
+
+        if (data.error) {
+            container.style.color = '#f87171';
+            container.textContent = data.error;
+            return;
+        }
+        if (!data.length) {
+            container.textContent = 'No recordings found yet. Check back after the meeting ends.';
+            return;
+        }
+
+        container.innerHTML = data.map((rec, i) => {
+            const dur = rec.duration ? `${Math.round(rec.duration / 60)} min` : '';
+            const started = rec.start_ts ? new Date(rec.start_ts * 1000).toLocaleString() : '';
+            return `
+            <div class="rec-item">
+                <i class="fas fa-circle-play" style="color:#818cf8;font-size:1.2rem;flex-shrink:0;"></i>
+                <div class="flex-grow-1">
+                    <div style="font-weight:600;font-size:0.88rem;">Recording ${i + 1}</div>
+                    <div style="font-size:0.75rem;color:#64748b;">${started}${dur ? ' · ' + dur : ''}</div>
+                </div>
+                <button class="btn btn-sm btn-outline-primary" style="font-size:0.78rem;" onclick="downloadRec('${rec.id}', this)">
+                    <i class="fas fa-download me-1"></i> Download
+                </button>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        container.style.color = '#f87171';
+        container.textContent = 'Failed to load: ' + e.message;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-rotate me-1"></i> Refresh';
+    }
+}
+
+async function downloadRec(recordingId, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    try {
+        const url = `{{ url_for("employer.recording_link", room_id=room.id, recording_id="__RID__") }}`.replace('__RID__', recordingId);
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.download_link) {
+            window.open(data.download_link, '_blank');
+        } else {
+            alert('Could not get link: ' + (data.error || 'unknown'));
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-download me-1"></i> Download';
+    }
+}
+</script>
+{% endif %}
+{% endblock %}

@@ -20,6 +20,7 @@ from . import db
 from .models import (
     Company, Job, Application, Notification,
     CompanyMember, CompanyInvite, CandidateProfile, User,
+    MeetingRoom, Message, EmployerSubscription, MeetingProposal, PLAN_LIMITS,
     JOB_CATEGORIES, JOB_LOCATIONS, COMPANY_SIZES, INDUSTRIES,
 )
 from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description
@@ -235,6 +236,20 @@ def post_job():
     company = get_owned_company()
 
     if request.method == 'POST':
+        # Plan limit check
+        sub = EmployerSubscription.query.filter_by(company_id=company.id).first()
+        plan = sub.plan if (sub and sub.status == 'active') else 'free'
+        job_limit = PLAN_LIMITS[plan]['jobs']
+        if job_limit < 9999:
+            open_count = Job.query.filter_by(company_id=company.id, status='open').count()
+            if open_count >= job_limit:
+                flash(
+                    f"Your {plan.title()} plan allows up to {job_limit} open job post{'s' if job_limit != 1 else ''}. "
+                    f"Upgrade your plan to post more.",
+                    "error",
+                )
+                return redirect(url_for('employer.billing'))
+
         title = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip()
         work_type = request.form.get('work_type', 'Remote (Worldwide)').strip()
@@ -1126,6 +1141,459 @@ def accept_invite(token):
 # ------------------------------------------------------------------ #
 #  Public Company Page
 # ------------------------------------------------------------------ #
+
+# ------------------------------------------------------------------ #
+#  Meeting Scheduling — Propose Times
+# ------------------------------------------------------------------ #
+
+@employer.route('/employer/applications/<int:application_id>/propose-times', methods=['POST'])
+@login_required
+@employer_required
+def propose_times(application_id):
+    company = get_owned_company()
+    application = Application.query.get_or_404(application_id)
+    job = Job.query.get_or_404(application.job_id)
+    if job.company_id != company.id:
+        abort(403)
+
+    notes = request.form.get('notes', '').strip()
+    slots = []
+    for i in range(1, 4):
+        d = request.form.get(f'date_{i}', '').strip()
+        t = request.form.get(f'time_{i}', '').strip()
+        if d and t:
+            slots.append({'date': d, 'time': t})
+
+    if not slots:
+        flash("Add at least one time slot.", "error")
+        return redirect(url_for('employer.applicants', job_id=job.id))
+
+    # Cancel any existing pending proposal for this application
+    MeetingProposal.query.filter_by(
+        application_id=application_id, status='pending'
+    ).update({'status': 'expired'})
+
+    proposal = MeetingProposal(
+        application_id=application_id,
+        employer_user_id=current_user.id,
+        slots=json.dumps(slots),
+        notes=notes or None,
+    )
+    db.session.add(proposal)
+
+    candidate = application.candidate
+    notif = Notification(
+        user_id=candidate.id,
+        message=f"{company.name} wants to schedule an interview for {job.title} — pick a time!",
+        link=url_for('candidate.interviews'),
+    )
+    db.session.add(notif)
+    db.session.commit()
+
+    try:
+        slot_lines = ''.join(
+            f"<li><strong>{s['date']}</strong> at {s['time']}</li>" for s in slots
+        )
+        send_branded_email(
+            to_email=candidate.email,
+            subject=f"{company.name} wants to schedule an interview — {job.title}",
+            heading=f"{company.name} wants to meet you!",
+            body_html=(
+                f"Hi {candidate.first_name or 'there'},<br><br>"
+                f"<strong>{company.name}</strong> would like to schedule a live video interview "
+                f"for <strong>{job.title}</strong>. Pick whichever time works best for you:<br><br>"
+                f"<ul>{slot_lines}</ul>"
+                + (f"<br><strong>Notes:</strong> {notes}<br>" if notes else "")
+                + "<br>Click below to choose your slot — the interview room will be created instantly."
+            ),
+            plain_text=(
+                f"Hi {candidate.first_name or 'there'},\n\n"
+                f"{company.name} wants to interview you for {job.title}.\n\n"
+                "Available times:\n"
+                + ''.join(f"  • {s['date']} at {s['time']}\n" for s in slots)
+                + (f"\nNotes: {notes}\n" if notes else "")
+            ),
+            cta_label="Pick a Time",
+            cta_url=url_for('candidate.interviews', _external=True),
+        )
+        flash(f"Time slots sent to {candidate.first_name or candidate.email}.", "success")
+    except Exception:
+        flash("Proposal saved — email notification failed.", "error")
+
+    return redirect(url_for('employer.applicants', job_id=job.id))
+
+
+# ------------------------------------------------------------------ #
+#  In-App Messaging
+# ------------------------------------------------------------------ #
+
+@employer.route('/employer/applications/<int:application_id>/messages.json')
+@login_required
+@employer_required
+def messages_json(application_id):
+    company = get_owned_company()
+    application = Application.query.get_or_404(application_id)
+    job = Job.query.get_or_404(application.job_id)
+    if job.company_id != company.id:
+        abort(403)
+
+    # Mark unread messages (from candidate) as read
+    Message.query.filter_by(application_id=application_id, read=False).filter(
+        Message.sender_user_id != current_user.id
+    ).update({"read": True})
+    db.session.commit()
+
+    msgs = Message.query.filter_by(application_id=application_id).order_by(Message.created_at).all()
+    return jsonify([{
+        "id": m.id,
+        "body": m.body,
+        "sender_name": m.sender.first_name or m.sender.email,
+        "is_mine": m.sender_user_id == current_user.id,
+        "time": m.created_at.strftime("%b %d, %H:%M") if m.created_at else "",
+    } for m in msgs])
+
+
+@employer.route('/employer/applications/<int:application_id>/message', methods=['POST'])
+@login_required
+@employer_required
+def send_message(application_id):
+    company = get_owned_company()
+    application = Application.query.get_or_404(application_id)
+    job = Job.query.get_or_404(application.job_id)
+    if job.company_id != company.id:
+        abort(403)
+
+    body = (request.json or {}).get('body', '').strip() if request.is_json else request.form.get('body', '').strip()
+    if not body:
+        return jsonify({"error": "Message body is required"}), 400
+
+    msg = Message(application_id=application_id, sender_user_id=current_user.id, body=body)
+    db.session.add(msg)
+
+    # Notify candidate
+    candidate = application.candidate
+    notif = Notification(
+        user_id=candidate.id,
+        message=f"New message from {company.name} about your {job.title} application.",
+        link=url_for('candidate.dashboard'),
+    )
+    db.session.add(notif)
+    db.session.commit()
+
+    return jsonify({
+        "id": msg.id,
+        "body": msg.body,
+        "sender_name": current_user.first_name or current_user.email,
+        "is_mine": True,
+        "time": msg.created_at.strftime("%b %d, %H:%M") if msg.created_at else "",
+    })
+
+
+# ------------------------------------------------------------------ #
+#  Employer Billing / Subscription
+# ------------------------------------------------------------------ #
+
+_PLAN_NAMES = {'free': 'Free', 'starter': 'Starter', 'pro': 'Pro'}
+_PLAN_PRICES = {'free': 0, 'starter': 79, 'pro': 249}
+
+
+def _get_or_create_sub(company_id):
+    sub = EmployerSubscription.query.filter_by(company_id=company_id).first()
+    if not sub:
+        sub = EmployerSubscription(company_id=company_id, plan='free')
+        db.session.add(sub)
+        db.session.commit()
+    return sub
+
+
+@employer.route('/employer/billing')
+@login_required
+@employer_required
+def billing():
+    company = get_owned_company()
+    sub = _get_or_create_sub(company.id)
+    open_jobs = Job.query.filter_by(company_id=company.id, status='open').count()
+    return render_template(
+        'employer_billing.html',
+        company=company,
+        sub=sub,
+        plan_limits=PLAN_LIMITS,
+        plan_names=_PLAN_NAMES,
+        plan_prices=_PLAN_PRICES,
+        open_jobs=open_jobs,
+    )
+
+
+@employer.route('/employer/billing/checkout', methods=['POST'])
+@login_required
+@employer_required
+def billing_checkout():
+    company = get_owned_company()
+    plan = request.form.get('plan')
+    if plan not in ('starter', 'pro'):
+        flash("Invalid plan.", "error")
+        return redirect(url_for('employer.billing'))
+
+    stripe.api_key = current_app.config.get('STRIPE_SECRET_KEY')
+    if not stripe.api_key:
+        flash("Stripe is not configured.", "error")
+        return redirect(url_for('employer.billing'))
+
+    price_key = 'STRIPE_STARTER_PRICE_ID' if plan == 'starter' else 'STRIPE_PRO_PRICE_ID'
+    price_id = current_app.config.get(price_key)
+    if not price_id:
+        flash(f"Stripe price for {plan} plan is not configured yet.", "error")
+        return redirect(url_for('employer.billing'))
+
+    sub = _get_or_create_sub(company.id)
+
+    try:
+        customer_kwargs = {}
+        if sub.stripe_customer_id:
+            customer_kwargs['customer'] = sub.stripe_customer_id
+        else:
+            customer_kwargs['customer_email'] = current_user.email
+
+        session = stripe.checkout.Session.create(
+            **customer_kwargs,
+            mode='subscription',
+            line_items=[{'price': price_id, 'quantity': 1}],
+            success_url=url_for('employer.billing_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}',
+            cancel_url=url_for('employer.billing', _external=True),
+            metadata={'company_id': company.id, 'plan': plan},
+        )
+        return redirect(session.url, code=303)
+    except stripe.error.StripeError as e:
+        flash(f"Stripe error: {e.user_message}", "error")
+        return redirect(url_for('employer.billing'))
+
+
+@employer.route('/employer/billing/success')
+@login_required
+@employer_required
+def billing_success():
+    session_id = request.args.get('session_id')
+    stripe.api_key = current_app.config.get('STRIPE_SECRET_KEY')
+    if session_id and stripe.api_key:
+        try:
+            session = stripe.checkout.Session.retrieve(session_id)
+            plan = (session.metadata or {}).get('plan', 'free')
+            company_id = int((session.metadata or {}).get('company_id', 0))
+            if company_id:
+                sub = _get_or_create_sub(company_id)
+                sub.plan = plan
+                sub.status = 'active'
+                sub.stripe_customer_id = session.customer
+                sub.stripe_subscription_id = session.subscription
+                db.session.commit()
+        except Exception:
+            logger.exception("Could not update subscription after checkout")
+
+    flash("Subscription activated! Your plan has been upgraded.", "success")
+    return redirect(url_for('employer.billing'))
+
+
+@employer.route('/employer/billing/portal')
+@login_required
+@employer_required
+def billing_portal():
+    company = get_owned_company()
+    sub = EmployerSubscription.query.filter_by(company_id=company.id).first()
+    stripe.api_key = current_app.config.get('STRIPE_SECRET_KEY')
+
+    if not stripe.api_key or not sub or not sub.stripe_customer_id:
+        flash("No active subscription found to manage.", "error")
+        return redirect(url_for('employer.billing'))
+
+    try:
+        portal = stripe.billing_portal.Session.create(
+            customer=sub.stripe_customer_id,
+            return_url=url_for('employer.billing', _external=True),
+        )
+        return redirect(portal.url, code=303)
+    except stripe.error.StripeError as e:
+        flash(f"Could not open billing portal: {e.user_message}", "error")
+        return redirect(url_for('employer.billing'))
+
+
+# ------------------------------------------------------------------ #
+#  In-App Video Meetings (Daily.co)
+# ------------------------------------------------------------------ #
+
+@employer.route('/employer/applications/<int:application_id>/meeting/create', methods=['POST'])
+@login_required
+@employer_required
+def create_meeting_room(application_id):
+    from daily_utils import create_room
+    company = get_owned_company()
+    application = Application.query.get_or_404(application_id)
+    job = Job.query.get_or_404(application.job_id)
+    if job.company_id != company.id:
+        abort(403)
+
+    date = request.form.get('date', '').strip()
+    time_ = request.form.get('time', '').strip()
+    notes = request.form.get('notes', '').strip()
+
+    if not date or not time_:
+        flash("Date and time are required.", "error")
+        return redirect(url_for('employer.applicants', job_id=job.id))
+
+    api_key = current_app.config.get('DAILY_API_KEY')
+    if not api_key:
+        flash("Daily.co API key is not configured.", "error")
+        return redirect(url_for('employer.applicants', job_id=job.id))
+
+    try:
+        room_data = create_room(api_key)
+    except Exception as e:
+        logger.exception("Daily.co room creation failed")
+        flash(f"Could not create meeting room: {e}", "error")
+        return redirect(url_for('employer.applicants', job_id=job.id))
+
+    room = MeetingRoom(
+        application_id=application_id,
+        employer_user_id=current_user.id,
+        room_name=room_data['name'],
+        room_url=room_data['url'],
+        scheduled_date=date,
+        scheduled_time=time_,
+        notes=notes or None,
+    )
+    db.session.add(room)
+
+    join_url = url_for('views.join_meeting', room_name=room_data['name'], _external=True)
+    application.scheduled_meeting = json.dumps({
+        "type": "virtual",
+        "date": date,
+        "time": time_,
+        "location_or_url": join_url,
+        "notes": notes,
+        "in_app": True,
+    })
+    db.session.commit()
+
+    candidate = application.candidate
+
+    # In-app notification (shows in the bell)
+    notif = Notification(
+        user_id=candidate.id,
+        message=f"{company.name} wants to meet you! Interview scheduled for {job.title} on {date} at {time_}.",
+        link=url_for('candidate.interviews'),
+    )
+    db.session.add(notif)
+    db.session.commit()
+
+    # Email
+    try:
+        send_branded_email(
+            to_email=candidate.email,
+            subject=f"🎉 {company.name} wants to interview you — {job.title}",
+            heading=f"{company.name} wants to meet you!",
+            body_html=(
+                f"Hi {candidate.first_name or 'there'},<br><br>"
+                f"Great news — <strong>{company.name}</strong> has scheduled a live video interview "
+                f"with you for <strong>{job.title}</strong>.<br><br>"
+                f"<strong>📅 Date:</strong> {date}<br>"
+                f"<strong>🕐 Time:</strong> {time_}<br>"
+                + (f"<strong>📝 Notes:</strong> {notes}<br>" if notes else "")
+                + "<br>The interview takes place directly on Avants — no Zoom needed. "
+                "Click the button below when it's time."
+            ),
+            plain_text=(
+                f"Hi {candidate.first_name or 'there'},\n\n"
+                f"{company.name} has scheduled a live interview for {job.title}.\n\n"
+                f"Date: {date}\nTime: {time_}\n"
+                + (f"Notes: {notes}\n" if notes else "")
+                + f"\nJoin here: {join_url}\n"
+            ),
+            cta_label="Join Interview",
+            cta_url=join_url,
+        )
+        flash("Interview room created — candidate notified by email and in-app.", "success")
+    except Exception:
+        flash("Interview room created and candidate notified in-app (email failed).", "error")
+
+    return redirect(url_for('employer.applicants', job_id=job.id))
+
+
+@employer.route('/employer/meetings')
+@login_required
+@employer_required
+def employer_meetings():
+    company = get_owned_company()
+    jobs = Job.query.filter_by(company_id=company.id).all()
+    job_ids = [j.id for j in jobs]
+    job_map = {j.id: j for j in jobs}
+
+    rooms = (
+        MeetingRoom.query
+        .join(Application, Application.id == MeetingRoom.application_id)
+        .filter(Application.job_id.in_(job_ids))
+        .order_by(MeetingRoom.created_at.desc())
+        .all()
+    )
+
+    candidate_map = {}
+    for room in rooms:
+        app = room.application
+        if app.candidate_user_id not in candidate_map:
+            candidate_map[app.candidate_user_id] = app.candidate
+
+    from datetime import date as _date
+    return render_template(
+        'employer_meetings.html',
+        company=company,
+        rooms=rooms,
+        job_map=job_map,
+        candidate_map=candidate_map,
+        now_date=_date.today().isoformat(),
+    )
+
+
+@employer.route('/employer/meetings/<int:room_id>/recordings')
+@login_required
+@employer_required
+def room_recordings(room_id):
+    from daily_utils import get_recordings
+    company = get_owned_company()
+    room = MeetingRoom.query.get_or_404(room_id)
+    job = Job.query.get_or_404(room.application.job_id)
+    if job.company_id != company.id:
+        abort(403)
+
+    api_key = current_app.config.get('DAILY_API_KEY')
+    if not api_key:
+        return jsonify({"error": "Daily.co not configured"}), 503
+    try:
+        recordings = get_recordings(api_key, room.room_name)
+        return jsonify(recordings)
+    except Exception as e:
+        logger.exception("Failed to fetch recordings for room %s", room.room_name)
+        return jsonify({"error": str(e)}), 502
+
+
+@employer.route('/employer/meetings/<int:room_id>/recording/<recording_id>/link')
+@login_required
+@employer_required
+def recording_link(room_id, recording_id):
+    from daily_utils import get_recording_link
+    company = get_owned_company()
+    room = MeetingRoom.query.get_or_404(room_id)
+    job = Job.query.get_or_404(room.application.job_id)
+    if job.company_id != company.id:
+        abort(403)
+
+    api_key = current_app.config.get('DAILY_API_KEY')
+    if not api_key:
+        return jsonify({"error": "Daily.co not configured"}), 503
+    try:
+        link = get_recording_link(api_key, recording_id)
+        return jsonify({"download_link": link})
+    except Exception as e:
+        logger.exception("Failed to get recording link %s", recording_id)
+        return jsonify({"error": str(e)}), 502
+
 
 @employer.route('/companies/<int:company_id>')
 def company_page(company_id):

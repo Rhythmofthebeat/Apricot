@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}Billing & Plan{% endblock %}
+
+{% block head %}
+<style>
+    .plan-card {
+        background: var(--surface);
+        border: 2px solid var(--border);
+        border-radius: var(--radius);
+        padding: 28px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        transition: border-color 0.15s, box-shadow 0.15s;
+        height: 100%;
+    }
+    .plan-card.current {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 4px rgba(79,70,229,0.08);
+    }
+    .plan-card.popular {
+        border-color: var(--primary);
+    }
+    .plan-name {
+        font-size: 1.05rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+    }
+    .plan-price {
+        font-size: 2.2rem;
+        font-weight: 800;
+        line-height: 1;
+        color: var(--text);
+    }
+    .plan-price span {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--text-muted);
+    }
+    .plan-feature {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+        color: var(--text);
+    }
+    .plan-feature i {
+        width: 16px;
+        text-align: center;
+        flex-shrink: 0;
+    }
+    .feature-yes { color: #059669; }
+    .feature-no  { color: #9ca3af; }
+    .current-badge {
+        display: inline-block;
+        background: var(--primary);
+        color: #fff;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 2px 10px;
+        margin-left: 8px;
+        vertical-align: middle;
+    }
+    .usage-bar-bg {
+        height: 6px; border-radius: 3px;
+        background: var(--border); overflow: hidden;
+    }
+    .usage-bar-fill {
+        height: 100%; border-radius: 3px;
+        background: var(--primary);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h1 class="h4 fw-bold mb-1">
+            <i class="fas fa-credit-card me-2 text-primary"></i>Billing &amp; Plan
+        </h1>
+        <p class="text-muted mb-0" style="font-size:0.85rem;">{{ company.name }}</p>
+    </div>
+    {% if sub.stripe_customer_id %}
+    <a href="{{ url_for('employer.billing_portal') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-gear me-1"></i> Manage Subscription
+    </a>
+    {% endif %}
+</div>
+
+<!-- Current usage -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold d-flex align-items-center gap-2">
+        Current usage
+        <span class="badge bg-primary" style="font-size:0.7rem;">{{ plan_names[sub.plan] }} plan</span>
+        {% if sub.status == 'past_due' %}
+        <span class="badge bg-danger" style="font-size:0.7rem;">Payment past due</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="d-flex justify-content-between mb-1" style="font-size:0.82rem;">
+                    <span>Open job posts</span>
+                    <span class="fw-semibold">{{ open_jobs }} / {{ plan_limits[sub.plan]['jobs'] if plan_limits[sub.plan]['jobs'] < 9999 else '∞' }}</span>
+                </div>
+                {% if plan_limits[sub.plan]['jobs'] < 9999 %}
+                <div class="usage-bar-bg">
+                    <div class="usage-bar-fill" style="width:{{ [open_jobs / plan_limits[sub.plan]['jobs'] * 100, 100]|min|int }}%;"></div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="col-md-6">
+                <div style="font-size:0.82rem;">
+                    <span class="fw-semibold">Talent pool search:</span>
+                    {% if plan_limits[sub.plan]['talent_search'] %}
+                    <span class="text-success">Enabled</span>
+                    {% else %}
+                    <span class="text-muted">Starter plan or above</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Plan cards -->
+<div class="row g-3 mb-4">
+
+    <!-- Free -->
+    <div class="col-md-4">
+        <div class="plan-card {% if sub.plan == 'free' %}current{% endif %}">
+            <div>
+                <div class="plan-name">
+                    Free
+                    {% if sub.plan == 'free' %}<span class="current-badge">Current</span>{% endif %}
+                </div>
+                <div class="plan-price mt-2">$0 <span>/ month</span></div>
+            </div>
+            <div class="d-flex flex-column gap-2">
+                <div class="plan-feature"><i class="fas fa-check feature-yes"></i> {{ plan_limits['free']['jobs'] }} open job posts</div>
+                <div class="plan-feature"><i class="fas fa-check feature-yes"></i> {{ plan_limits['free']['interviews_per_month'] }} AI interviews / month</div>
+                <div class="plan-feature"><i class="fas fa-xmark feature-no"></i> Talent pool search</div>
+                <div class="plan-feature"><i class="fas fa-xmark feature-no"></i> Priority support</div>
+            </div>
+            <div class="mt-auto">
+                {% if sub.plan == 'free' %}
+                <button class="btn btn-outline-secondary btn-sm w-100" disabled>Current plan</button>
+                {% else %}
+                <a href="{{ url_for('employer.billing_portal') }}" class="btn btn-outline-secondary btn-sm w-100">
+                    Downgrade
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Starter -->
+    <div class="col-md-4">
+        <div class="plan-card {% if sub.plan == 'starter' %}current{% else %}popular{% endif %}">
+            <div>
+                <div class="plan-name">
+                    Starter
+                    {% if sub.plan == 'starter' %}<span class="current-badge">Current</span>{% endif %}
+                </div>
+                <div class="plan-price mt-2">$79 <span>/ month</span></div>
+            </div>
+            <div class="d-flex flex-column gap-2">
+                <div class="plan-feature"><i class="fas fa-check feature-yes"></i> {{ plan_limits['starter']['jobs'] }} open job posts</div>
+                <div class="plan-feature"><i class="fas fa-check feature-yes"></i> {{ plan_limits['starter']['interviews_per_month'] }} AI interviews / month</div>
+                <div class="plan-feature"><i class="fas fa-check feature-yes"></i> Talent pool search</div>
+                <div class="plan-feature"><i class="fas fa-xmark feature-no"></i> Priority support</div>
+            </div>
+            <div class="mt-auto">
+                {% if sub.plan == 'starter' %}
+                <button class="btn btn-primary btn-sm w-100" disabled>Current plan</button>
+                {% elif sub.plan == 'pro' %}
+                <a href="{{ url_for('employer.billing_portal') }}" class="btn btn-outline-secondary btn-sm w-100">Downgrade</a>
+                {% else %}
+                <form method="POST" action="{{ url_for('employer.billing_checkout') }}">
+                    <input type="hidden" name="plan" value="starter">
+                    <button type="submit" class="btn btn-primary btn-sm w-100">
+                        <i class="fas fa-arrow-up me-1"></i> Upgrade to Starter
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Pro -->
+    <div class="col-md-4">
+        <div class="plan-card {% if sub.plan == 'pro' %}current{% endif %}">
+            <div>
+                <div class="plan-name">
+                    Pro
+                    {% if sub.plan == 'pro' %}<span class="current-badge">Current</span>{% endif %}
+                </div>
+                <div class="plan-price mt-2">$249 <span>/ month</span></div>
+            </div>
+            <div class="d-flex flex-column gap-2">
+                <div class="plan-feature"><i class="fas fa-check feature-yes"></i> Unlimited job posts</div>
+                <div class="plan-feature"><i class="fas fa-check feature-yes"></i> Unlimited AI interviews</div>
+                <div class="plan-feature"><i class="fas fa-check feature-yes"></i> Talent pool search</div>
+                <div class="plan-feature"><i class="fas fa-check feature-yes"></i> Priority support</div>
+            </div>
+            <div class="mt-auto">
+                {% if sub.plan == 'pro' %}
+                <button class="btn btn-primary btn-sm w-100" disabled>Current plan</button>
+                {% else %}
+                <form method="POST" action="{{ url_for('employer.billing_checkout') }}">
+                    <input type="hidden" name="plan" value="pro">
+                    <button type="submit" class="btn btn-primary btn-sm w-100">
+                        <i class="fas fa-arrow-up me-1"></i> Upgrade to Pro
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="card" style="background:var(--bg);">
+    <div class="card-body p-3" style="font-size:0.82rem;color:var(--text-muted);">
+        <i class="fas fa-circle-info me-1"></i>
+        Billing is monthly. You can upgrade, downgrade, or cancel at any time from the Manage Subscription portal.
+        Downgrading takes effect at the end of the current billing period.
+    </div>
+</div>
+{% endblock %}

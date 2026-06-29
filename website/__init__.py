@@ -67,6 +67,9 @@ def _run_migrations(db):
         "ALTER TABLE application ADD COLUMN ai_likelihood TEXT",
         # user — supabase auth uid for admin API calls
         "ALTER TABLE \"user\" ADD COLUMN supabase_uid VARCHAR(200)",
+        # candidate_profile — profile basics
+        "ALTER TABLE candidate_profile ADD COLUMN headline VARCHAR(200)",
+        "ALTER TABLE candidate_profile ADD COLUMN target_roles VARCHAR(300)",
         # candidate_profile — talent pool opt-in fields
         "ALTER TABLE candidate_profile ADD COLUMN open_to_work BOOLEAN NOT NULL DEFAULT 0",
         "ALTER TABLE candidate_profile ADD COLUMN skills TEXT",
@@ -74,6 +77,15 @@ def _run_migrations(db):
         "ALTER TABLE candidate_profile ADD COLUMN availability VARCHAR(50)",
         "ALTER TABLE candidate_profile ADD COLUMN years_experience VARCHAR(20)",
         "ALTER TABLE candidate_profile ADD COLUMN location VARCHAR(200)",
+        # earn_task — domain gating for contractor network
+        "ALTER TABLE earn_task ADD COLUMN required_domains TEXT",
+        # earn_task — consensus scoring
+        "ALTER TABLE earn_task ADD COLUMN min_responses INTEGER NOT NULL DEFAULT 3",
+        "ALTER TABLE earn_task ADD COLUMN consensus_answer TEXT",
+        # task_submission — per-submission agreement with consensus
+        "ALTER TABLE task_submission ADD COLUMN agreement_score REAL",
+        # contractor_profile — Stripe Connect payout flag
+        "ALTER TABLE contractor_profile ADD COLUMN payout_enabled BOOLEAN NOT NULL DEFAULT 0",
     ]
     with db.engine.connect() as conn:
         for stmt in new_columns:
@@ -119,7 +131,7 @@ def create_app():
     
     os.makedirs(upload_path, exist_ok=True)
 
-    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission, SavedJob
+    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission, SavedJob, ContractorProfile, MeetingRoom, Message, EmployerSubscription, MeetingProposal
 
     with app.app_context():
         db.create_all()
@@ -140,6 +152,40 @@ def create_app():
     app.register_blueprint(admin_bp, url_prefix='/')
 
     from datetime import datetime, timezone
+    from flask_login import current_user as _cu
+
+    @app.context_processor
+    def inject_globals():
+        if not _cu.is_authenticated:
+            return {"unread_messages": 0}
+        from .models import Message, Application, Job, Company
+        try:
+            base_q = (
+                db.session.query(db.func.count(Message.id))
+                .join(Application, Application.id == Message.application_id)
+                .filter(Message.read == False, Message.sender_user_id != _cu.id)
+            )
+            if _cu.role == 'employer':
+                company = Company.query.filter_by(owner_user_id=_cu.id).first()
+                count = (
+                    base_q.join(Job, Job.id == Application.job_id)
+                    .filter(Job.company_id == company.id)
+                    .scalar() or 0
+                ) if company else 0
+            else:
+                count = base_q.filter(Application.candidate_user_id == _cu.id).scalar() or 0
+            return {"unread_messages": count}
+        except Exception:
+            return {"unread_messages": 0}
+
+    import json as _json
+
+    @app.template_filter('from_json')
+    def from_json_filter(s):
+        try:
+            return _json.loads(s)
+        except Exception:
+            return []
 
     @app.template_filter('time_ago')
     def time_ago_filter(dt):

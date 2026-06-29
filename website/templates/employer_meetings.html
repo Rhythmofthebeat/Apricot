@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Meetings & Recordings{% endblock %}
+
+{% block head %}
+<style>
+    .meet-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 20px;
+        margin-bottom: 10px;
+    }
+    .meet-card.upcoming { border-left: 4px solid #059669; }
+    .meet-card-header {
+        display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    }
+    .meet-avatar {
+        width: 40px; height: 40px; border-radius: 50%;
+        background: var(--primary-soft); color: var(--primary);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 800; font-size: 1rem; flex-shrink: 0;
+    }
+    .meet-meta { font-size: 0.78rem; color: var(--text-muted); }
+    .rec-row {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 0; border-top: 1px solid var(--border);
+        flex-wrap: wrap;
+    }
+    .status-chip {
+        font-size: 0.72rem; font-weight: 700; border-radius: 999px;
+        padding: 3px 10px; white-space: nowrap;
+    }
+    .chip-upcoming { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+    .chip-past     { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set today = now_date %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <a href="{{ url_for('employer.dashboard') }}" class="btn btn-sm btn-outline-secondary mb-2">
+            <i class="fas fa-arrow-left me-1"></i> Dashboard
+        </a>
+        <h1 class="h4 fw-bold mb-0">
+            <i class="fas fa-circle-dot me-2 text-primary"></i>Meetings &amp; Recordings
+        </h1>
+    </div>
+</div>
+
+{% if not rooms %}
+<div class="card">
+    <div class="card-body text-center p-5 text-muted">
+        <i class="fas fa-video mb-3" style="font-size:2rem;opacity:0.25;display:block;"></i>
+        <p class="fw-semibold mb-1">No meetings yet</p>
+        <p class="small mb-0">Open an applicant's card and click <strong>Live Interview</strong> to create a room.</p>
+    </div>
+</div>
+{% else %}
+<p class="text-muted mb-3" style="font-size:0.82rem;">
+    {{ rooms|length }} meeting{{ 's' if rooms|length != 1 }} — click <strong>Recordings</strong> to fetch saved video after a call ends.
+</p>
+
+{% for room in rooms %}
+{% set app = room.application %}
+{% set job = job_map.get(app.job_id) %}
+{% set candidate = candidate_map.get(app.candidate_user_id) %}
+{% set initial = (candidate.first_name or candidate.email or '?')[0].upper() %}
+{% set is_upcoming = room.scheduled_date and room.scheduled_date >= today %}
+
+<div class="meet-card {{ 'upcoming' if is_upcoming }}">
+    <div class="meet-card-header">
+        <div class="meet-avatar">{{ initial }}</div>
+        <div class="flex-grow-1">
+            <div class="fw-semibold" style="font-size:0.95rem;">
+                {{ candidate.first_name or candidate.email }}
+                <span class="text-muted fw-normal" style="font-size:0.82rem;">· {{ candidate.email }}</span>
+            </div>
+            <div class="meet-meta">
+                {% if job %}{{ job.title }}{% endif %}
+                {% if room.scheduled_date %} · {{ room.scheduled_date }}{% if room.scheduled_time %} at {{ room.scheduled_time }}{% endif %}{% endif %}
+            </div>
+        </div>
+
+        {% if is_upcoming %}
+        <span class="status-chip chip-upcoming"><i class="fas fa-circle me-1" style="font-size:0.5rem;vertical-align:middle;"></i>Upcoming</span>
+        {% else %}
+        <span class="status-chip chip-past">Past</span>
+        {% endif %}
+
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <a href="{{ url_for('views.join_meeting', room_name=room.room_name) }}"
+               target="_blank"
+               class="btn btn-sm {{ 'btn-success fw-bold' if is_upcoming else 'btn-outline-secondary' }}">
+                <i class="fas fa-{{ 'circle-dot' if is_upcoming else 'arrow-right' }} me-1"></i>
+                {{ 'Join Now' if is_upcoming else 'Rejoin' }}
+            </a>
+            <button class="btn btn-sm btn-outline-primary"
+                    onclick="toggleRecordings({{ room.id }}, this)">
+                <i class="fas fa-circle-play me-1"></i> Recordings
+            </button>
+        </div>
+    </div>
+
+    {% if room.notes %}
+    <div class="mt-2 text-muted" style="font-size:0.82rem;">
+        <i class="fas fa-note-sticky me-1"></i>{{ room.notes }}
+    </div>
+    {% endif %}
+
+    <div id="recs-{{ room.id }}" style="display:none;">
+        <div class="rec-row text-muted" style="font-size:0.82rem;">
+            <i class="fas fa-circle-info me-1"></i>Click "Recordings" to load recordings for this meeting.
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const loadedRooms = new Set();
+
+async function toggleRecordings(roomId, btn) {
+    const container = document.getElementById(`recs-${roomId}`);
+    if (container.style.display !== 'none') {
+        container.style.display = 'none';
+        return;
+    }
+    container.style.display = 'block';
+    if (loadedRooms.has(roomId)) return;
+
+    container.innerHTML = '<div class="rec-row text-muted" style="font-size:0.82rem;"><i class="fas fa-spinner fa-spin me-2"></i>Loading recordings…</div>';
+
+    try {
+        const res = await fetch(`/employer/meetings/${roomId}/recordings`);
+        const data = await res.json();
+
+        if (data.error) {
+            container.innerHTML = `<div class="rec-row text-danger" style="font-size:0.82rem;">${data.error}</div>`;
+            return;
+        }
+        if (!Array.isArray(data) || !data.length) {
+            container.innerHTML = '<div class="rec-row text-muted" style="font-size:0.82rem;"><i class="fas fa-circle-info me-1"></i>No recordings yet. Daily.co may take a few minutes to process after the call ends.</div>';
+            loadedRooms.add(roomId);
+            return;
+        }
+
+        let html = '';
+        data.forEach((rec, i) => {
+            const dur = rec.duration ? `${Math.round(rec.duration / 60)} min` : '';
+            const started = rec.start_ts ? new Date(rec.start_ts * 1000).toLocaleString() : '';
+            html += `
+            <div class="rec-row">
+                <i class="fas fa-circle-play text-primary" style="font-size:1.1rem;"></i>
+                <div class="flex-grow-1">
+                    <div class="fw-semibold" style="font-size:0.88rem;">Recording ${i + 1}</div>
+                    <div class="text-muted" style="font-size:0.78rem;">${started}${dur ? ' · ' + dur : ''}</div>
+                </div>
+                <button class="btn btn-sm btn-outline-primary" onclick="downloadRec(${roomId}, '${rec.id}', this)">
+                    <i class="fas fa-download me-1"></i> Download
+                </button>
+            </div>`;
+        });
+        container.innerHTML = html;
+        loadedRooms.add(roomId);
+    } catch (e) {
+        container.innerHTML = `<div class="rec-row text-danger" style="font-size:0.82rem;">Error: ${e.message}</div>`;
+    }
+}
+
+async function downloadRec(roomId, recordingId, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>';
+    try {
+        const res = await fetch(`/employer/meetings/${roomId}/recording/${recordingId}/link`);
+        const data = await res.json();
+        if (data.download_link) {
+            window.open(data.download_link, '_blank');
+        } else {
+            alert('Could not get link: ' + (data.error || 'unknown'));
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-download me-1"></i> Download';
+    }
+}
+</script>
+{% endblock %}

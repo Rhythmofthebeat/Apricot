@@ -258,6 +258,11 @@
             <div class="card-tab" id="tab-notes-{{ app.id }}" onclick="switchAppTab({{ app.id }}, 'notes', event)">
                 <i class="fas fa-note-sticky me-1"></i> Notes{% if app.employer_notes %} <span style="width:6px;height:6px;border-radius:50%;background:var(--primary);display:inline-block;margin-left:3px;vertical-align:middle;"></span>{% endif %}
             </div>
+            <div class="card-tab" id="tab-messages-{{ app.id }}" onclick="switchAppTab({{ app.id }}, 'messages', event)">
+                <i class="fas fa-message me-1"></i> Messages
+                {% set unread_for_app = app.messages | rejectattr('read') | selectattr('sender_user_id', 'ne', current_user.id) | list %}
+                {% if unread_for_app %}<span class="badge bg-primary ms-1" style="font-size:0.6rem;">{{ unread_for_app|length }}</span>{% endif %}
+            </div>
         </div>
 
         <!-- ── OVERVIEW TAB ── -->
@@ -280,6 +285,12 @@
                 </button>
                 <button class="btn btn-outline-primary btn-sm" onclick="toggleSchedule({{ app.id }}, 'in_person', event)">
                     <i class="fas fa-handshake me-1"></i> In-Person
+                </button>
+                <button class="btn btn-outline-primary btn-sm" onclick="togglePropose({{ app.id }}, event)">
+                    <i class="fas fa-calendar me-1"></i> Propose Times
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="toggleInAppMeeting({{ app.id }}, event)">
+                    <i class="fas fa-circle-dot me-1"></i> Start Now
                 </button>
             </div>
 
@@ -316,6 +327,84 @@
                         <i class="fas fa-paper-plane me-1"></i> Send Invite
                     </button>
                 </form>
+            </div>
+
+            <!-- Propose Times form -->
+            <div class="schedule-form" id="propose-{{ app.id }}" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <strong class="small"><i class="fas fa-calendar me-1 text-primary"></i>Propose interview times</strong>
+                    <button type="button" class="btn btn-sm btn-link text-muted p-0" onclick="document.getElementById('propose-{{ app.id }}').style.display='none'; event.stopPropagation();">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <p class="text-muted mb-3" style="font-size:0.82rem;">
+                    Offer up to 3 time slots. The candidate picks one and the interview room is created instantly.
+                </p>
+                <form method="POST" action="{{ url_for('employer.propose_times', application_id=app.id) }}">
+                    {% for i in [1, 2, 3] %}
+                    <div class="row g-2 mb-2 align-items-center">
+                        <div class="col-auto text-muted" style="font-size:0.8rem;width:28px;">{{ i }}.</div>
+                        <div class="col">
+                            <input type="date" class="form-control form-control-sm" name="date_{{ i }}">
+                        </div>
+                        <div class="col-auto">
+                            <input type="time" class="form-control form-control-sm" name="time_{{ i }}">
+                        </div>
+                    </div>
+                    {% endfor %}
+                    <div class="mb-2 mt-1">
+                        <input type="text" class="form-control form-control-sm" name="notes" placeholder="Any notes for the candidate (optional)">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-paper-plane me-1"></i> Send to Candidate
+                    </button>
+                </form>
+            </div>
+
+            <!-- In-app meeting form -->
+            <div class="schedule-form" id="inapp-{{ app.id }}" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <strong class="small"><i class="fas fa-circle-dot me-1 text-primary"></i>Create live in-app interview room</strong>
+                    <button type="button" class="btn btn-sm btn-link text-muted p-0" onclick="document.getElementById('inapp-{{ app.id }}').style.display='none'; event.stopPropagation();">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <p class="text-muted mb-3" style="font-size:0.82rem;">
+                    A private video room will be created on Avants. The candidate receives a join link by email. Calls are recorded and saved for you to review.
+                </p>
+                <form method="POST" action="{{ url_for('employer.create_meeting_room', application_id=app.id) }}">
+                    <div class="row g-2 mb-2">
+                        <div class="col-sm-4">
+                            <label class="form-label small fw-semibold">Date</label>
+                            <input type="date" class="form-control form-control-sm" name="date" required>
+                        </div>
+                        <div class="col-sm-3">
+                            <label class="form-label small fw-semibold">Time</label>
+                            <input type="time" class="form-control form-control-sm" name="time" required>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Notes (optional)</label>
+                        <textarea class="form-control form-control-sm" name="notes" rows="2" placeholder="Any details to include in the invite…"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-circle-dot me-1"></i> Create Room &amp; Send Invite
+                    </button>
+                </form>
+                {% if app.meeting_rooms %}
+                <div class="mt-3 pt-3" style="border-top:1px solid var(--border);">
+                    <div class="text-muted mb-2" style="font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Past rooms</div>
+                    {% for mr in app.meeting_rooms %}
+                    <div class="d-flex align-items-center gap-2 mb-1" style="font-size:0.82rem;">
+                        <a href="{{ url_for('views.join_meeting', room_name=mr.room_name) }}" target="_blank" class="text-primary">
+                            <i class="fas fa-video me-1"></i>{{ mr.scheduled_date or 'Unscheduled' }} {{ mr.scheduled_time or '' }}
+                        </a>
+                        <span class="text-muted">·</span>
+                        <a href="{{ url_for('employer.employer_meetings') }}" class="text-muted" style="font-size:0.78rem;">View recordings</a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
 
             <!-- Work authorization -->
@@ -569,6 +658,25 @@
             </div>
         </div><!-- /pane-notes -->
 
+        <!-- ── MESSAGES TAB ── -->
+        <div id="pane-messages-{{ app.id }}" style="display:none;">
+            <div class="detail-section">
+                <div class="detail-section-label">Message Candidate</div>
+                <div id="msgFeed-{{ app.id }}"
+                     style="max-height:320px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;font-size:0.85rem;">
+                    <div class="text-muted text-center py-3" style="font-size:0.82rem;">Loading…</div>
+                </div>
+                <div class="d-flex gap-2">
+                    <input type="text" id="msgInput-{{ app.id }}" class="form-control form-control-sm"
+                           placeholder="Type a message…"
+                           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg({{ app.id }});}">
+                    <button class="btn btn-primary btn-sm px-3" onclick="sendMsg({{ app.id }})">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div><!-- /pane-messages -->
+
     </div><!-- /pipeline-body -->
 </div><!-- /pipeline-card -->
 {% endfor %}
@@ -598,12 +706,78 @@ function animateAiCircles(container) {
     });
 }
 
+const _msgLoaded = new Set();
+
 function switchAppTab(appId, tab, event) {
     event.stopPropagation();
-    ['overview', 'resume', 'notes'].forEach(t => {
+    ['overview', 'resume', 'notes', 'messages'].forEach(t => {
         document.getElementById(`pane-${t}-${appId}`).style.display = t === tab ? 'block' : 'none';
         document.getElementById(`tab-${t}-${appId}`).classList.toggle('active', t === tab);
     });
+    if (tab === 'messages' && !_msgLoaded.has(appId)) loadMsgs(appId);
+}
+
+async function loadMsgs(appId) {
+    const feed = document.getElementById(`msgFeed-${appId}`);
+    try {
+        const res = await fetch(`/employer/applications/${appId}/messages.json`);
+        const msgs = await res.json();
+        renderMsgs(appId, msgs);
+        _msgLoaded.add(appId);
+        // Clear badge
+        const tab = document.getElementById(`tab-messages-${appId}`);
+        const badge = tab && tab.querySelector('.badge');
+        if (badge) badge.remove();
+    } catch(e) {
+        feed.innerHTML = `<div class="text-danger small">Failed to load messages.</div>`;
+    }
+}
+
+function renderMsgs(appId, msgs) {
+    const feed = document.getElementById(`msgFeed-${appId}`);
+    if (!msgs.length) {
+        feed.innerHTML = `<div class="text-muted text-center py-3" style="font-size:0.82rem;">No messages yet. Start the conversation below.</div>`;
+        return;
+    }
+    feed.innerHTML = msgs.map(m => `
+        <div style="display:flex;justify-content:${m.is_mine ? 'flex-end' : 'flex-start'};margin-bottom:8px;">
+            <div style="max-width:72%;background:${m.is_mine ? 'var(--primary)' : 'var(--surface)'};
+                        color:${m.is_mine ? '#fff' : 'var(--text)'};
+                        border:1px solid ${m.is_mine ? 'var(--primary)' : 'var(--border)'};
+                        border-radius:12px;padding:8px 12px;font-size:0.85rem;">
+                <div>${escHtml(m.body)}</div>
+                <div style="font-size:0.68rem;opacity:0.65;margin-top:3px;text-align:right;">${escHtml(m.time)}</div>
+            </div>
+        </div>`).join('');
+    feed.scrollTop = feed.scrollHeight;
+}
+
+async function sendMsg(appId) {
+    const input = document.getElementById(`msgInput-${appId}`);
+    const body = input.value.trim();
+    if (!body) return;
+    input.value = '';
+    try {
+        const res = await fetch(`/employer/applications/${appId}/message`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({body}),
+        });
+        const msg = await res.json();
+        if (msg.error) { alert(msg.error); return; }
+        const feed = document.getElementById(`msgFeed-${appId}`);
+        const empty = feed.querySelector('.text-muted');
+        if (empty) empty.remove();
+        const el = document.createElement('div');
+        el.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:8px;';
+        el.innerHTML = `<div style="max-width:72%;background:var(--primary);color:#fff;border:1px solid var(--primary);border-radius:12px;padding:8px 12px;font-size:0.85rem;"><div>${escHtml(msg.body)}</div><div style="font-size:0.68rem;opacity:0.65;margin-top:3px;text-align:right;">${escHtml(msg.time)}</div></div>`;
+        feed.appendChild(el);
+        feed.scrollTop = feed.scrollHeight;
+    } catch(e) { alert('Failed to send.'); }
+}
+
+function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function toggleSchedule(appId, type, event) {
@@ -624,6 +798,32 @@ function toggleSchedule(appId, type, event) {
         inputEl.placeholder = '123 Main St, City, State';
     }
 
+    const isVisible = box.style.display !== 'none';
+    box.style.display = isVisible ? 'none' : 'block';
+    if (!isVisible) {
+        document.getElementById(`card-${appId}`).classList.add('open');
+    }
+}
+
+function togglePropose(appId, event) {
+    event.stopPropagation();
+    const box = document.getElementById(`propose-${appId}`);
+    ['schedule', 'inapp'].forEach(id => {
+        const el = document.getElementById(`${id}-${appId}`);
+        if (el) el.style.display = 'none';
+    });
+    const isVisible = box.style.display !== 'none';
+    box.style.display = isVisible ? 'none' : 'block';
+    if (!isVisible) document.getElementById(`card-${appId}`).classList.add('open');
+}
+
+function toggleInAppMeeting(appId, event) {
+    event.stopPropagation();
+    const box = document.getElementById(`inapp-${appId}`);
+    ['schedule', 'propose'].forEach(id => {
+        const el = document.getElementById(`${id}-${appId}`);
+        if (el) el.style.display = 'none';
+    });
     const isVisible = box.style.display !== 'none';
     box.style.display = isVisible ? 'none' : 'block';
     if (!isVisible) {

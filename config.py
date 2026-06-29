@@ -6,8 +6,11 @@ load_dotenv()
 
 class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    DAILY_API_KEY = os.getenv("DAILY_API_KEY")
     STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
     STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+    STRIPE_STARTER_PRICE_ID = os.getenv("STRIPE_STARTER_PRICE_ID")   # monthly recurring price
+    STRIPE_PRO_PRICE_ID = os.getenv("STRIPE_PRO_PRICE_ID")
     PLATFORM_FEE_PERCENT = 12.5
     MAIL_SERVER = os.getenv("MAIL_SERVER", "smtp.gmail.com")
     MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))

@@ -13,7 +13,8 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import getSampleStyleSheet
 
 from . import db
-from .models import Job, Application, CandidateProfile, Company, Notification, SavedJob, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
+from .models import Job, Application, CandidateProfile, Company, Notification, SavedJob, Message, MeetingRoom, MeetingProposal, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
+from email_utils import send_branded_email
 
 from ai_services import (
     extract_text_from_file,
@@ -449,12 +450,157 @@ def dashboard():
 
     candidate_profile = CandidateProfile.query.filter_by(user_id=current_user.id).first()
     has_profile = bool(candidate_profile and (candidate_profile.resume_text or '').strip())
+
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    app_ids = [a.id for a in applications]
+    upcoming_interviews = (
+        MeetingRoom.query
+        .filter(MeetingRoom.application_id.in_(app_ids))
+        .filter(MeetingRoom.scheduled_date >= today)
+        .order_by(MeetingRoom.scheduled_date, MeetingRoom.scheduled_time)
+        .all()
+    ) if app_ids else []
+
+    pending_proposals = (
+        MeetingProposal.query
+        .filter(MeetingProposal.application_id.in_(app_ids))
+        .filter_by(status='pending')
+        .count()
+    ) if app_ids else 0
+
     return render_template(
         "candidate_dashboard.html",
         applications=applications,
         meetings=meetings,
         has_profile=has_profile,
         roadmaps=roadmaps,
+        upcoming_interviews=upcoming_interviews,
+        pending_proposals=pending_proposals,
+    )
+
+
+@candidate.route('/candidate/proposals/<int:proposal_id>/accept', methods=['POST'])
+@login_required
+def accept_slot(proposal_id):
+    from daily_utils import create_room as _create_room
+    from flask import current_app
+
+    proposal = MeetingProposal.query.get_or_404(proposal_id)
+    application = Application.query.get_or_404(proposal.application_id)
+    if application.candidate_user_id != current_user.id:
+        abort(403)
+    if proposal.status != 'pending':
+        flash("This scheduling request is no longer active.", "error")
+        return redirect(url_for('candidate.interviews'))
+
+    slot_index = request.form.get('slot')
+    slots = json.loads(proposal.slots)
+    try:
+        slot = slots[int(slot_index)]
+    except (TypeError, IndexError, ValueError):
+        flash("Please select a time slot.", "error")
+        return redirect(url_for('candidate.interviews'))
+
+    api_key = current_app.config.get('DAILY_API_KEY')
+    if not api_key:
+        flash("Video rooms are not configured yet — contact support.", "error")
+        return redirect(url_for('candidate.interviews'))
+
+    try:
+        room_data = _create_room(api_key)
+    except Exception as e:
+        flash(f"Could not create room: {e}", "error")
+        return redirect(url_for('candidate.interviews'))
+
+    room = MeetingRoom(
+        application_id=application.id,
+        employer_user_id=proposal.employer_user_id,
+        room_name=room_data['name'],
+        room_url=room_data['url'],
+        scheduled_date=slot['date'],
+        scheduled_time=slot['time'],
+        notes=proposal.notes,
+    )
+    db.session.add(room)
+
+    proposal.status = 'accepted'
+    proposal.accepted_slot = json.dumps(slot)
+
+    join_url = url_for('views.join_meeting', room_name=room_data['name'], _external=True)
+    application.scheduled_meeting = json.dumps({
+        'type': 'virtual', 'date': slot['date'], 'time': slot['time'],
+        'location_or_url': join_url, 'notes': proposal.notes or '', 'in_app': True,
+    })
+
+    employer = proposal.employer
+    notif = Notification(
+        user_id=employer.id,
+        message=f"{current_user.first_name or current_user.email} confirmed {slot['date']} at {slot['time']} for {application.job.title}.",
+        link=url_for('employer.employer_meetings'),
+    )
+    db.session.add(notif)
+    db.session.commit()
+
+    try:
+        send_branded_email(
+            to_email=employer.email,
+            subject=f"Interview confirmed — {application.job.title}",
+            heading="Interview time confirmed",
+            body_html=(
+                f"<strong>{current_user.first_name or current_user.email}</strong> has confirmed "
+                f"<strong>{slot['date']}</strong> at <strong>{slot['time']}</strong> "
+                f"for <strong>{application.job.title}</strong>.<br><br>"
+                "The interview room is ready."
+            ),
+            plain_text=(
+                f"{current_user.first_name or current_user.email} confirmed the interview:\n"
+                f"Job: {application.job.title}\nDate: {slot['date']}\nTime: {slot['time']}\n\nJoin: {join_url}\n"
+            ),
+            cta_label="Join Interview Room",
+            cta_url=join_url,
+        )
+    except Exception:
+        pass
+
+    flash(f"Interview confirmed for {slot['date']} at {slot['time']}. The room is ready!", "success")
+    return redirect(url_for('candidate.interviews'))
+
+
+@candidate.route('/candidate/interviews')
+@login_required
+def interviews():
+    """Candidate-facing page showing all their scheduled meetings."""
+    from datetime import date as _date
+    applications = Application.query.filter_by(candidate_user_id=current_user.id).all()
+    app_ids = [a.id for a in applications]
+    app_map = {a.id: a for a in applications}
+
+    rooms = (
+        MeetingRoom.query
+        .filter(MeetingRoom.application_id.in_(app_ids))
+        .order_by(MeetingRoom.scheduled_date.asc(), MeetingRoom.scheduled_time.asc())
+        .all()
+    )
+
+    today = _date.today().isoformat()
+    upcoming = [r for r in rooms if (r.scheduled_date or '') >= today]
+    past     = [r for r in rooms if (r.scheduled_date or '') < today]
+
+    pending_proposals = (
+        MeetingProposal.query
+        .filter(MeetingProposal.application_id.in_(app_ids))
+        .filter_by(status='pending')
+        .order_by(MeetingProposal.created_at.desc())
+        .all()
+    ) if app_ids else []
+
+    return render_template(
+        'candidate_interviews.html',
+        upcoming=upcoming,
+        past=past,
+        app_map=app_map,
+        pending_proposals=pending_proposals,
     )
 
 
@@ -845,3 +991,66 @@ def notification_preferences():
     current_user.notifications_enabled = bool(data.get("enabled", True))
     db.session.commit()
     return jsonify({"notifications_enabled": current_user.notifications_enabled})
+
+
+# ------------------------------------------------------------------ #
+#  In-App Messaging (candidate side)
+# ------------------------------------------------------------------ #
+
+@candidate.route('/candidate/applications/<int:application_id>/messages.json')
+@login_required
+def candidate_messages_json(application_id):
+    application = Application.query.get_or_404(application_id)
+    if application.candidate_user_id != current_user.id:
+        abort(403)
+
+    # Mark employer messages as read
+    Message.query.filter_by(application_id=application_id, read=False).filter(
+        Message.sender_user_id != current_user.id
+    ).update({"read": True})
+    db.session.commit()
+
+    msgs = Message.query.filter_by(application_id=application_id).order_by(Message.created_at).all()
+    return jsonify([{
+        "id": m.id,
+        "body": m.body,
+        "sender_name": m.sender.first_name or m.sender.email,
+        "is_mine": m.sender_user_id == current_user.id,
+        "time": m.created_at.strftime("%b %d, %H:%M") if m.created_at else "",
+    } for m in msgs])
+
+
+@candidate.route('/candidate/applications/<int:application_id>/message', methods=['POST'])
+@login_required
+def candidate_send_message(application_id):
+    application = Application.query.get_or_404(application_id)
+    if application.candidate_user_id != current_user.id:
+        abort(403)
+
+    body = (request.json or {}).get('body', '').strip() if request.is_json else request.form.get('body', '').strip()
+    if not body:
+        return jsonify({"error": "Message body is required"}), 400
+
+    msg = Message(application_id=application_id, sender_user_id=current_user.id, body=body)
+    db.session.add(msg)
+
+    # Notify employer
+    job = application.job
+    employer_company = job.company
+    owner = db.session.get(type(current_user), employer_company.owner_user_id)
+    if owner:
+        notif = Notification(
+            user_id=owner.id,
+            message=f"{current_user.first_name or current_user.email} sent a message about their {job.title} application.",
+            link=url_for('employer.applicants', job_id=job.id),
+        )
+        db.session.add(notif)
+    db.session.commit()
+
+    return jsonify({
+        "id": msg.id,
+        "body": msg.body,
+        "sender_name": current_user.first_name or current_user.email,
+        "is_mine": True,
+        "time": msg.created_at.strftime("%b %d, %H:%M") if msg.created_at else "",
+    })

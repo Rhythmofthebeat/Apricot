@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}My Interviews{% endblock %}
+
+{% block head %}
+<style>
+    .interview-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 18px 22px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        transition: border-color 0.13s;
+    }
+    .interview-card.upcoming { border-left: 4px solid #059669; }
+    .interview-card.past     { opacity: 0.7; }
+    .co-avatar {
+        width: 44px; height: 44px; border-radius: 10px;
+        background: var(--primary-soft); color: var(--primary);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 800; font-size: 1.1rem; flex-shrink: 0;
+    }
+    .int-title  { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
+    .int-meta   { font-size: 0.78rem; color: var(--text-muted); }
+    .int-time   {
+        font-size: 0.82rem; font-weight: 600;
+        background: var(--bg); border: 1px solid var(--border);
+        border-radius: 8px; padding: 6px 12px; white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .int-time.soon { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h4 fw-bold mb-0">
+        <i class="fas fa-circle-dot me-2 text-primary"></i>My Interviews
+    </h1>
+</div>
+
+{% if pending_proposals %}
+<h2 class="h6 fw-bold text-uppercase mb-3" style="letter-spacing:.06em;font-size:0.72rem;color:#d97706;">
+    <i class="fas fa-clock me-1"></i> Action required — pick a time
+</h2>
+{% for proposal in pending_proposals %}
+{% set app = app_map[proposal.application_id] %}
+{% set slots = proposal.slots | from_json %}
+<div class="card mb-3" style="border-color:#fde68a;background:#fffbeb;">
+    <div class="card-body p-4">
+        <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+            {% if app.job.company.logo_filename %}
+            <img src="{{ url_for('static', filename='logos/' + app.job.company.logo_filename) }}?v={{ app.job.company.logo_version or 0 }}"
+                 alt="{{ app.job.company.name }}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;">
+            {% else %}
+            <div class="co-avatar" style="background:#fde68a;color:#92400e;">{{ app.job.company.name[0]|upper }}</div>
+            {% endif %}
+            <div>
+                <div class="fw-bold" style="font-size:0.95rem;">{{ app.job.company.name }} wants to interview you</div>
+                <div class="text-muted" style="font-size:0.82rem;">{{ app.job.title }}</div>
+            </div>
+        </div>
+
+        {% if proposal.notes %}
+        <div class="mb-3 text-muted" style="font-size:0.85rem;">
+            <i class="fas fa-note-sticky me-1"></i>{{ proposal.notes }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('candidate.accept_slot', proposal_id=proposal.id) }}">
+            <p class="fw-semibold mb-2" style="font-size:0.85rem;">Choose a time that works for you:</p>
+            {% for slot in slots %}
+            <label class="d-flex align-items-center gap-3 mb-2 p-3" style="border:1.5px solid #fbbf24;border-radius:8px;cursor:pointer;background:#fff;">
+                <input type="radio" name="slot" value="{{ loop.index0 }}" required style="flex-shrink:0;">
+                <span class="fw-semibold" style="font-size:0.9rem;">
+                    <i class="fas fa-calendar me-1 text-warning"></i>
+                    {{ slot.date }} at {{ slot.time }}
+                </span>
+            </label>
+            {% endfor %}
+            <button type="submit" class="btn btn-warning fw-bold mt-2">
+                <i class="fas fa-check me-1"></i> Confirm this time
+            </button>
+        </form>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if not upcoming and not past and not pending_proposals %}
+<div class="card">
+    <div class="card-body text-center p-5 text-muted">
+        <i class="fas fa-video mb-3" style="font-size:2rem;opacity:0.25;display:block;"></i>
+        <p class="fw-semibold mb-1">No interviews scheduled yet</p>
+        <p class="small mb-0">When an employer schedules a live interview with you, it will appear here.</p>
+    </div>
+</div>
+{% else %}
+
+{% if upcoming %}
+<h2 class="h6 fw-bold text-muted text-uppercase mb-3" style="letter-spacing:.06em;font-size:0.72rem;">
+    Upcoming <span class="badge bg-success ms-1" style="font-size:0.65rem;">{{ upcoming|length }}</span>
+</h2>
+{% for room in upcoming %}
+{% set app = app_map[room.application_id] %}
+{% set company = app.job.company %}
+{% set initial = (company.name or '?')[0].upper() %}
+<div class="interview-card upcoming">
+    {% if company.logo_filename %}
+    <img src="{{ url_for('static', filename='logos/' + company.logo_filename) }}?v={{ company.logo_version or 0 }}"
+         alt="{{ company.name }}" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;">
+    {% else %}
+    <div class="co-avatar">{{ initial }}</div>
+    {% endif %}
+
+    <div class="flex-grow-1">
+        <div class="int-title">{{ app.job.title }}</div>
+        <div class="int-meta">{{ company.name }}</div>
+        {% if room.notes %}
+        <div class="int-meta mt-1"><i class="fas fa-note-sticky me-1"></i>{{ room.notes }}</div>
+        {% endif %}
+    </div>
+
+    <div class="int-time soon">
+        <i class="fas fa-calendar me-1"></i>
+        {{ room.scheduled_date }}{% if room.scheduled_time %} at {{ room.scheduled_time }}{% endif %}
+    </div>
+
+    <a href="{{ url_for('views.join_meeting', room_name=room.room_name) }}"
+       class="btn btn-success fw-bold btn-sm">
+        <i class="fas fa-video me-1"></i> Join Interview
+    </a>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if past %}
+<h2 class="h6 fw-bold text-muted text-uppercase mb-3 mt-4" style="letter-spacing:.06em;font-size:0.72rem;">Past</h2>
+{% for room in past %}
+{% set app = app_map[room.application_id] %}
+{% set company = app.job.company %}
+{% set initial = (company.name or '?')[0].upper() %}
+<div class="interview-card past">
+    {% if company.logo_filename %}
+    <img src="{{ url_for('static', filename='logos/' + company.logo_filename) }}?v={{ company.logo_version or 0 }}"
+         alt="{{ company.name }}" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;">
+    {% else %}
+    <div class="co-avatar">{{ initial }}</div>
+    {% endif %}
+
+    <div class="flex-grow-1">
+        <div class="int-title">{{ app.job.title }}</div>
+        <div class="int-meta">{{ company.name }}</div>
+    </div>
+
+    <div class="int-time">
+        <i class="fas fa-calendar me-1"></i>
+        {{ room.scheduled_date }}{% if room.scheduled_time %} at {{ room.scheduled_time }}{% endif %}
+    </div>
+
+    <a href="{{ url_for('views.join_meeting', room_name=room.room_name) }}"
+       class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-right me-1"></i> Rejoin
+    </a>
+</div>
+{% endfor %}
+{% endif %}
+
+{% endif %}
+{% endblock %}
