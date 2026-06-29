@@ -63,6 +63,8 @@ def _run_migrations(db):
         "ALTER TABLE application ADD COLUMN interview_saved_session TEXT",
         # user — admin flag
         "ALTER TABLE \"user\" ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE",
+        # application — AI-generation likelihood score for candidate interview answers
+        "ALTER TABLE application ADD COLUMN ai_likelihood TEXT",
     ]
     with db.engine.connect() as conn:
         for stmt in new_columns:

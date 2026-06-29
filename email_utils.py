@@ -14,7 +14,7 @@ VERIFICATION_SALT = "employer-email-verification"
 VERIFICATION_MAX_AGE = 60 * 60 * 24  # 24 hours
 
 
-LOGO_URL = "https://raw.githubusercontent.com/Rhythmofthebeat/Apricot/main/website/static/Avants.png"
+LOGO_URL = "https://apricot-u9ap.onrender.com/static/Avants.png"
 
 
 def render_branded_email(heading, body_html, cta_label=None, cta_url=None, accent="#4f46e5"):

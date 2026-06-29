@@ -26,6 +26,7 @@ from ai_services import (
     find_similar_jobs,
     generate_interview_coaching,
     generate_skills_roadmap,
+    analyze_ai_likelihood,
 )
 
 candidate = Blueprint('candidate', __name__)
@@ -340,6 +341,11 @@ def interview_chat(job_id, application_id):
         verdict = verdict_match.group(1).title() if verdict_match else "Pending"
         application.interview_verdict = verdict
         application.status = 'interviewing'
+        try:
+            ai_result = analyze_ai_likelihood(application.interview_transcript, job.title)
+            application.ai_likelihood = json.dumps(ai_result)
+        except Exception:
+            pass
 
         if current_user.notifications_enabled:
             job = Job.query.get(job_id)

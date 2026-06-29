@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, session
+from flask import Blueprint, render_template, request, flash, redirect, url_for, session, make_response
 from .models import User, Company, FREE_EMAIL_DOMAINS
 from werkzeug.security import generate_password_hash, check_password_hash
 from . import db
@@ -139,13 +139,25 @@ def login():
                 "password": password
             })
         except Exception as e:
+            err = str(e).lower()
             print("Supabase login error:", e)
+            if "email not confirmed" in err or "not confirmed" in err:
+                flash("Please verify your email before signing in. Check your inbox for a confirmation link.", "error")
+                resp = make_response(redirect(url_for("auth.verify_email_prompt")))
+                resp.set_cookie("pending_verify_email", email, max_age=900, httponly=True, samesite="Lax")
+                return resp
             flash("Invalid email or password.", "error")
             return render_template("login.html")
 
         if not hasattr(res, 'user') or not res.user:
             flash("Invalid email or password.", "error")
             return render_template("login.html")
+
+        if not res.user.email_confirmed_at:
+            flash("Please verify your email before signing in. Check your inbox for a confirmation link.", "error")
+            resp = make_response(redirect(url_for("auth.verify_email_prompt")))
+            resp.set_cookie("pending_verify_email", email, max_age=900, httponly=True, samesite="Lax")
+            return resp
 
         # Ensure local user exists for Flask-Login
         local_user = User.query.filter_by(email=email).first()
@@ -212,8 +224,9 @@ def sign_up():
                     flash("Something went wrong. Try again.", "error")
                     return redirect(url_for("auth.sign_up"))
 
-                flash("Check your email and click the confirmation link to finish creating your account.", "success")
-                return redirect(url_for("auth.login"))
+                resp = make_response(redirect(url_for("auth.verify_email_prompt")))
+                resp.set_cookie("pending_verify_email", email, max_age=900, httponly=True, samesite="Lax")
+                return resp
 
             except Exception as e:
                 if "already registered" in str(e):
@@ -225,6 +238,30 @@ def sign_up():
                 return redirect(url_for("auth.sign_up"))
 
     return render_template("sign_up.html")
+
+# ------------------------------------------------ #
+# ----------- VERIFY EMAIL PROMPT PAGE ------------ #
+# ------------------------------------------------ #
+
+@auth.route("/verify-email")
+def verify_email_prompt():
+    email = request.cookies.get("pending_verify_email", "")
+    return render_template("verify_email.html", email=email)
+
+
+@auth.route("/resend-verification", methods=["POST"])
+def resend_verification():
+    email = request.form.get("email", "").strip()
+    if email:
+        try:
+            confirm_url = request.host_url.rstrip("/") + "/auth/confirm"
+            supabase.auth.resend({"type": "signup", "email": email, "options": {"email_redirect_to": confirm_url}})
+        except Exception:
+            pass
+    flash("If that email is registered, a new confirmation link has been sent.", "success")
+    resp = make_response(redirect(url_for("auth.verify_email_prompt")))
+    resp.set_cookie("pending_verify_email", email, max_age=900, httponly=True, samesite="Lax")
+    return resp
 
 # ------------------------------------------------ #
 # --------- SUPABASE EMAIL CONFIRMATION ----------- #
@@ -311,22 +348,6 @@ def verify_email(token):
     flash("Email verified! You can now post jobs.", "success")
     return redirect(url_for("views.home"))
 
-
-@auth.route("/resend-verification", methods=["POST"])
-@login_required
-def resend_verification():
-    if current_user.email_verified:
-        flash("Your email is already verified.", "success")
-        return redirect(url_for("views.home"))
-
-    try:
-        send_verification_email(current_user)
-        flash("Verification email sent — check your inbox.", "success")
-    except Exception as e:
-        print("Resend verification failed:", e)
-        flash("Couldn't send the verification email right now. Try again shortly.", "error")
-
-    return redirect(url_for("views.home"))
 
 # ------------------------------------------------ #
 # ---------------- GOOGLE OAUTH ------------------ #

@@ -66,20 +66,6 @@
 
 {% block content %}
 
-<!-- Unverified email banner -->
-{% if not current_user.email_verified %}
-<div class="unverified-banner">
-    <div class="d-flex align-items-center gap-2">
-        <i class="fas fa-triangle-exclamation" style="color:var(--warning);"></i>
-        <span class="small fw-semibold">Verify your company email to post jobs.</span>
-        <span class="small text-muted">Check your inbox for a verification link.</span>
-    </div>
-    <form method="POST" action="{{ url_for('auth.resend_verification') }}" class="mb-0">
-        <button type="submit" class="btn btn-sm btn-outline-secondary">Resend Email</button>
-    </form>
-</div>
-{% endif %}
-
 <!-- Company header -->
 <div class="company-header">
     <div class="d-flex align-items-center gap-3">

@@ -681,6 +681,77 @@ Respond with ONLY the questions, one per line, no numbering, no extra commentary
     return [line.strip().lstrip("-•0123456789. ").strip() for line in lines if line.strip()]
 
 
+def analyze_ai_likelihood(transcript, job_title):
+    """Estimate the probability that a candidate's interview answers were
+    AI-generated (e.g. typed into ChatGPT and read aloud) rather than authentic.
+    Returns a dict: {score: 0-100, label: str, reasons: [str]}"""
+    candidate_lines = []
+    for line in transcript.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("user:"):
+            candidate_lines.append(stripped[5:].strip())
+
+    if not candidate_lines:
+        return {"score": 0, "label": "No data", "reasons": []}
+
+    candidate_text = "\n\n".join(candidate_lines)
+
+    prompt = f"""You are a hiring expert analyzing job interview answers to detect whether they were AI-generated (e.g. the candidate used ChatGPT to write answers and read or pasted them) rather than authentic spoken responses.
+
+Job: {job_title}
+
+Candidate's answers only:
+{candidate_text[:3000]}
+
+Analyze for these specific AI signals:
+1. Formulaic structure (e.g. "First I would X, then Y, finally Z" repeated across answers)
+2. Dense corporate buzzwords used unnaturally ("leverage", "synergize", "holistic approach", "proactive mindset")
+3. Suspiciously comprehensive coverage — real humans miss things; AI answers every angle
+4. Missing personal specifics — no real names, company names, concrete dates, or actual numbers from memory
+5. Zero natural speech disfluencies — no self-corrections, incomplete thoughts, or casual phrasing
+6. Answers that parrot the question's exact wording back verbatim
+7. Eerily consistent tone, vocabulary level, and answer length across all questions
+8. Vague experience claims without supporting detail ("I have extensive experience in X")
+
+Score 0-100 where 0 = clearly authentic human speech and 100 = almost certainly AI-generated or heavily AI-edited.
+Give 3 specific reasons citing actual phrases or patterns from the text above.
+
+Respond EXACTLY in this format (no extra text):
+Score: <number>
+Reason: <one specific observation — quote or name a phrase from the answers>
+Reason: <another specific observation>
+Reason: <another specific observation>"""
+
+    response = openai.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=350,
+        temperature=0.2,
+    )
+    content = response.choices[0].message.content.strip()
+
+    result = {"score": 0, "label": "Human-like", "reasons": []}
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith("Score:"):
+            try:
+                result["score"] = min(100, max(0, int(re.search(r"\d+", line).group())))
+            except Exception:
+                pass
+        elif line.startswith("Reason:"):
+            result["reasons"].append(line[7:].strip())
+
+    score = result["score"]
+    if score < 35:
+        result["label"] = "Human-like"
+    elif score < 65:
+        result["label"] = "Uncertain"
+    else:
+        result["label"] = "Likely AI-assisted"
+
+    return result
+
+
 def transcribe_audio(file_path):
     """Speech-to-text for a candidate's recorded interview answer."""
     with open(file_path, "rb") as f:

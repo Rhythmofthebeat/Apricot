@@ -65,6 +65,11 @@
     }
     .wa-table { font-size: 0.82rem; }
     .wa-table td:first-child { color: var(--text-muted); font-weight: 500; padding-right: 12px; white-space: nowrap; }
+    .ai-badge-human   { background:#d1fae5; color:#065f46; border-radius:999px; padding:2px 10px; font-size:0.72rem; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+    .ai-badge-unsure  { background:#fef3c7; color:#92400e; border-radius:999px; padding:2px 10px; font-size:0.72rem; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+    .ai-badge-ai      { background:#fee2e2; color:#991b1b; border-radius:999px; padding:2px 10px; font-size:0.72rem; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+    .score-breakdown-grid { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+    .score-breakdown-item { text-align:center; }
     .schedule-form { background: var(--bg); border-radius: var(--radius); padding: 16px; margin-top: 12px; }
     .page-header { margin-bottom: 24px; }
     .page-header h1 { margin-bottom: 4px; }
@@ -115,7 +120,7 @@
             <p class="text-muted small mb-0">
                 <span class="badge-status {{ job.status }}">{{ job.status|capitalize }}</span>
                 <span class="ms-2">{{ applications|length }} applicant{{ 's' if applications|length != 1 }}</span>
-                &middot; sorted by match score
+                &middot; sorted by overall score (resume + interview + authenticity)
             </p>
         </div>
         <a href="{{ url_for('employer.edit_job', job_id=job.id) }}" class="btn btn-outline-secondary btn-sm">
@@ -183,6 +188,23 @@
                         <i class="fas fa-hourglass-half me-1" style="font-size:0.65rem;"></i>Interview Pending
                     </span>
                 {% endif %}
+                {% set ai_data = ai_likelihoods.get(app.id) %}
+                {% if ai_data %}
+                    {% set ai_score = ai_data.score %}
+                    {% if ai_score < 35 %}
+                        <span class="ai-badge-human" title="AI Detection: {{ ai_score }}/100 — {{ ai_data.label }}">
+                            <i class="fas fa-user-check" style="font-size:0.65rem;"></i>{{ ai_data.label }}
+                        </span>
+                    {% elif ai_score < 65 %}
+                        <span class="ai-badge-unsure" title="AI Detection: {{ ai_score }}/100 — {{ ai_data.label }}">
+                            <i class="fas fa-circle-question" style="font-size:0.65rem;"></i>{{ ai_data.label }}
+                        </span>
+                    {% else %}
+                        <span class="ai-badge-ai" title="AI Detection: {{ ai_score }}/100 — {{ ai_data.label }}">
+                            <i class="fas fa-robot" style="font-size:0.65rem;"></i>{{ ai_data.label }}
+                        </span>
+                    {% endif %}
+                {% endif %}
                 {% if app.status == 'hired' %}
                     {% if app.fee_paid %}
                         <span class="badge-status hired"><i class="fas fa-circle-check me-1"></i>Fee Paid</span>
@@ -213,10 +235,10 @@
             {% endif %}
         </div>
 
-        <div class="d-flex flex-column align-items-center gap-1 flex-shrink-0">
-            {% set score = app.match_score or 0 %}
-            <span class="score-pill {{ 'high' if score >= 70 else ('mid' if score >= 40 else 'low') }}">{{ score }}</span>
-            <span class="text-muted" style="font-size:0.65rem; font-weight:500;">MATCH</span>
+        {% set cscore = composite_scores.get(app.id, app.match_score or 0) %}
+        <div class="d-flex flex-column align-items-center gap-1 flex-shrink-0" title="Overall score — Resume (45%) + Interview (45%) + Authenticity (10%)">
+            <span class="score-pill {{ 'high' if cscore >= 70 else ('mid' if cscore >= 40 else 'low') }}">{{ cscore }}</span>
+            <span class="text-muted" style="font-size:0.65rem; font-weight:500;">OVERALL</span>
         </div>
 
         <i class="fas fa-chevron-down pipeline-expand-icon"></i>
@@ -310,11 +332,161 @@
             </div>
             {% endif %}
 
+            <!-- Overall score breakdown -->
+            {% set cscore = composite_scores.get(app.id, app.match_score or 0) %}
+            <div class="detail-section">
+                <div class="detail-section-label">Overall Score Breakdown</div>
+                <div class="score-breakdown-grid">
+                    <!-- Resume -->
+                    {% set rs = app.match_score or 0 %}
+                    {% set rs_color = '#10b981' if rs >= 70 else ('#f59e0b' if rs >= 40 else '#ef4444') %}
+                    <div class="score-breakdown-item">
+                        <div style="width:56px;height:56px;margin:0 auto 6px;">
+                            <svg viewBox="0 0 36 36" style="display:block;width:100%;height:100%;">
+                                <path fill="none" stroke="#e5e7eb" stroke-width="3.8" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                <path class="ai-circle-fill" fill="none" stroke="{{ rs_color }}" stroke-width="3.8" stroke-linecap="round"
+                                      style="transform:rotate(-90deg);transform-origin:50% 50%;" data-score="{{ rs }}"
+                                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                <text x="18" y="18" fill="{{ rs_color }}" font-size="0.45em" text-anchor="middle" dominant-baseline="middle" font-weight="bold">{{ rs }}</text>
+                            </svg>
+                        </div>
+                        <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">Resume</div>
+                        <div style="font-size:0.65rem;color:var(--text-muted);">45%</div>
+                    </div>
+                    <!-- Interview -->
+                    {% set vmap = {"Strong Yes": 100, "Yes": 75, "No": 25, "Strong No": 0} %}
+                    {% set vs = vmap.get(app.interview_verdict) %}
+                    {% if vs is not none %}
+                        {% set vs_color = '#10b981' if vs >= 70 else ('#f59e0b' if vs >= 40 else '#ef4444') %}
+                        <div class="score-breakdown-item">
+                            <div style="width:56px;height:56px;margin:0 auto 6px;">
+                                <svg viewBox="0 0 36 36" style="display:block;width:100%;height:100%;">
+                                    <path fill="none" stroke="#e5e7eb" stroke-width="3.8" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                    <path class="ai-circle-fill" fill="none" stroke="{{ vs_color }}" stroke-width="3.8" stroke-linecap="round"
+                                          style="transform:rotate(-90deg);transform-origin:50% 50%;" data-score="{{ vs }}"
+                                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                    <text x="18" y="18" fill="{{ vs_color }}" font-size="0.45em" text-anchor="middle" dominant-baseline="middle" font-weight="bold">{{ vs }}</text>
+                                </svg>
+                            </div>
+                            <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">Interview</div>
+                            <div style="font-size:0.65rem;color:var(--text-muted);">45%</div>
+                        </div>
+                    {% else %}
+                        <div class="score-breakdown-item" style="opacity:0.45;">
+                            <div style="width:56px;height:56px;margin:0 auto 6px;">
+                                <svg viewBox="0 0 36 36" style="display:block;width:100%;height:100%;">
+                                    <path fill="none" stroke="#e5e7eb" stroke-width="3.8" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                    <text x="18" y="18" fill="#9ca3af" font-size="0.3em" text-anchor="middle" dominant-baseline="middle">—</text>
+                                </svg>
+                            </div>
+                            <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">Interview</div>
+                            <div style="font-size:0.65rem;color:var(--text-muted);">Pending</div>
+                        </div>
+                    {% endif %}
+                    <!-- Authenticity -->
+                    {% set ai_data_bd = ai_likelihoods.get(app.id) %}
+                    {% if ai_data_bd and ai_data_bd.score is defined %}
+                        {% set auth_score = 100 - ai_data_bd.score %}
+                        {% set auth_color = '#10b981' if auth_score >= 65 else ('#f59e0b' if auth_score >= 35 else '#ef4444') %}
+                        <div class="score-breakdown-item">
+                            <div style="width:56px;height:56px;margin:0 auto 6px;">
+                                <svg viewBox="0 0 36 36" style="display:block;width:100%;height:100%;">
+                                    <path fill="none" stroke="#e5e7eb" stroke-width="3.8" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                    <path class="ai-circle-fill" fill="none" stroke="{{ auth_color }}" stroke-width="3.8" stroke-linecap="round"
+                                          style="transform:rotate(-90deg);transform-origin:50% 50%;" data-score="{{ auth_score }}"
+                                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                    <text x="18" y="18" fill="{{ auth_color }}" font-size="0.45em" text-anchor="middle" dominant-baseline="middle" font-weight="bold">{{ auth_score }}</text>
+                                </svg>
+                            </div>
+                            <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">Authentic</div>
+                            <div style="font-size:0.65rem;color:var(--text-muted);">10%</div>
+                        </div>
+                    {% else %}
+                        <div class="score-breakdown-item" style="opacity:0.45;">
+                            <div style="width:56px;height:56px;margin:0 auto 6px;">
+                                <svg viewBox="0 0 36 36" style="display:block;width:100%;height:100%;">
+                                    <path fill="none" stroke="#e5e7eb" stroke-width="3.8" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                    <text x="18" y="18" fill="#9ca3af" font-size="0.3em" text-anchor="middle" dominant-baseline="middle">—</text>
+                                </svg>
+                            </div>
+                            <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">Authentic</div>
+                            <div style="font-size:0.65rem;color:var(--text-muted);">Pending</div>
+                        </div>
+                    {% endif %}
+                    <!-- Overall -->
+                    {% set oc = '#10b981' if cscore >= 70 else ('#f59e0b' if cscore >= 40 else '#ef4444') %}
+                    <div class="score-breakdown-item" style="border-left:1px solid var(--border); padding-left:12px; margin-left:4px;">
+                        <div style="width:56px;height:56px;margin:0 auto 6px;">
+                            <svg viewBox="0 0 36 36" style="display:block;width:100%;height:100%;">
+                                <path fill="none" stroke="#e5e7eb" stroke-width="3.8" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                <path class="ai-circle-fill" fill="none" stroke="{{ oc }}" stroke-width="3.8" stroke-linecap="round"
+                                      style="transform:rotate(-90deg);transform-origin:50% 50%;" data-score="{{ cscore }}"
+                                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                <text x="18" y="18" fill="{{ oc }}" font-size="0.45em" text-anchor="middle" dominant-baseline="middle" font-weight="bold">{{ cscore }}</text>
+                            </svg>
+                        </div>
+                        <div style="font-size:0.72rem;font-weight:700;color:var(--text);">Overall</div>
+                        <div style="font-size:0.65rem;color:var(--text-muted);">Composite</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Match analysis -->
             {% if app.match_explanation %}
             <div class="detail-section">
                 <div class="detail-section-label">Match Analysis</div>
                 <div class="transcript-box">{{ app.match_explanation }}</div>
+            </div>
+            {% endif %}
+
+            <!-- AI Detection -->
+            {% set ai_data = ai_likelihoods.get(app.id) %}
+            {% if ai_data and ai_data.score is defined %}
+            {% set ai_score = ai_data.score %}
+            {% set ai_color = '#10b981' if ai_score < 35 else ('#f59e0b' if ai_score < 65 else '#ef4444') %}
+            <div class="detail-section">
+                <div class="detail-section-label">AI Usage Detection</div>
+                <div class="d-flex align-items-center gap-4">
+                    <!-- Circle score -->
+                    <div class="text-center flex-shrink-0">
+                        <div style="width:80px; height:80px; margin:0 auto;">
+                            <svg viewBox="0 0 36 36" style="display:block; width:100%; height:100%;">
+                                <path fill="none" stroke="#e5e7eb" stroke-width="3.8"
+                                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                <path class="ai-circle-fill" fill="none" stroke="{{ ai_color }}" stroke-width="3.8"
+                                      stroke-linecap="round"
+                                      style="transform:rotate(-90deg); transform-origin:50% 50%;"
+                                      data-score="{{ ai_score }}"
+                                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                <text x="18" y="17" fill="{{ ai_color }}" font-size="0.42em" text-anchor="middle" dominant-baseline="middle" font-weight="bold">{{ ai_score }}</text>
+                                <text x="18" y="23" fill="#9ca3af" font-size="0.22em" text-anchor="middle" dominant-baseline="middle">/100</text>
+                            </svg>
+                        </div>
+                        <div class="mt-1">
+                            {% if ai_score < 35 %}
+                                <span class="ai-badge-human"><i class="fas fa-user-check" style="font-size:0.6rem;"></i>{{ ai_data.label }}</span>
+                            {% elif ai_score < 65 %}
+                                <span class="ai-badge-unsure"><i class="fas fa-circle-question" style="font-size:0.6rem;"></i>{{ ai_data.label }}</span>
+                            {% else %}
+                                <span class="ai-badge-ai"><i class="fas fa-robot" style="font-size:0.6rem;"></i>{{ ai_data.label }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <!-- Reasons -->
+                    {% if ai_data.reasons %}
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:6px;">Why</div>
+                        {% for reason in ai_data.reasons %}
+                        <div class="d-flex align-items-start gap-2 mb-2">
+                            <i class="fas fa-{{ 'circle-check' if ai_score < 35 else ('triangle-exclamation' if ai_score < 65 else 'robot') }}"
+                               style="font-size:0.72rem; color:{{ ai_color }}; margin-top:3px; flex-shrink:0;"></i>
+                            <span style="font-size:0.82rem; color:var(--text-muted); line-height:1.5;">{{ reason }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                <p class="text-muted mb-0 mt-3" style="font-size:0.72rem;">Automated signal only — use alongside the interview recording and transcript.</p>
             </div>
             {% endif %}
 
@@ -410,6 +582,20 @@ function toggleCard(appId, event) {
     if (event.target.closest('form, button, select, input, textarea, a, .card-tab')) return;
     const card = document.getElementById(`card-${appId}`);
     card.classList.toggle('open');
+    if (card.classList.contains('open')) animateAiCircles(card);
+}
+
+function animateAiCircles(container) {
+    container.querySelectorAll('.ai-circle-fill').forEach(path => {
+        const score = parseInt(path.dataset.score) || 0;
+        const circumference = 2 * Math.PI * 15.9155;
+        path.style.strokeDasharray = circumference + ' ' + circumference;
+        path.style.strokeDashoffset = circumference;
+        requestAnimationFrame(() => {
+            path.style.transition = 'stroke-dashoffset 0.9s ease-out';
+            path.style.strokeDashoffset = circumference * (1 - score / 100);
+        });
+    });
 }
 
 function switchAppTab(appId, tab, event) {

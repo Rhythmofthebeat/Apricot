@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Check Your Email | Avants{% endblock %}
+
+{% block head %}
+<style>
+    .auth-wrap {
+        min-height: calc(100vh - 140px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 16px;
+    }
+    .auth-card {
+        width: 100%;
+        max-width: 460px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 44px 40px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+        text-align: center;
+    }
+    .email-icon {
+        width: 64px;
+        height: 64px;
+        background: var(--primary-soft);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 24px;
+        font-size: 1.75rem;
+        color: var(--primary);
+    }
+    .verify-title {
+        font-size: 1.5rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        margin-bottom: 10px;
+    }
+    .verify-sub {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        line-height: 1.6;
+        margin-bottom: 8px;
+    }
+    .email-highlight {
+        font-weight: 700;
+        color: var(--text);
+    }
+    .steps-box {
+        background: var(--bg);
+        border-radius: 10px;
+        padding: 18px 20px;
+        margin: 24px 0;
+        text-align: left;
+    }
+    .steps-box .step {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-bottom: 12px;
+    }
+    .steps-box .step:last-child { margin-bottom: 0; }
+    .step-num {
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
+        background: var(--primary);
+        color: #fff;
+        border-radius: 50%;
+        font-size: 0.72rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1px;
+    }
+    .resend-form { margin-top: 20px; }
+    .divider-line {
+        display: flex; align-items: center; gap: 12px;
+        color: var(--text-muted); font-size: 0.78rem; font-weight: 500;
+        margin: 20px 0;
+    }
+    .divider-line:before, .divider-line:after { content: ''; flex: 1; height: 1px; background: var(--border); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrap">
+    <div class="auth-card">
+        <div class="email-icon">
+            <i class="fas fa-envelope-open-text"></i>
+        </div>
+
+        <h1 class="verify-title">Check your email</h1>
+        <p class="verify-sub">
+            We sent a confirmation link to<br>
+            <span class="email-highlight">{{ email }}</span>
+        </p>
+        <p class="verify-sub">Click the link in that email to activate your account.</p>
+
+        <div class="steps-box">
+            <div class="step">
+                <div class="step-num">1</div>
+                <span>Open your inbox and find an email from <strong>Avants AI</strong></span>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <span>Click <strong>"Confirm your email"</strong> in that message</span>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <span>You'll be logged in and ready to go</span>
+            </div>
+        </div>
+
+        <p class="verify-sub" style="font-size:0.82rem;">
+            Can't find it? Check your spam folder, or resend below.
+        </p>
+
+        <form method="POST" action="{{ url_for('auth.resend_verification') }}" class="resend-form">
+            <input type="hidden" name="email" value="{{ email }}">
+            <button type="submit" class="btn btn-outline-primary w-100" style="padding:10px; font-size:0.88rem;">
+                <i class="fas fa-paper-plane me-2"></i>Resend confirmation email
+            </button>
+        </form>
+
+        <div class="divider-line">or</div>
+
+        <a href="{{ url_for('auth.login') }}" class="text-muted text-decoration-none" style="font-size:0.85rem;">
+            Already confirmed? <span class="fw-semibold" style="color: var(--primary);">Log in</span>
+        </a>
+    </div>
+</div>
+{% endblock %}

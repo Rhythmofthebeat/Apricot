@@ -28,6 +28,18 @@ from email_utils import send_branded_email
 employer = Blueprint('employer', __name__)
 
 MAX_INTERVIEW_QUESTIONS = 15
+
+_VERDICT_SCORE = {"Strong Yes": 100, "Yes": 75, "No": 25, "Strong No": 0}
+
+def compute_composite_score(app, ai_data):
+    """Weighted overall score: resume 45%, interview verdict 45%, AI authenticity 10%.
+    If no interview exists yet, falls back to resume score alone."""
+    resume = app.match_score or 0
+    if app.interview_verdict in _VERDICT_SCORE:
+        verdict = _VERDICT_SCORE[app.interview_verdict]
+        ai_penalty = (ai_data.get("score", 0) if ai_data else 0)
+        return round(resume * 0.45 + verdict * 0.45 + (100 - ai_penalty) * 0.10)
+    return resume
 PLATFORM_FEE_PERCENT = 15
 LOGO_ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 LOGO_MAX_SIZE = (800, 800)
@@ -222,10 +234,6 @@ def dashboard():
 def post_job():
     company = get_owned_company()
 
-    if not current_user.email_verified:
-        flash("Verify your company email before posting jobs.", "error")
-        return redirect(url_for('employer.dashboard'))
-
     if request.method == 'POST':
         title = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip()
@@ -398,14 +406,14 @@ def applicants(job_id):
     if job.company_id != company.id:
         abort(403)
 
-    applications = (
-        Application.query.filter_by(job_id=job.id)
-        .order_by(Application.match_score.desc())
-        .all()
-    )
+    applications = Application.query.filter_by(job_id=job.id).all()
     summaries = {app.id: summarize_explanation(app.match_explanation) for app in applications}
     audio_logs = {
         app.id: json.loads(app.interview_audio_log) if app.interview_audio_log else []
+        for app in applications
+    }
+    ai_likelihoods = {
+        app.id: json.loads(app.ai_likelihood) if app.ai_likelihood else None
         for app in applications
     }
     work_auths = {
@@ -420,7 +428,14 @@ def applicants(job_id):
         app.candidate_user_id: CandidateProfile.query.filter_by(user_id=app.candidate_user_id).first()
         for app in applications
     }
-    # Blind mode: assign anonymous IDs sorted by score (rank order = Candidate #1, #2, ...)
+
+    composite_scores = {
+        app.id: compute_composite_score(app, ai_likelihoods.get(app.id))
+        for app in applications
+    }
+    applications.sort(key=lambda a: composite_scores[a.id], reverse=True)
+
+    # Blind mode: assign anonymous IDs in composite-score order
     blind_labels = {}
     if company.blind_mode_enabled:
         for i, app in enumerate(applications, 1):
@@ -437,6 +452,8 @@ def applicants(job_id):
         profiles=profiles,
         blind_mode=company.blind_mode_enabled,
         blind_labels=blind_labels,
+        ai_likelihoods=ai_likelihoods,
+        composite_scores=composite_scores,
     )
 
 

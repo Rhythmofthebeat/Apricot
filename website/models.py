@@ -186,6 +186,7 @@ class Application(db.Model):
     candidate_feedback = db.Column(db.Text)  # employer-approved AI feedback sent to candidate on rejection
     skills_roadmap = db.Column(db.Text)  # JSON: AI-generated skill gap action plan (generated when score < 65)
     interview_saved_session = db.Column(db.Text)  # JSON: partial history saved for later resumption
+    ai_likelihood = db.Column(db.Text)  # JSON: {score, label, reasons} — AI-generation probability for candidate answers
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     job = db.relationship("Job", backref="applications")
