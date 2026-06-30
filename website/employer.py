@@ -20,7 +20,7 @@ from . import db
 from .models import (
     Company, Job, Application, Notification,
     CompanyMember, CompanyInvite, CandidateProfile, User,
-    MeetingRoom, Message, EmployerSubscription, MeetingProposal, PLAN_LIMITS,
+    MeetingRoom, Message, MeetingProposal,
     JOB_CATEGORIES, JOB_LOCATIONS, COMPANY_SIZES, INDUSTRIES,
 )
 from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description
@@ -236,20 +236,6 @@ def post_job():
     company = get_owned_company()
 
     if request.method == 'POST':
-        # Plan limit check
-        sub = EmployerSubscription.query.filter_by(company_id=company.id).first()
-        plan = sub.plan if (sub and sub.status == 'active') else 'free'
-        job_limit = PLAN_LIMITS[plan]['jobs']
-        if job_limit < 9999:
-            open_count = Job.query.filter_by(company_id=company.id, status='open').count()
-            if open_count >= job_limit:
-                flash(
-                    f"Your {plan.title()} plan allows up to {job_limit} open job post{'s' if job_limit != 1 else ''}. "
-                    f"Upgrade your plan to post more.",
-                    "error",
-                )
-                return redirect(url_for('employer.billing'))
-
         title = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip()
         work_type = request.form.get('work_type', 'Remote (Worldwide)').strip()
@@ -1289,131 +1275,6 @@ def send_message(application_id):
     })
 
 
-# ------------------------------------------------------------------ #
-#  Employer Billing / Subscription
-# ------------------------------------------------------------------ #
-
-_PLAN_NAMES = {'free': 'Free', 'starter': 'Starter', 'pro': 'Pro'}
-_PLAN_PRICES = {'free': 0, 'starter': 79, 'pro': 249}
-
-
-def _get_or_create_sub(company_id):
-    sub = EmployerSubscription.query.filter_by(company_id=company_id).first()
-    if not sub:
-        sub = EmployerSubscription(company_id=company_id, plan='free')
-        db.session.add(sub)
-        db.session.commit()
-    return sub
-
-
-@employer.route('/employer/billing')
-@login_required
-@employer_required
-def billing():
-    company = get_owned_company()
-    sub = _get_or_create_sub(company.id)
-    open_jobs = Job.query.filter_by(company_id=company.id, status='open').count()
-    return render_template(
-        'employer_billing.html',
-        company=company,
-        sub=sub,
-        plan_limits=PLAN_LIMITS,
-        plan_names=_PLAN_NAMES,
-        plan_prices=_PLAN_PRICES,
-        open_jobs=open_jobs,
-    )
-
-
-@employer.route('/employer/billing/checkout', methods=['POST'])
-@login_required
-@employer_required
-def billing_checkout():
-    company = get_owned_company()
-    plan = request.form.get('plan')
-    if plan not in ('starter', 'pro'):
-        flash("Invalid plan.", "error")
-        return redirect(url_for('employer.billing'))
-
-    stripe.api_key = current_app.config.get('STRIPE_SECRET_KEY')
-    if not stripe.api_key:
-        flash("Stripe is not configured.", "error")
-        return redirect(url_for('employer.billing'))
-
-    price_key = 'STRIPE_STARTER_PRICE_ID' if plan == 'starter' else 'STRIPE_PRO_PRICE_ID'
-    price_id = current_app.config.get(price_key)
-    if not price_id:
-        flash(f"Stripe price for {plan} plan is not configured yet.", "error")
-        return redirect(url_for('employer.billing'))
-
-    sub = _get_or_create_sub(company.id)
-
-    try:
-        customer_kwargs = {}
-        if sub.stripe_customer_id:
-            customer_kwargs['customer'] = sub.stripe_customer_id
-        else:
-            customer_kwargs['customer_email'] = current_user.email
-
-        session = stripe.checkout.Session.create(
-            **customer_kwargs,
-            mode='subscription',
-            line_items=[{'price': price_id, 'quantity': 1}],
-            success_url=url_for('employer.billing_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}',
-            cancel_url=url_for('employer.billing', _external=True),
-            metadata={'company_id': company.id, 'plan': plan},
-        )
-        return redirect(session.url, code=303)
-    except stripe.error.StripeError as e:
-        flash(f"Stripe error: {e.user_message}", "error")
-        return redirect(url_for('employer.billing'))
-
-
-@employer.route('/employer/billing/success')
-@login_required
-@employer_required
-def billing_success():
-    session_id = request.args.get('session_id')
-    stripe.api_key = current_app.config.get('STRIPE_SECRET_KEY')
-    if session_id and stripe.api_key:
-        try:
-            session = stripe.checkout.Session.retrieve(session_id)
-            plan = (session.metadata or {}).get('plan', 'free')
-            company_id = int((session.metadata or {}).get('company_id', 0))
-            if company_id:
-                sub = _get_or_create_sub(company_id)
-                sub.plan = plan
-                sub.status = 'active'
-                sub.stripe_customer_id = session.customer
-                sub.stripe_subscription_id = session.subscription
-                db.session.commit()
-        except Exception:
-            logger.exception("Could not update subscription after checkout")
-
-    flash("Subscription activated! Your plan has been upgraded.", "success")
-    return redirect(url_for('employer.billing'))
-
-
-@employer.route('/employer/billing/portal')
-@login_required
-@employer_required
-def billing_portal():
-    company = get_owned_company()
-    sub = EmployerSubscription.query.filter_by(company_id=company.id).first()
-    stripe.api_key = current_app.config.get('STRIPE_SECRET_KEY')
-
-    if not stripe.api_key or not sub or not sub.stripe_customer_id:
-        flash("No active subscription found to manage.", "error")
-        return redirect(url_for('employer.billing'))
-
-    try:
-        portal = stripe.billing_portal.Session.create(
-            customer=sub.stripe_customer_id,
-            return_url=url_for('employer.billing', _external=True),
-        )
-        return redirect(portal.url, code=303)
-    except stripe.error.StripeError as e:
-        flash(f"Could not open billing portal: {e.user_message}", "error")
-        return redirect(url_for('employer.billing'))
 
 
 # ------------------------------------------------------------------ #

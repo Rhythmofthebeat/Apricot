@@ -4,7 +4,7 @@ from flask_login import current_user, login_required
 from datetime import timezone
 
 from . import db
-from .models import Application, Job, User, Company, MeetingRoom, EmployerSubscription
+from .models import Application, Job, User, Company, MeetingRoom
 
 views = Blueprint('views', __name__)
 
@@ -82,57 +82,12 @@ def stripe_webhook():
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        meta = session.get("metadata") or {}
-
-        # One-time placement fee
-        app_id = meta.get("application_id")
+        app_id = (session.get("metadata") or {}).get("application_id")
         if app_id:
             application = Application.query.get(int(app_id))
             if application and not application.fee_paid:
                 application.fee_paid = True
                 db.session.commit()
-
-        # Subscription checkout
-        if session.get("mode") == "subscription":
-            plan = meta.get("plan")
-            company_id = meta.get("company_id")
-            if plan and company_id:
-                sub = EmployerSubscription.query.filter_by(company_id=int(company_id)).first()
-                if sub:
-                    sub.plan = plan
-                    sub.status = "active"
-                    sub.stripe_customer_id = session.get("customer")
-                    sub.stripe_subscription_id = session.get("subscription")
-                    db.session.commit()
-
-    elif event["type"] in ("customer.subscription.updated", "customer.subscription.created"):
-        stripe_sub = event["data"]["object"]
-        sub = EmployerSubscription.query.filter_by(
-            stripe_subscription_id=stripe_sub["id"]
-        ).first()
-        if sub:
-            sub.status = stripe_sub.get("status", "active")
-            db.session.commit()
-
-    elif event["type"] == "customer.subscription.deleted":
-        stripe_sub = event["data"]["object"]
-        sub = EmployerSubscription.query.filter_by(
-            stripe_subscription_id=stripe_sub["id"]
-        ).first()
-        if sub:
-            sub.plan = "free"
-            sub.status = "canceled"
-            sub.stripe_subscription_id = None
-            db.session.commit()
-
-    elif event["type"] == "invoice.payment_failed":
-        invoice = event["data"]["object"]
-        sub = EmployerSubscription.query.filter_by(
-            stripe_customer_id=invoice.get("customer")
-        ).first()
-        if sub:
-            sub.status = "past_due"
-            db.session.commit()
 
     return "", 200
 
