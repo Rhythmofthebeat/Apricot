@@ -87,13 +87,13 @@ def _run_migrations(db):
         # contractor_profile — Stripe Connect payout flag
         "ALTER TABLE contractor_profile ADD COLUMN payout_enabled BOOLEAN NOT NULL DEFAULT 0",
     ]
-    with db.engine.connect() as conn:
-        for stmt in new_columns:
-            try:
+    for stmt in new_columns:
+        try:
+            with db.engine.connect() as conn:
                 conn.execute(text(stmt))
                 conn.commit()
-            except Exception:
-                conn.rollback()
+        except Exception:
+            pass
 
 def create_app():
     app = Flask(__name__)
