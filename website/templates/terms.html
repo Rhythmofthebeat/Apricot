@@ -65,13 +65,78 @@
                 <p>We may update these Terms from time to time. Continued use of the platform after changes are posted constitutes acceptance of the updated Terms.</p>
 
                 <h5 class="fw-bold mb-2 mt-4">11. Contact</h5>
-                <p>For any questions about these Terms, contact us at <a href="{{ url_for('contact') }}" class="text-decoration-none fw-semibold">the contact page</a>.</p>
+                <p>For any questions about these Terms, email us at <strong>legal@avants.ai</strong>.</p>
+
+            </div>
+        </div>
+
+        <!-- Employer Contract -->
+        <div class="card mb-4" id="employer-contract" style="border-color: var(--primary);">
+            <div class="card-header fw-bold" style="background:var(--primary-soft);color:var(--primary);font-size:0.9rem;">
+                <i class="fas fa-file-signature me-2"></i>Section 12 — Employer Platform Agreement
+                <span class="badge bg-primary ms-2" style="font-size:0.65rem;vertical-align:middle;">Binding on employer accounts</span>
+            </div>
+            <div class="card-body p-4" style="line-height:1.8; font-size:0.92rem; color:var(--text);">
+
+                <p class="text-muted" style="font-size:0.85rem;">This Section 12 constitutes a binding agreement between Avants AI ("Avants") and the registered employer ("Company") and takes effect when the Company creates an account on the platform. By checking the agreement checkbox at signup, an authorised representative of the Company accepts these terms on behalf of the Company.</p>
+
+                <h5 class="fw-bold mb-2 mt-4">12.1 Placement Fee</h5>
+                <ul>
+                    <li>If the Company makes a hire of any Candidate who was introduced to the Company through the Avants platform (a "Referred Candidate"), a <strong>placement fee of 15% of the Candidate's first-year gross base compensation</strong> is payable to Avants.</li>
+                    <li>The fee is due within <strong>30 days of the Candidate's official start date</strong>.</li>
+                    <li>The Company will promptly notify Avants (within 5 business days) of any offer of employment accepted by a Referred Candidate.</li>
+                    <li>Invoices will be sent to the email address on the employer account. Unpaid invoices accrue interest at 1.5% per month after 30 days.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">12.2 Non-Circumvention</h5>
+                <ul>
+                    <li>The Company agrees <strong>not to solicit, engage, or hire any Referred Candidate outside of the Avants platform</strong> for a period of <strong>12 months</strong> from the date the Candidate first applied through Avants, without paying the applicable placement fee.</li>
+                    <li>Sharing Candidate contact information (email, LinkedIn, phone) with third parties outside the Company's hiring team is prohibited.</li>
+                    <li>Violation of this clause entitles Avants to the full placement fee plus reasonable legal costs.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">12.3 Candidate Data</h5>
+                <ul>
+                    <li>Candidate resumes, interview recordings, AI scores, and personal information accessed through the platform may only be used for evaluating that Candidate's application to the Company's open roles.</li>
+                    <li>The Company may not share, sell, or use Candidate data for any other purpose, including marketing, building databases, or training AI models.</li>
+                    <li>The Company agrees to delete Candidate data from internal systems upon request from Avants or the Candidate.</li>
+                    <li>The Company is responsible for compliance with applicable data protection law (including GDPR and CCPA) with respect to Candidate data it processes.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">12.4 Equal Opportunity & Non-Discrimination</h5>
+                <ul>
+                    <li>The Company agrees to comply with all applicable equal employment opportunity laws, including Title VII, the ADA, ADEA, and applicable state equivalents.</li>
+                    <li>Job postings must not discriminate on the basis of race, colour, religion, sex, national origin, age, disability, or any other protected characteristic.</li>
+                    <li>The Company acknowledges that AI match scores are <strong>assistive tools only</strong> and agrees not to use them as the sole basis for any hiring decision.</li>
+                    <li>The Company agrees to disclose to Candidates upon request that AI-assisted screening was used in the evaluation process.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">12.5 Accurate Job Postings</h5>
+                <ul>
+                    <li>All job postings must represent genuine, open roles at the Company. Posting phantom roles, harvesting resumes, or misleading Candidates is grounds for immediate account termination.</li>
+                    <li>Salary and compensation information posted must be accurate to within a reasonable range.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">12.6 Term & Termination</h5>
+                <ul>
+                    <li>This Agreement continues for as long as the Company maintains an active account on the platform.</li>
+                    <li>Avants may terminate the Company's account at any time for material breach of these terms, with written notice by email.</li>
+                    <li>Termination does not extinguish any placement fee obligations already accrued.</li>
+                </ul>
+
+                <h5 class="fw-bold mb-2 mt-4">12.7 Governing Law</h5>
+                <p>This Agreement is governed by the laws of the State of Delaware, United States, without regard to its conflict-of-law principles. Any dispute shall be resolved by binding arbitration administered by JAMS in San Francisco, CA.</p>
+
+                <div class="mt-4 p-3 rounded" style="background:var(--primary-soft);border:1px solid var(--primary);font-size:0.85rem;">
+                    <i class="fas fa-circle-check me-2" style="color:var(--primary);"></i>
+                    <strong>Acceptance:</strong> By checking "I agree to the Employer Platform Agreement" during account creation, an authorised representative confirms they have read, understood, and accepted this Section 12 on behalf of their organisation. The acceptance timestamp, IP address, and terms version are recorded.
+                </div>
 
             </div>
         </div>
 
         <p class="text-center text-muted" style="font-size:0.82rem;">
-            See also: <a href="{{ url_for('privacy') }}" class="text-decoration-none fw-semibold">Privacy Policy</a>
+            See also: <a href="{{ url_for('views.privacy') }}" class="text-decoration-none fw-semibold">Privacy Policy</a>
         </p>
     </div>
 </div>

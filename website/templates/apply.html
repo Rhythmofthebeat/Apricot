@@ -285,10 +285,7 @@
                     <h2 class="mb-3">Work authorization</h2>
                     <p class="text-muted">Please ensure you meet local employment requirements for work authorization. Accurate information helps {{ job.company.name }} process your application smoothly.</p>
 
-                    <label class="form-label fw-bold">Date of Birth (MM/DD/YYYY)</label>
-                    <input type="text" class="form-control mb-3" id="dob" placeholder="MM/DD/YYYY">
-
-                    <h6 class="fw-bold mt-4">Location of Residence</h6>
+                    <h6 class="fw-bold">Location of Residence</h6>
                     <p class="text-muted small">Where you're based for most of the year. This might be different from your citizenship.</p>
 
                     <div class="row g-3 mb-2">
@@ -601,7 +598,6 @@ syncCountryLabels();
 document.getElementById("saveWorkAuthBtn").addEventListener("click", () => {
     showError("step2Error", null);
 
-    const dob = document.getElementById("dob").value.trim();
     const state = document.getElementById("residenceState").value.trim();
     const city = document.getElementById("residenceCity").value.trim();
     const postal = document.getElementById("residencePostal").value.trim();
@@ -610,8 +606,8 @@ document.getElementById("saveWorkAuthBtn").addEventListener("click", () => {
     const fullName = document.getElementById("signatureFullName").value.trim();
     const signature = document.getElementById("signatureText").value.trim();
 
-    if (!dob || !state || !city || !postal) {
-        showError("step2Error", "Fill in your date of birth and full residence address first.");
+    if (!state || !city || !postal) {
+        showError("step2Error", "Fill in your full residence address first.");
         return;
     }
     if (!authConfirm || !remainWorking) {
@@ -624,7 +620,6 @@ document.getElementById("saveWorkAuthBtn").addEventListener("click", () => {
     }
 
     workAuthorization = {
-        date_of_birth: dob,
         country: residenceCountry.value,
         state, city, postal_code: postal,
         working_from_different_country: document.getElementById("differentCountryCheck").checked,

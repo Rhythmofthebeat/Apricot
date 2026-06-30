@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Delete Account | Avants{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card" style="border-color:var(--danger);">
+            <div class="card-header fw-bold text-danger" style="background:var(--danger-soft);">
+                <i class="fas fa-triangle-exclamation me-2"></i>Delete your account
+            </div>
+            <div class="card-body p-4">
+                <p class="mb-3">This will permanently delete your account and erase all personal data we hold about you, including:</p>
+                <ul class="text-muted" style="font-size:0.9rem;">
+                    <li>Your profile and resume</li>
+                    <li>Interview recordings and transcripts</li>
+                    <li>Work authorization attestations</li>
+                    <li>Application history (anonymised, not deleted, so employers retain their pipeline records)</li>
+                    <li>All messages and notifications</li>
+                </ul>
+                <p class="text-muted small mb-4">This action cannot be undone. If you were hired through Avants, the placement fee record is retained for legal and billing purposes.</p>
+
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Type <strong>delete my account</strong> to confirm</label>
+                        <input type="text" class="form-control" name="confirm" placeholder="delete my account" autocomplete="off" required>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="{{ url_for('candidate.profile') }}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-danger fw-bold">Delete my account</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

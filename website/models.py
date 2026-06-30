@@ -117,6 +117,9 @@ class Company(db.Model):
     logo_filename = db.Column(db.String(200))
     logo_version = db.Column(db.Integer, default=0)
     blind_mode_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    terms_accepted_at = db.Column(db.DateTime(timezone=True))
+    terms_accepted_ip = db.Column(db.String(45))
+    terms_version = db.Column(db.String(10))
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
 

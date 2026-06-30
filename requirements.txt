@@ -23,3 +23,4 @@ reportlab>=4.1.0
 stripe>=9.0.0
 Pillow>=10.0.0
 pillow-heif>=0.13.0
+Flask-Limiter==3.9.0

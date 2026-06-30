@@ -12,7 +12,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import getSampleStyleSheet
 
-from . import db
+from . import db, limiter
 from .models import Job, Application, CandidateProfile, Company, Notification, SavedJob, Message, MeetingRoom, MeetingProposal, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
 from email_utils import send_branded_email
 
@@ -230,6 +230,7 @@ def preview_match(job_id):
 
 @candidate.route('/jobs/<int:job_id>/apply', methods=['POST'])
 @login_required
+@limiter.limit("10 per hour")
 def submit_application(job_id):
     job = Job.query.get_or_404(job_id)
 
@@ -1069,3 +1070,57 @@ def candidate_send_message(application_id):
         "is_mine": True,
         "time": msg.created_at.strftime("%b %d, %H:%M") if msg.created_at else "",
     })
+
+
+# ------------------------------------------------------------------ #
+#  Account deletion (GDPR right to erasure)
+# ------------------------------------------------------------------ #
+
+@candidate.route('/account/delete', methods=['GET', 'POST'])
+@login_required
+def delete_account():
+    if current_user.role != 'candidate':
+        abort(403)
+
+    if request.method == 'POST':
+        confirm = request.form.get('confirm', '').strip().lower()
+        if confirm != 'delete my account':
+            flash("Type exactly 'delete my account' to confirm.", "error")
+            return render_template('delete_account.html')
+
+        user = current_user
+        from flask_login import logout_user as _logout
+
+        # Wipe personal data from all applications
+        apps = Application.query.filter_by(candidate_user_id=user.id).all()
+        for app in apps:
+            app.resume_text = '[deleted]'
+            app.interview_transcript = None
+            app.interview_audio_log = None
+            app.work_authorization = None
+            app.match_explanation = None
+            app.skills_roadmap = None
+            app.interview_saved_session = None
+
+        # Delete profile
+        profile = CandidateProfile.query.filter_by(user_id=user.id).first()
+        if profile:
+            db.session.delete(profile)
+
+        # Delete notifications, saved jobs, messages
+        Notification.query.filter_by(user_id=user.id).delete()
+        SavedJob.query.filter_by(user_id=user.id).delete()
+        Message.query.filter_by(sender_user_id=user.id).delete()
+
+        # Anonymise the user record
+        user.first_name = 'Deleted'
+        user.email = f'deleted_{user.id}@deleted.invalid'
+        user.password = None
+        user.email_verified = False
+
+        db.session.commit()
+        _logout()
+        flash("Your account and personal data have been deleted.", "success")
+        return redirect(url_for('views.index'))
+
+    return render_template('delete_account.html')

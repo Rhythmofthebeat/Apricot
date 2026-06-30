@@ -142,16 +142,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 <input type="password" class="form-control" id="password2" name="password2" placeholder="Repeat your password" required autocomplete="new-password">
             </div>
 
-            <!-- Employer: placement fee agreement -->
+            <!-- Employer: platform agreement (shown only for employer accounts) -->
             <div id="employerFeeBlock" style="display:none;" class="mb-3">
                 <div class="employer-fee-block">
                     <i class="fas fa-file-contract"></i>
-                    <span><strong>Placement fee agreement:</strong> If you hire a candidate sourced through Avants AI, a placement fee of <strong>10–15% of their first-year compensation</strong> will apply. The exact rate is confirmed before any payment is due. <a href="/terms#fee" class="text-decoration-none fw-semibold" style="color:#92400e;">Learn more</a></span>
+                    <div>
+                        <strong>Employer Platform Agreement</strong><br>
+                        <span style="font-size:0.82rem;">By creating an employer account you agree to the <a href="/terms#employer-contract" target="_blank" class="fw-semibold" style="color:#92400e;">Employer Platform Agreement</a> (Section 12 of our Terms), which covers the <strong>15% placement fee</strong>, non-circumvention, and candidate data handling obligations.</span>
+                    </div>
                 </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="feeAgreementCheck" name="fee_agreement">
-                    <label class="form-check-label" style="font-size:0.82rem;" for="feeAgreementCheck">
-                        I understand and agree to the placement fee terms
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="employerAgreementCheck" name="employer_agreement" required>
+                    <label class="form-check-label" style="font-size:0.82rem;" for="employerAgreementCheck">
+                        I am authorised to sign on behalf of my company and agree to the <a href="/terms#employer-contract" target="_blank" class="text-decoration-none fw-semibold">Employer Platform Agreement</a>
                     </label>
                 </div>
             </div>

@@ -4,6 +4,8 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_mail import Mail
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from sqlalchemy import text
 from dotenv import load_dotenv
 from config import Config
@@ -12,6 +14,7 @@ load_dotenv(override=True)
 
 db = SQLAlchemy()
 mail = Mail()
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
 DB_NAME = "database.db"
 
 
@@ -59,6 +62,10 @@ def _run_migrations(db):
         "ALTER TABLE application ADD COLUMN skills_roadmap TEXT",
         # company — blind hiring mode
         "ALTER TABLE company ADD COLUMN blind_mode_enabled BOOLEAN NOT NULL DEFAULT 0",
+        # company — employer terms acceptance audit trail
+        "ALTER TABLE company ADD COLUMN terms_accepted_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE company ADD COLUMN terms_accepted_ip VARCHAR(45)",
+        "ALTER TABLE company ADD COLUMN terms_version VARCHAR(10)",
         # application — saved interview session for resume-later
         "ALTER TABLE application ADD COLUMN interview_saved_session TEXT",
         # user — admin flag
@@ -115,8 +122,9 @@ def create_app():
         app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_NAME}'
 
     app.config.from_object(Config)
-    db.init_app(app) # we are going to use this app
+    db.init_app(app)
     mail.init_app(app)
+    limiter.init_app(app)
 
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
     audio_path = os.path.join(BASE_DIR, "..", "audio")

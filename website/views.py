@@ -139,6 +139,16 @@ def join_meeting(room_name):
     return render_template('meeting_room.html', room=room, application=application, is_employer=is_employer)
 
 
+@views.route('/terms')
+def terms():
+    return render_template('terms.html')
+
+
+@views.route('/privacy')
+def privacy():
+    return render_template('privacy.html')
+
+
 @views.route('/robots.txt')
 def robots():
     content = f"User-agent: *\nAllow: /\nDisallow: /employer/\nDisallow: /candidate/\nDisallow: /admin/\nSitemap: {request.host_url.rstrip('/')}/sitemap.xml\n"

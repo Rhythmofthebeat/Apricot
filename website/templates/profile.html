@@ -236,6 +236,23 @@
     </div>
 </div>
 
+<!-- Danger zone -->
+<div class="row justify-content-center mt-4">
+    <div class="col-lg-10">
+        <div class="card" style="border-color:var(--border);">
+            <div class="card-body p-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div>
+                    <div class="fw-semibold" style="font-size:0.88rem;">Delete account</div>
+                    <div class="text-muted" style="font-size:0.8rem;">Permanently erase your profile, resume, interview recordings, and all personal data.</div>
+                </div>
+                <a href="{{ url_for('candidate.delete_account') }}" class="btn btn-outline-danger btn-sm fw-semibold">
+                    <i class="fas fa-trash me-1"></i> Delete my account
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}

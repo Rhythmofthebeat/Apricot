@@ -1,7 +1,8 @@
+from datetime import datetime, timezone
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session, make_response
 from .models import User, Company, FREE_EMAIL_DOMAINS
 from werkzeug.security import generate_password_hash, check_password_hash
-from . import db
+from . import db, limiter
 from flask_login import login_user, login_required, logout_user, current_user
 from supabase import create_client
 import os
@@ -128,6 +129,7 @@ def reset_password_form():
 # ------------------------------------------------ #
 
 @auth.route('/login', methods=['GET', 'POST'])
+@limiter.limit("20 per minute; 5 per 10 seconds")
 def login():
     if request.method == 'POST':
         email = request.form.get('email')
@@ -184,6 +186,7 @@ def logout():
 
 # ---------------- SIGN-UP ----------------
 @auth.route('/sign-up', methods=['GET', 'POST'])
+@limiter.limit("10 per hour")
 def sign_up():
     if current_user.is_authenticated:
         return redirect(url_for('views.home'))
@@ -235,7 +238,13 @@ def sign_up():
                 )
                 db.session.add(local_user)
                 if role == 'employer' and company_name and email_domain not in FREE_EMAIL_DOMAINS:
-                    company = Company(owner_user_id=local_user.id, name=company_name)
+                    company = Company(
+                        owner_user_id=local_user.id,
+                        name=company_name,
+                        terms_accepted_at=datetime.now(timezone.utc),
+                        terms_accepted_ip=request.remote_addr,
+                        terms_version='1.0',
+                    )
                     db.session.add(company)
                 db.session.commit()
 
@@ -328,7 +337,13 @@ def auth_confirm():
             db.session.commit()
 
             if role == 'employer' and company_name:
-                company = Company(owner_user_id=local_user.id, name=company_name)
+                company = Company(
+                    owner_user_id=local_user.id,
+                    name=company_name,
+                    terms_accepted_at=datetime.now(timezone.utc),
+                    terms_accepted_ip=request.remote_addr,
+                    terms_version='1.0',
+                )
                 db.session.add(company)
                 db.session.commit()
         else:
