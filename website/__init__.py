@@ -130,10 +130,7 @@ def create_app():
     audio_path = os.path.join(BASE_DIR, "..", "audio")
     upload_path = os.path.join(BASE_DIR, "..", "uploads")
 
-    app.config["AUDIO_FOLDER"] = os.path.join(os.path.dirname(__file__), "audio")
     app.config["AUDIO_FOLDER"] = audio_path
-
-    app.config["AUDIO_FOLDER"] = os.path.join(os.path.dirname(__file__), "uploads")
     app.config["UPLOAD_FOLDER"] = upload_path
 
     

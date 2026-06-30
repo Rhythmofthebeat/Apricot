@@ -1121,6 +1121,6 @@ def delete_account():
         db.session.commit()
         _logout()
         flash("Your account and personal data have been deleted.", "success")
-        return redirect(url_for('views.index'))
+        return redirect(url_for('views.home'))
 
     return render_template('delete_account.html')
