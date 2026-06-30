@@ -35,36 +35,39 @@
 <div class="row justify-content-center g-4">
     <!-- Sidebar: Completeness + JD Analyzer -->
     <div class="col-lg-4 order-lg-2">
+        <div style="position:sticky;top:80px;z-index:10;">
 
-        <!-- Completeness checklist -->
-        <div class="card mb-3 sticky-top" style="top:80px;z-index:10;">
-            <div class="card-header fw-bold d-flex align-items-center justify-content-between" style="font-size:0.85rem;">
-                <span><i class="fas fa-list-check me-2" style="color:var(--primary);"></i>Post Checklist</span>
-                <span id="checklistScore" class="badge bg-secondary" style="font-size:0.7rem;">0 / 5</span>
+            <!-- Completeness checklist -->
+            <div class="card mb-3">
+                <div class="card-header fw-bold d-flex align-items-center justify-content-between" style="font-size:0.85rem;">
+                    <span><i class="fas fa-list-check me-2" style="color:var(--primary);"></i>Post Checklist</span>
+                    <span id="checklistScore" class="badge bg-secondary" style="font-size:0.7rem;">0 / 5</span>
+                </div>
+                <div class="card-body p-3">
+                    <ul class="list-unstyled mb-0" id="checklistItems" style="font-size:0.83rem;">
+                        <li id="chk-title"       class="chk-row mb-2"><i class="fas fa-circle-xmark me-2 text-danger"></i>Job title <span class="text-danger fw-semibold" style="font-size:0.72rem;">required</span></li>
+                        <li id="chk-description" class="chk-row mb-2"><i class="fas fa-circle-xmark me-2 text-danger"></i>Description <span class="text-danger fw-semibold" style="font-size:0.72rem;">required</span></li>
+                        <li id="chk-salary"      class="chk-row mb-2"><i class="fas fa-circle-xmark me-2 text-danger"></i>Pay range <span class="text-muted" style="font-size:0.75rem;">recommended</span></li>
+                        <li id="chk-focus"       class="chk-row mb-2"><i class="fas fa-circle-xmark me-2 text-danger"></i>Interview focus <span class="text-muted" style="font-size:0.75rem;">recommended</span></li>
+                        <li id="chk-questions"   class="chk-row mb-0"><i class="fas fa-circle-xmark me-2 text-danger"></i>Custom questions <span class="text-muted" style="font-size:0.75rem;">optional</span></li>
+                    </ul>
+                </div>
             </div>
-            <div class="card-body p-3">
-                <ul class="list-unstyled mb-0" id="checklistItems" style="font-size:0.83rem;">
-                    <li id="chk-title"       class="chk-row mb-2"><i class="fas fa-circle-xmark me-2 text-danger"></i>Job title <span class="text-danger fw-semibold" style="font-size:0.72rem;">required</span></li>
-                    <li id="chk-description" class="chk-row mb-2"><i class="fas fa-circle-xmark me-2 text-danger"></i>Description <span class="text-danger fw-semibold" style="font-size:0.72rem;">required</span></li>
-                    <li id="chk-salary"      class="chk-row mb-2"><i class="fas fa-circle-xmark me-2 text-danger"></i>Pay range <span class="text-muted" style="font-size:0.75rem;">recommended</span></li>
-                    <li id="chk-focus"       class="chk-row mb-2"><i class="fas fa-circle-xmark me-2 text-danger"></i>Interview focus <span class="text-muted" style="font-size:0.75rem;">recommended</span></li>
-                    <li id="chk-questions"   class="chk-row mb-0"><i class="fas fa-circle-xmark me-2 text-danger"></i>Custom questions <span class="text-muted" style="font-size:0.75rem;">optional</span></li>
-                </ul>
-            </div>
-        </div>
 
-        <!-- JD Quality Analyzer -->
-        <div class="card">
-            <div class="card-header fw-bold" style="font-size:0.85rem;">
-                <i class="fas fa-magnifying-glass-chart me-2" style="color:var(--primary);"></i>JD Quality Analyzer
+            <!-- JD Quality Analyzer -->
+            <div class="card">
+                <div class="card-header fw-bold" style="font-size:0.85rem;">
+                    <i class="fas fa-magnifying-glass-chart me-2" style="color:var(--primary);"></i>JD Quality Analyzer
+                </div>
+                <div class="card-body p-3">
+                    <p class="text-muted small mb-3">Let AI review your job post before you publish it.</p>
+                    <button type="button" class="btn btn-outline-primary w-100 btn-sm" id="analyzeJdBtn" onclick="analyzeJD()">
+                        <i class="fas fa-wand-magic-sparkles me-1"></i> Analyze Description
+                    </button>
+                    <div id="jdAnalysisResult" class="mt-3" style="display:none;"></div>
+                </div>
             </div>
-            <div class="card-body p-3">
-                <p class="text-muted small mb-3">Let AI review your job post before you publish it.</p>
-                <button type="button" class="btn btn-outline-primary w-100 btn-sm" id="analyzeJdBtn" onclick="analyzeJD()">
-                    <i class="fas fa-wand-magic-sparkles me-1"></i> Analyze Description
-                </button>
-                <div id="jdAnalysisResult" class="mt-3" style="display:none;"></div>
-            </div>
+
         </div>
     </div>
 
