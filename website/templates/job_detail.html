@@ -290,6 +290,11 @@
                                 </a>
                             </li>
                             <li>
+                                <a class="dropdown-item" href="sms:&body={{ (job.title + ' at ' + job.company.name + ' — ' + request.url)|urlencode }}">
+                                    <i class="fas fa-comment-dots me-2" style="color:#34c759;width:16px;"></i>iMessage / SMS
+                                </a>
+                            </li>
+                            <li>
                                 <a class="dropdown-item" href="mailto:?subject={{ ('Job: ' + job.title + ' at ' + job.company.name)|urlencode }}&body={{ ('Check out this job on Avants: ' + request.url)|urlencode }}">
                                     <i class="fas fa-envelope me-2" style="color:var(--text-muted);width:16px;"></i>Email
                                 </a>
