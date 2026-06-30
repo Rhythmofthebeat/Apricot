@@ -244,26 +244,37 @@ def submit_application(job_id):
     if not resume_text:
         return jsonify({"error": "Add your resume content first."}), 400
 
-    result = compare_resume_to_job(job.description_text, resume_text)
+    try:
+        result = compare_resume_to_job(job.description_text, resume_text)
+    except Exception as e:
+        return jsonify({"error": "Resume analysis failed — please try again."}), 500
+
     score = _extract_score(result)
 
-    application = Application(
-        job_id=job.id,
-        candidate_user_id=current_user.id,
-        resume_text=resume_text,
-        work_authorization=json.dumps(work_authorization) if work_authorization else None,
-        match_score=score,
-        match_explanation=result.replace('*', ''),
-    )
-    db.session.add(application)
+    try:
+        application = Application(
+            job_id=job.id,
+            candidate_user_id=current_user.id,
+            resume_text=resume_text,
+            work_authorization=json.dumps(work_authorization) if work_authorization else None,
+            match_score=score,
+            match_explanation=result.replace('*', ''),
+        )
+        db.session.add(application)
 
-    profile = CandidateProfile.query.filter_by(user_id=current_user.id).first()
-    if not profile:
-        profile = CandidateProfile(user_id=current_user.id)
-        db.session.add(profile)
-    profile.resume_text = resume_text
+        try:
+            profile = CandidateProfile.query.filter_by(user_id=current_user.id).first()
+            if not profile:
+                profile = CandidateProfile(user_id=current_user.id)
+                db.session.add(profile)
+            profile.resume_text = resume_text
+        except Exception:
+            db.session.rollback()
 
-    db.session.commit()
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Could not save your application — please try again."}), 500
 
     return jsonify({
         "redirect_url": url_for('candidate.apply_next_steps', job_id=job.id, application_id=application.id)
@@ -454,20 +465,24 @@ def dashboard():
     from datetime import date as _date
     today = _date.today().isoformat()
     app_ids = [a.id for a in applications]
-    upcoming_interviews = (
-        MeetingRoom.query
-        .filter(MeetingRoom.application_id.in_(app_ids))
-        .filter(MeetingRoom.scheduled_date >= today)
-        .order_by(MeetingRoom.scheduled_date, MeetingRoom.scheduled_time)
-        .all()
-    ) if app_ids else []
-
-    pending_proposals = (
-        MeetingProposal.query
-        .filter(MeetingProposal.application_id.in_(app_ids))
-        .filter_by(status='pending')
-        .count()
-    ) if app_ids else 0
+    try:
+        upcoming_interviews = (
+            MeetingRoom.query
+            .filter(MeetingRoom.application_id.in_(app_ids))
+            .filter(MeetingRoom.scheduled_date >= today)
+            .order_by(MeetingRoom.scheduled_date, MeetingRoom.scheduled_time)
+            .all()
+        ) if app_ids else []
+        pending_proposals = (
+            MeetingProposal.query
+            .filter(MeetingProposal.application_id.in_(app_ids))
+            .filter_by(status='pending')
+            .count()
+        ) if app_ids else 0
+    except Exception:
+        db.session.rollback()
+        upcoming_interviews = []
+        pending_proposals = 0
 
     return render_template(
         "candidate_dashboard.html",

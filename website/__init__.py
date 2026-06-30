@@ -176,6 +176,7 @@ def create_app():
                 count = base_q.filter(Application.candidate_user_id == _cu.id).scalar() or 0
             return {"unread_messages": count}
         except Exception:
+            db.session.rollback()
             return {"unread_messages": 0}
 
     import json as _json
