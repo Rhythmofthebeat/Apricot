@@ -42,17 +42,17 @@ def _run_migrations(db):
         "ALTER TABLE application ADD COLUMN interview_transcript TEXT",
         "ALTER TABLE application ADD COLUMN interview_audio_log TEXT",
         "ALTER TABLE application ADD COLUMN interview_verdict VARCHAR(20)",
-        "ALTER TABLE application ADD COLUMN fee_paid BOOLEAN NOT NULL DEFAULT 0",
+        "ALTER TABLE application ADD COLUMN fee_paid BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE application ADD COLUMN stripe_payment_link VARCHAR(500)",
         # user — verification + notifications
-        "ALTER TABLE user ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT 1",
-        "ALTER TABLE user ADD COLUMN notifications_enabled BOOLEAN NOT NULL DEFAULT 1",
+        "ALTER TABLE \"user\" ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE \"user\" ADD COLUMN notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE",
         # company — logo
         "ALTER TABLE company ADD COLUMN logo_filename VARCHAR(200)",
         "ALTER TABLE company ADD COLUMN logo_version INTEGER NOT NULL DEFAULT 0",
         # application — employer notes + withdrawal
         "ALTER TABLE application ADD COLUMN employer_notes TEXT",
-        "ALTER TABLE application ADD COLUMN withdrawn BOOLEAN NOT NULL DEFAULT 0",
+        "ALTER TABLE application ADD COLUMN withdrawn BOOLEAN NOT NULL DEFAULT FALSE",
         # job — salary range
         "ALTER TABLE job ADD COLUMN salary_max_usd INTEGER",
         "ALTER TABLE job ADD COLUMN pay_type VARCHAR(20) NOT NULL DEFAULT 'yearly'",
@@ -61,7 +61,7 @@ def _run_migrations(db):
         # application — AI-generated skills gap roadmap
         "ALTER TABLE application ADD COLUMN skills_roadmap TEXT",
         # company — blind hiring mode
-        "ALTER TABLE company ADD COLUMN blind_mode_enabled BOOLEAN NOT NULL DEFAULT 0",
+        "ALTER TABLE company ADD COLUMN blind_mode_enabled BOOLEAN NOT NULL DEFAULT FALSE",
         # company — employer terms acceptance audit trail
         "ALTER TABLE company ADD COLUMN terms_accepted_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE company ADD COLUMN terms_accepted_ip VARCHAR(45)",
@@ -78,7 +78,7 @@ def _run_migrations(db):
         "ALTER TABLE candidate_profile ADD COLUMN headline VARCHAR(200)",
         "ALTER TABLE candidate_profile ADD COLUMN target_roles VARCHAR(300)",
         # candidate_profile — talent pool opt-in fields
-        "ALTER TABLE candidate_profile ADD COLUMN open_to_work BOOLEAN NOT NULL DEFAULT 0",
+        "ALTER TABLE candidate_profile ADD COLUMN open_to_work BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE candidate_profile ADD COLUMN skills TEXT",
         "ALTER TABLE candidate_profile ADD COLUMN work_preference VARCHAR(50)",
         "ALTER TABLE candidate_profile ADD COLUMN availability VARCHAR(50)",
@@ -92,7 +92,7 @@ def _run_migrations(db):
         # task_submission — per-submission agreement with consensus
         "ALTER TABLE task_submission ADD COLUMN agreement_score REAL",
         # contractor_profile — Stripe Connect payout flag
-        "ALTER TABLE contractor_profile ADD COLUMN payout_enabled BOOLEAN NOT NULL DEFAULT 0",
+        "ALTER TABLE contractor_profile ADD COLUMN payout_enabled BOOLEAN NOT NULL DEFAULT FALSE",
     ]
     for stmt in new_columns:
         try:
