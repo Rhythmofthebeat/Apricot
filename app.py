@@ -44,7 +44,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # OpenAI
-openai.api_key = Config.OPENAI_API_KEY
+client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -268,7 +268,7 @@ def resume_chat():
     messages.append({"role": "user", "content": user_message})
 
     try:
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
             max_tokens=800,
