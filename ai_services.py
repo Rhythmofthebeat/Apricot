@@ -2,6 +2,7 @@
 website/ blueprints. Pulled out of app.py so blueprints can import these
 without circular-importing the Flask app itself."""
 import io
+import os
 import logging
 import re
 from collections import Counter
@@ -16,7 +17,7 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
-openai.api_key = Config.OPENAI_API_KEY
+client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 
 def extract_pdf_text(file_stream):
@@ -91,7 +92,7 @@ Rules:
 - Remove all asterisks
 - Be specific — mention exact skills, tools, and requirements from the job description
 """
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}]
     )
@@ -109,7 +110,7 @@ Rules:
 def generate_summary(text):
     """Generate AI resume summary with retry logic."""
     try:
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {
@@ -194,7 +195,7 @@ Rules:
 - Only use information present in the pasted content — never invent companies, dates, or credentials.
 - If a section has no information, write "Not provided" under that heading instead of guessing.
 """
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=900,
@@ -235,7 +236,7 @@ Job ID: <id>
 Score: <number 0-100>
 Reason: <1-2 sentences, specific to this candidate's actual background and this job's requirements>
 """
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=900,
@@ -298,7 +299,7 @@ Job ID: <id>
 Similarity: <number 0-100>
 Reason: <one short sentence>"""
 
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=400,
@@ -346,7 +347,7 @@ Context:
 
 Write only the feedback message text. No subject line, no greeting, no sign-off."""
 
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=250,
@@ -397,7 +398,7 @@ Issue: <level> | <specific actionable feedback, 1 sentence>
 
 Include 3-7 issues total. Be specific to this actual posting — do not give generic advice."""
 
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=500,
@@ -455,7 +456,7 @@ Tip: <1 sentence, concrete and actionable>
 Tip: <1 sentence>
 Tip: <1 sentence>"""
 
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=600,
@@ -507,7 +508,7 @@ Step: ...
 Description: ...
 Timeline: ..."""
 
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=600,
@@ -629,7 +630,7 @@ def run_interview_turn(role, job_description, user_message, history, force_concl
     elif not history:
         messages.append({"role": "user", "content": "Begin the interview."})
 
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=messages,
         max_tokens=400,
@@ -671,7 +672,7 @@ role's requirements{"" if not interview_focus else ", plus at least one question
 
 Respond with ONLY the questions, one per line, no numbering, no extra commentary.
 """
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=800,
@@ -722,7 +723,7 @@ Reason: <one specific observation — quote or name a phrase from the answers>
 Reason: <another specific observation>
 Reason: <another specific observation>"""
 
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=350,
@@ -755,7 +756,7 @@ Reason: <another specific observation>"""
 def transcribe_audio(file_path):
     """Speech-to-text for a candidate's recorded interview answer."""
     with open(file_path, "rb") as f:
-        transcript = openai.audio.transcriptions.create(model="whisper-1", file=f)
+        transcript = client.audio.transcriptions.create(model="whisper-1", file=f)
     return transcript.text.strip()
 
 
