@@ -352,15 +352,22 @@
                         Invite a colleague by email. They'll receive a link to create an employer account (or log in)
                         and join your company, giving them access to all your job postings and applicants.
                     </p>
-                    <form action="{{ url_for('employer.invite_member') }}" method="POST">
+                    <form id="invite-member-form" action="{{ url_for('employer.invite_member') }}" method="POST">
                         <div class="d-flex gap-2">
                             <input type="email" name="email" class="form-control" placeholder="colleague@yourcompany.com" required style="max-width:320px;">
-                            <button type="submit" class="btn btn-primary">
+                            <button type="submit" class="btn btn-primary" id="invite-member-btn">
                                 <i class="fas fa-paper-plane me-1"></i> Send Invite
                             </button>
                         </div>
                         <div class="form-text mt-2">The invitee must sign up or log in with the same email address to accept.</div>
                     </form>
+                    <script>
+                        document.getElementById('invite-member-form').addEventListener('submit', function () {
+                            const btn = document.getElementById('invite-member-btn');
+                            btn.disabled = true;
+                            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sending…';
+                        });
+                    </script>
                 </div>
             </div>
             {% else %}

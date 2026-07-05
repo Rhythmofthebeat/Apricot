@@ -20,43 +20,44 @@ def _avatar_color(letter):
 @views.route('/')
 @views.route('/home')
 def home():
-    if not current_user.is_authenticated:
-        latest_jobs = (Job.query
-            .filter_by(status='open')
-            .order_by(Job.created_at.desc())
-            .limit(8)
+    if current_user.is_authenticated and request.path == '/':
+        if current_user.role == 'employer':
+            return redirect(url_for('employer.dashboard'))
+        return redirect(url_for('candidate.browse_jobs'))
+
+    latest_jobs = (Job.query
+        .filter_by(status='open')
+        .order_by(Job.created_at.desc())
+        .limit(8)
+        .all())
+
+    job_data = []
+    for job in latest_jobs:
+        app_count = Application.query.filter_by(job_id=job.id).count()
+        recent_apps = (Application.query
+            .filter_by(job_id=job.id)
+            .limit(4)
             .all())
+        avatars = []
+        for app in recent_apps:
+            u = User.query.get(app.candidate_user_id)
+            if u and u.first_name:
+                avatars.append({
+                    "letter": u.first_name[0].upper(),
+                    "color": _avatar_color(u.first_name[0]),
+                })
+        job_data.append({"job": job, "app_count": app_count, "avatars": avatars})
 
-        job_data = []
-        for job in latest_jobs:
-            app_count = Application.query.filter_by(job_id=job.id).count()
-            recent_apps = (Application.query
-                .filter_by(job_id=job.id)
-                .limit(4)
-                .all())
-            avatars = []
-            for app in recent_apps:
-                u = User.query.get(app.candidate_user_id)
-                if u and u.first_name:
-                    avatars.append({
-                        "letter": u.first_name[0].upper(),
-                        "color": _avatar_color(u.first_name[0]),
-                    })
-            job_data.append({"job": job, "app_count": app_count, "avatars": avatars})
+    open_job_count = Job.query.filter_by(status='open').count()
+    candidate_count = User.query.filter_by(role='candidate').count()
+    company_count = Company.query.count()
 
-        open_job_count = Job.query.filter_by(status='open').count()
-        candidate_count = User.query.filter_by(role='candidate').count()
-        company_count = Company.query.count()
-
-        return render_template("landing.html",
-            job_data=job_data,
-            open_job_count=open_job_count,
-            candidate_count=candidate_count,
-            company_count=company_count,
-        )
-    if current_user.role == 'employer':
-        return redirect(url_for('employer.dashboard'))
-    return redirect(url_for('candidate.browse_jobs'))
+    return render_template("landing.html",
+        job_data=job_data,
+        open_job_count=open_job_count,
+        candidate_count=candidate_count,
+        company_count=company_count,
+    )
 
 
 @views.route('/stripe/webhook', methods=['POST'])

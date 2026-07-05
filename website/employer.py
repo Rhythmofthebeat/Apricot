@@ -1027,14 +1027,19 @@ def invite_member():
         flash("A valid email address is required.", "error")
         return redirect(url_for('employer.company_settings'))
 
-    from .models import FREE_EMAIL_DOMAINS
+    from .models import FREE_EMAIL_DOMAINS, User
     domain = email.split('@')[-1]
     if domain in FREE_EMAIL_DOMAINS:
         flash("Please invite using a company email address — personal email providers like Gmail aren't accepted.", "error")
         return redirect(url_for('employer.company_settings'))
 
+    owner = User.query.get(company.owner_user_id)
+    owner_domain = owner.email.split('@')[-1].lower() if owner and owner.email else None
+    if owner_domain and domain != owner_domain:
+        flash(f"You can only invite teammates with an @{owner_domain} email address.", "error")
+        return redirect(url_for('employer.company_settings'))
+
     # Don't invite someone already a member or the owner
-    from .models import User
     existing_user = User.query.filter_by(email=email).first()
     if existing_user:
         if existing_user.id == company.owner_user_id:

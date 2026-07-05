@@ -1,6 +1,7 @@
-from website import create_app, mail
+from website import create_app, mail, limiter
 from flask_mail import Message
 from flask import Flask, render_template, request, jsonify, current_app, Response, flash, redirect, url_for
+from flask_login import login_required, current_user
 import openai
 import io
 import re
@@ -57,6 +58,7 @@ def resumesum():
 
 
 @app.route('/resume-jobmatch', methods=['GET', 'POST'])
+@limiter.limit("10 per hour", methods=["POST"])
 def resumemat():
     """Resume job-match page — handles both the form display and form submission."""
     result        = None
@@ -85,7 +87,31 @@ def resumemat():
                 job_text=job_text,
             )
 
-        result = compare_resume_to_job(job_text, resume_text)
+        try:
+            result = compare_resume_to_job(job_text, resume_text)
+        except RateLimitError:
+            return render_template(
+                'resumemat.html',
+                result="Our AI service is busy right now. Please try again in a minute.",
+                score_value=0,
+                job_text=job_text,
+            )
+        except AuthenticationError:
+            logger.error("OpenAI authentication failed in /resume-jobmatch")
+            return render_template(
+                'resumemat.html',
+                result="Something went wrong on our end. Please try again shortly.",
+                score_value=0,
+                job_text=job_text,
+            )
+        except Exception as e:
+            logger.error(f"compare_resume_to_job failed: {str(e)}")
+            return render_template(
+                'resumemat.html',
+                result="We couldn't analyze your resume right now. Please try again shortly.",
+                score_value=0,
+                job_text=job_text,
+            )
 
         # Persist raw result to disk (optional)
         with open("resumemat.txt", "w", encoding="utf-8") as f:
@@ -109,6 +135,8 @@ def resumemat():
 
 
 @app.route("/generate-profile-resume", methods=["POST"])
+@login_required
+@limiter.limit("10 per hour")
 def generate_profile_resume():
     """Build a resume from pasted LinkedIn profile text for candidates without one."""
     data = request.get_json() or {}
@@ -160,6 +188,7 @@ def export_profile_resume_pdf():
 
 
 @app.route("/uploads", methods=["POST"])
+@limiter.limit("10 per hour")
 def upload_resume():
     """Handle resume uploads for the summariser page."""
     logger.info("Upload endpoint hit")
@@ -225,6 +254,8 @@ def upload_resume():
 
 
 @app.route("/resume-chat", methods=["POST"])
+@login_required
+@limiter.limit("30 per hour")
 def resume_chat():
     """Chat endpoint — resume coaching powered by GPT-4o."""
     data = request.get_json()
@@ -281,6 +312,8 @@ def resume_chat():
 
 
 @app.route("/speak", methods=["POST"])
+@login_required
+@limiter.limit("20 per hour")
 def speak_summary():
     from google.cloud import texttospeech
     data         = request.get_json()
@@ -326,6 +359,7 @@ def serve_audio(filename):
 
 
 @app.route("/export/summary-pdf", methods=["POST"])
+@login_required
 def export_summary_pdf():
     data    = request.get_json()
     summary = (data or {}).get("summary", "").strip()
