@@ -67,6 +67,9 @@ def resumemat():
     job_text      = ''      # always defined
 
     if request.method == 'POST':
+        if not current_user.is_authenticated:
+            return redirect(url_for('auth.login', next=request.path))
+
         job_text    = request.form.get('job_req', '')
         resume_file = request.files.get('resume')
 
@@ -188,6 +191,7 @@ def export_profile_resume_pdf():
 
 
 @app.route("/uploads", methods=["POST"])
+@login_required
 @limiter.limit("10 per hour")
 def upload_resume():
     """Handle resume uploads for the summariser page."""
