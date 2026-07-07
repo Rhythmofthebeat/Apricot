@@ -339,7 +339,7 @@
         so you hear back in hours, not weeks.
     </p>
     <div class="hero-cta-group">
-        <a href="/sign-up" class="btn-hero-primary">
+        <a href="{{ url_for('candidate.browse_jobs') }}" class="btn-hero-primary">
             <i class="fas fa-search"></i> Browse open roles
         </a>
         <a href="/sign-up?role=employer" class="btn-hero-outline">
@@ -415,12 +415,12 @@
     <div class="container">
         <div class="roles-header">
             <h2>Latest roles</h2>
-            <a href="/sign-up">View all <i class="fas fa-arrow-right ms-1"></i></a>
+            <a href="{{ url_for('candidate.browse_jobs') }}">View all <i class="fas fa-arrow-right ms-1"></i></a>
         </div>
         <div class="roles-grid">
             {% for item in job_data %}
             {% set job = item.job %}
-            <a href="/sign-up" class="role-card">
+            <a href="{{ url_for('candidate.job_detail', job_id=job.id) }}" class="role-card">
                 <div>
                     <div class="role-company">{{ job.company.name if job.company else 'Company' }}</div>
                     <div class="role-title">{{ job.title }}</div>
@@ -511,7 +511,7 @@
                         <li><i class="fas fa-check-circle"></i> Real feedback, not automated rejection 3 months later</li>
                         <li><i class="fas fa-check-circle"></i> Track all your applications in one dashboard</li>
                     </ul>
-                    <a href="/sign-up" class="btn btn-primary btn-rounded">
+                    <a href="{{ url_for('candidate.browse_jobs') }}" class="btn btn-primary btn-rounded">
                         <i class="fas fa-search me-1"></i> Browse open roles
                     </a>
                 </div>
