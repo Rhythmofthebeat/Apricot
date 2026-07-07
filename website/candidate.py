@@ -13,7 +13,7 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import getSampleStyleSheet
 
 from . import db, limiter
-from .models import Job, Application, CandidateProfile, Company, Notification, SavedJob, Message, MeetingRoom, MeetingProposal, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
+from .models import Job, Application, CandidateProfile, Company, Notification, SavedJob, Message, MeetingRoom, MeetingProposal, User, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
 from email_utils import send_branded_email
 
 from ai_services import (
@@ -963,6 +963,42 @@ def withdraw_application(application_id):
     application.withdrawn = True
     db.session.commit()
     flash("Application withdrawn.", "success")
+    return redirect(url_for('candidate.dashboard'))
+
+
+@candidate.route('/applications/<int:application_id>/confirm-hire', methods=['POST'])
+@login_required
+def confirm_hire(application_id):
+    """Candidate-side verification that a hire actually happened — the employer's
+    placement fee invoice only fires after this, not the moment they click 'hired'."""
+    application = Application.query.get_or_404(application_id)
+    if application.candidate_user_id != current_user.id:
+        abort(403)
+    if application.status != 'hired':
+        abort(400)
+
+    if not application.candidate_confirmed_hire:
+        application.candidate_confirmed_hire = True
+        application.hire_confirmed_at = func.now()
+        db.session.commit()
+
+        job = Job.query.get(application.job_id)
+        company = Company.query.get(job.company_id)
+        employer_user = User.query.get(company.owner_user_id)
+
+        if employer_user:
+            notif = Notification(
+                user_id=employer_user.id,
+                message=f"{current_user.first_name} confirmed their hire for {job.title}.",
+                link=url_for('employer.applicants', job_id=job.id),
+            )
+            db.session.add(notif)
+            db.session.commit()
+
+            from .employer import send_hire_fee_invoice
+            send_hire_fee_invoice(application, job, company, current_user, employer_user)
+
+    flash("Thanks for confirming! We've let the employer know.", "success")
     return redirect(url_for('candidate.dashboard'))
 
 

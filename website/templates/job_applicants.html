@@ -210,6 +210,10 @@
                         <span class="badge-status hired"><i class="fas fa-circle-check me-1"></i>Fee Paid</span>
                     {% elif app.stripe_payment_link %}
                         <span class="badge-status applied"><i class="fas fa-clock me-1"></i>Fee Pending</span>
+                    {% elif app.candidate_confirmed_hire %}
+                        <span class="badge-status applied"><i class="fas fa-clock me-1"></i>Confirmed — invoice pending</span>
+                    {% else %}
+                        <span class="badge-status applied" title="The candidate hasn't confirmed the hire yet — no fee invoice will be sent until they do"><i class="fas fa-hourglass-half me-1"></i>Awaiting candidate confirmation</span>
                     {% endif %}
                 {% endif %}
             </div>

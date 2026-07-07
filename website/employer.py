@@ -116,6 +116,62 @@ def is_company_owner():
 #  Private helpers
 # ------------------------------------------------------------------ #
 
+def send_hire_fee_invoice(application, job, company, candidate, employer_user):
+    """Create the Stripe placement-fee payment link and invoice the employer.
+    Only called once the candidate has confirmed the hire — see candidate.confirm_hire."""
+    payment_link_url = None
+    if not application.stripe_payment_link:
+        payment_link_url = _create_stripe_payment_link(application, job, company, candidate)
+        if payment_link_url:
+            application.stripe_payment_link = payment_link_url
+            db.session.commit()
+
+    fee_amount = int(job.salary_usd * PLATFORM_FEE_PERCENT / 100) if job.salary_usd else None
+    try:
+        if payment_link_url and fee_amount:
+            send_branded_email(
+                to_email=employer_user.email,
+                subject=f"Placement fee invoice — {candidate.first_name} / {job.title}",
+                heading="Placement fee due",
+                body_html=(
+                    f"<strong>{candidate.first_name}</strong> has confirmed their hire for "
+                    f"<strong>{job.title}</strong> through Avants AI.<br><br>"
+                    f"The platform placement fee is <strong>${fee_amount:,}</strong> "
+                    f"(15% of first-year compensation of ${job.salary_usd:,}).<br><br>"
+                    f"This is due within 30 days of the candidate's start date. "
+                    f"Click below to pay securely via Stripe."
+                ),
+                plain_text=(
+                    f"{candidate.first_name} has confirmed their hire for {job.title} through Avants AI.\n\n"
+                    f"Placement fee: ${fee_amount:,} (15% of ${job.salary_usd:,} first-year salary).\n"
+                    f"Pay here: {payment_link_url}"
+                ),
+                cta_label="Pay Placement Fee",
+                cta_url=payment_link_url,
+            )
+        else:
+            send_branded_email(
+                to_email=employer_user.email,
+                subject=f"Placement fee — {candidate.first_name} / {job.title}",
+                heading="Placement fee due",
+                body_html=(
+                    f"<strong>{candidate.first_name}</strong> has confirmed their hire for "
+                    f"<strong>{job.title}</strong> through Avants AI.<br><br>"
+                    f"A placement fee of <strong>15% of first-year compensation</strong> "
+                    f"is due within 30 days of the candidate's start date. "
+                    f"Our team will follow up with an invoice."
+                ),
+                plain_text=(
+                    f"{candidate.first_name} has confirmed their hire for {job.title} through Avants AI.\n\n"
+                    f"A 15% placement fee will be invoiced to you within 30 days of the start date."
+                ),
+                cta_label="View Dashboard",
+                cta_url=url_for('employer.dashboard', _external=True),
+            )
+    except Exception as e:
+        print(f"Hire fee invoice email failed: {e}")
+
+
 def _create_stripe_payment_link(application, job, company, candidate):
     stripe.api_key = current_app.config.get("STRIPE_SECRET_KEY")
     if not stripe.api_key or not job.salary_usd:
@@ -544,12 +600,12 @@ def update_status(application_id):
         if status_changed and copy:
             candidate = application.candidate
 
-            payment_link_url = None
-            if new_status == 'hired' and not application.stripe_payment_link:
-                payment_link_url = _create_stripe_payment_link(application, job, company, candidate)
-                if payment_link_url:
-                    application.stripe_payment_link = payment_link_url
-                    db.session.commit()
+            if new_status == 'hired':
+                # Reset confirmation state — this is a fresh hire event, not yet verified by the candidate.
+                # The placement fee invoice only fires once they confirm (see candidate.confirm_hire).
+                application.candidate_confirmed_hire = False
+                application.hire_confirmed_at = None
+                db.session.commit()
 
             if candidate.notifications_enabled:
                 notif_messages = {
@@ -566,9 +622,9 @@ def update_status(application_id):
                 db.session.commit()
 
             try:
-                fee_amount = int(job.salary_usd * PLATFORM_FEE_PERCENT / 100) if job.salary_usd else None
                 if new_status == 'hired':
-                    # Email the candidate — clean congratulations, no fee language
+                    # Email the candidate — congratulations + ask them to confirm the hire.
+                    # The employer isn't invoiced for the placement fee until the candidate confirms.
                     send_branded_email(
                         to_email=candidate.email,
                         subject=f"You're hired — {job.title}",
@@ -576,57 +632,16 @@ def update_status(application_id):
                         body_html=(
                             f"Congratulations — <strong>{company.name}</strong> has decided to move forward "
                             f"with you for the <strong>{job.title}</strong> role!<br><br>"
-                            f"They'll be in touch with next steps. Best of luck in your new role!"
+                            f"Please confirm the hire on your dashboard so we can let {company.name} know. "
+                            f"Best of luck in your new role!"
                         ),
                         plain_text=(
                             f"Congratulations — {company.name} has offered you the {job.title} role! "
-                            f"They'll be in touch with next steps."
+                            f"Please confirm the hire on your dashboard."
                         ),
-                        cta_label="View My Dashboard",
+                        cta_label="Confirm My Hire",
                         cta_url=url_for('candidate.dashboard', _external=True),
                     )
-                    # Email the employer — Stripe payment link for the 15% placement fee
-                    employer_user = current_user
-                    if payment_link_url and fee_amount:
-                        send_branded_email(
-                            to_email=employer_user.email,
-                            subject=f"Placement fee invoice — {candidate.first_name} / {job.title}",
-                            heading="Placement fee due",
-                            body_html=(
-                                f"You've hired <strong>{candidate.first_name}</strong> for "
-                                f"<strong>{job.title}</strong> through Avants AI.<br><br>"
-                                f"The platform placement fee is <strong>${fee_amount:,}</strong> "
-                                f"(15% of first-year compensation of ${job.salary_usd:,}).<br><br>"
-                                f"This is due within 30 days of the candidate's start date. "
-                                f"Click below to pay securely via Stripe."
-                            ),
-                            plain_text=(
-                                f"You've hired {candidate.first_name} for {job.title} through Avants AI.\n\n"
-                                f"Placement fee: ${fee_amount:,} (15% of ${job.salary_usd:,} first-year salary).\n"
-                                f"Pay here: {payment_link_url}"
-                            ),
-                            cta_label="Pay Placement Fee",
-                            cta_url=payment_link_url,
-                        )
-                    elif new_status == 'hired':
-                        send_branded_email(
-                            to_email=employer_user.email,
-                            subject=f"Placement fee — {candidate.first_name} / {job.title}",
-                            heading="Placement fee due",
-                            body_html=(
-                                f"You've hired <strong>{candidate.first_name}</strong> for "
-                                f"<strong>{job.title}</strong> through Avants AI.<br><br>"
-                                f"A placement fee of <strong>15% of first-year compensation</strong> "
-                                f"is due within 30 days of the candidate's start date. "
-                                f"Our team will follow up with an invoice."
-                            ),
-                            plain_text=(
-                                f"You've hired {candidate.first_name} for {job.title} through Avants AI.\n\n"
-                                f"A 15% placement fee will be invoiced to you within 30 days of the start date."
-                            ),
-                            cta_label="View Dashboard",
-                            cta_url=url_for('employer.dashboard', _external=True),
-                        )
                 else:
                     send_branded_email(
                         to_email=candidate.email,

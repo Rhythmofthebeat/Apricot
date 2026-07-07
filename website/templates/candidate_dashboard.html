@@ -236,10 +236,22 @@
                 </div>
                 {% endif %}
 
+                <!-- Confirm hire prompt (verification gate before the employer is invoiced) -->
+                {% if app.status == 'hired' and not app.candidate_confirmed_hire %}
+                <div class="w-100" style="background:rgba(37,99,235,0.06);border:1px solid rgba(37,99,235,0.25);border-radius:8px;padding:10px 14px;margin-bottom:8px;">
+                    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                        <span style="font-size:0.85rem;"><i class="fas fa-circle-check me-1" style="color:var(--primary);"></i>Confirm you accepted this offer to complete the hire.</span>
+                        <form method="POST" action="{{ url_for('candidate.confirm_hire', application_id=app.id) }}">
+                            <button type="submit" class="btn btn-primary btn-sm">Confirm Hire</button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Status + actions -->
                 <div class="d-flex flex-wrap gap-2 align-items-center flex-shrink-0">
                     {% if app.status == 'hired' %}
-                        <span class="badge-status hired"><i class="fas fa-trophy me-1"></i> Hired</span>
+                        <span class="badge-status hired"><i class="fas fa-trophy me-1"></i> Hired{% if app.candidate_confirmed_hire %} (confirmed){% endif %}</span>
                     {% elif app.status == 'rejected' %}
                         <span class="badge-status rejected">Not selected</span>
                     {% else %}

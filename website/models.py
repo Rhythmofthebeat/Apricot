@@ -206,6 +206,8 @@ class Application(db.Model):
     interview_audio_log = db.Column(db.Text)  # JSON list of {role, text, audio_filename}
     interview_verdict = db.Column(db.String(20))  # "Strong Yes" | "Yes" | "No" | "Strong No"
     status = db.Column(db.String(20), nullable=False, default="applied")  # applied | interviewing | rejected | hired
+    candidate_confirmed_hire = db.Column(db.Boolean, nullable=False, default=False)  # candidate must confirm before the fee invoice fires
+    hire_confirmed_at = db.Column(db.DateTime(timezone=True))
     fee_paid = db.Column(db.Boolean, nullable=False, default=False)
     stripe_payment_link = db.Column(db.String(500))  # Stripe Payment Link URL sent to employer on hire
     employer_notes = db.Column(db.Text)  # private notes visible only to employer
