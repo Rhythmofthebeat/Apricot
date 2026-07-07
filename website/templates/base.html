@@ -360,15 +360,6 @@
                         <a class="nav-link" href="/home">
                             <i class="fas fa-house me-1"></i> Home
                         </a>
-                        <div class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="resumeToolsDropdownAuth" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                Resume Tools
-                            </a>
-                            <ul class="dropdown-menu" aria-labelledby="resumeToolsDropdownAuth">
-                                <li><a class="dropdown-item" href="{{ url_for('resumemat') }}"><i class="fas fa-file-circle-check me-2"></i>Resume Job Match</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('resumesum') }}"><i class="fas fa-file-lines me-2"></i>Resume Summarizer</a></li>
-                            </ul>
-                        </div>
                         {% if current_user.role == 'employer' %}
                             {# Show which company this user belongs to #}
                             {% set nav_company = None %}
@@ -376,22 +367,30 @@
                             <a class="nav-link" href="{{ url_for('employer.dashboard') }}">
                                 <i class="fas fa-gauge me-1"></i> Dashboard
                             </a>
-                            <a class="nav-link" href="{{ url_for('employer.post_job') }}">
-                                <i class="fas fa-plus me-1"></i> Post Job
-                            </a>
-                            <a class="nav-link" href="{{ url_for('employer.analytics') }}">
-                                <i class="fas fa-chart-bar me-1"></i> Analytics
-                            </a>
-                            <a class="nav-link" href="{{ url_for('employer.employer_meetings') }}">
-                                <i class="fas fa-circle-dot me-1"></i> Meetings
-                            </a>
-<a class="nav-link" href="{{ url_for('employer.company_settings') }}">
-                                <i class="fas fa-building me-1"></i> Company
-                            </a>
+                            <div class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="recruitmentToolsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Recruitment Tools
+                                </a>
+                                <ul class="dropdown-menu" aria-labelledby="recruitmentToolsDropdown">
+                                    <li><a class="dropdown-item" href="{{ url_for('employer.post_job') }}"><i class="fas fa-plus me-2"></i>Post Job</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('employer.analytics') }}"><i class="fas fa-chart-bar me-2"></i>Analytics</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('employer.employer_meetings') }}"><i class="fas fa-circle-dot me-2"></i>Meetings</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('employer.company_settings') }}"><i class="fas fa-building me-2"></i>Company</a></li>
+                                </ul>
+                            </div>
                         {% else %}
                             <a class="nav-link" href="{{ url_for('candidate.browse_jobs') }}">
                                 <i class="fas fa-search me-1"></i> Find Jobs
                             </a>
+                            <div class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="resumeToolsDropdownAuth" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Resume Tools
+                                </a>
+                                <ul class="dropdown-menu" aria-labelledby="resumeToolsDropdownAuth">
+                                    <li><a class="dropdown-item" href="{{ url_for('resumemat') }}"><i class="fas fa-file-circle-check me-2"></i>Resume Job Match</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('resumesum') }}"><i class="fas fa-file-lines me-2"></i>Resume Summarizer</a></li>
+                                </ul>
+                            </div>
                             <a class="nav-link" href="{{ url_for('candidate.dashboard') }}">
                                 <i class="fas fa-list-check me-1"></i> Applications
                             </a>

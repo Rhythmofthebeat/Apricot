@@ -93,6 +93,9 @@ def _run_migrations(db):
         "ALTER TABLE task_submission ADD COLUMN agreement_score REAL",
         # contractor_profile — Stripe Connect payout flag
         "ALTER TABLE contractor_profile ADD COLUMN payout_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+        # application — candidate must confirm a hire before the fee invoice fires
+        "ALTER TABLE application ADD COLUMN candidate_confirmed_hire BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE application ADD COLUMN hire_confirmed_at TIMESTAMP WITH TIME ZONE",
     ]
     for stmt in new_columns:
         try:
@@ -133,7 +136,7 @@ def create_app():
     app.config["AUDIO_FOLDER"] = audio_path
     app.config["UPLOAD_FOLDER"] = upload_path
 
-    
+    os.makedirs(audio_path, exist_ok=True)
     os.makedirs(upload_path, exist_ok=True)
 
     from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission, SavedJob, ContractorProfile, MeetingRoom, Message, EmployerSubscription, MeetingProposal

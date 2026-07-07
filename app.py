@@ -327,8 +327,7 @@ def speak_summary():
         return jsonify({"error": "No summary text provided"}), 400
 
     try:
-        audio_folder = os.path.join(current_app.root_path, "website", "audio")
-        os.makedirs(audio_folder, exist_ok=True)
+        audio_folder = app.config["AUDIO_FOLDER"]
         filename = f"{uuid.uuid4()}.mp3"
         filepath = os.path.join(audio_folder, filename)
 
@@ -358,8 +357,7 @@ def speak_summary():
 
 @app.route("/audio/<filename>")
 def serve_audio(filename):
-    audio_folder = os.path.join(current_app.root_path, "website", "audio")
-    return send_from_directory(audio_folder, filename)
+    return send_from_directory(app.config["AUDIO_FOLDER"], filename)
 
 
 @app.route("/export/summary-pdf", methods=["POST"])

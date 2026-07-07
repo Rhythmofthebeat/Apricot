@@ -17,8 +17,8 @@ class Config:
     MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
     MAIL_DEFAULT_SENDER = ("Avants AI", os.getenv("MAIL_USERNAME")) if os.getenv("MAIL_USERNAME") else None
     GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "uploads")
-    AUDIO_FOLDER = os.getenv("AUDIO_FOLDER", "audio")
+    # UPLOAD_FOLDER / AUDIO_FOLDER are set as absolute paths in create_app() —
+    # not defined here so app.config.from_object(Config) doesn't clobber them.
     ALLOWED_EXTENSIONS = {"pdf", "docx", "txt"}
     MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
     MAX_TEXT_LENGTH = 15000  # Characters to send to OpenAI
