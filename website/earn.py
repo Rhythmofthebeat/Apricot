@@ -7,6 +7,7 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 from flask_login import login_required, current_user
 from . import db
 from .models import EarnTask, TaskSubmission, ContractorProfile, EARN_DOMAINS
+from email_utils import external_url
 
 logger = logging.getLogger(__name__)
 
@@ -280,8 +281,8 @@ def payout_setup():
 
         link = stripe.AccountLink.create(
             account=contractor.stripe_account_id,
-            refresh_url=url_for('earn.payout_setup', _external=True),
-            return_url=url_for('earn.payout_return', _external=True),
+            refresh_url=external_url('earn.payout_setup'),
+            return_url=external_url('earn.payout_return'),
             type='account_onboarding',
         )
         return redirect(link.url)

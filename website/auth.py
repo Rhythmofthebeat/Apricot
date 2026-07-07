@@ -7,7 +7,7 @@ from flask_login import login_user, login_required, logout_user, current_user
 from supabase import create_client
 import os
 
-from email_utils import send_verification_email, verify_verification_token
+from email_utils import send_verification_email, verify_verification_token, public_base_url
 
 # ---------------- Supabase Client ---------------- #
 # Anon-role client for user-facing auth flows (login, sign-up, password reset request).
@@ -30,7 +30,7 @@ def forgot_password():
 
         supabase.auth.reset_password_for_email(
             email,
-            {"redirect_to": request.host_url.rstrip("/") + "/reset-password"}
+            {"redirect_to": public_base_url() + "/reset-password"}
         )
 
         flash("Password reset email sent!", "success")

@@ -5,6 +5,9 @@ load_dotenv()
 
 
 class Config:
+    # Real public domain used to build links sent in emails — never inferred
+    # from the triggering request's Host header (see email_utils.external_url).
+    PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://apricot-u9ap.onrender.com")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     DAILY_API_KEY = os.getenv("DAILY_API_KEY")
     STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")

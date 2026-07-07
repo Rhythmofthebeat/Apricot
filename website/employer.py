@@ -24,7 +24,7 @@ from .models import (
     JOB_CATEGORIES, JOB_LOCATIONS, COMPANY_SIZES, INDUSTRIES,
 )
 from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description
-from email_utils import send_branded_email
+from email_utils import send_branded_email, external_url
 
 employer = Blueprint('employer', __name__)
 
@@ -166,7 +166,7 @@ def send_hire_fee_invoice(application, job, company, candidate, employer_user):
                     f"A 15% placement fee will be invoiced to you within 30 days of the start date."
                 ),
                 cta_label="View Dashboard",
-                cta_url=url_for('employer.dashboard', _external=True),
+                cta_url=external_url('employer.dashboard'),
             )
     except Exception as e:
         print(f"Hire fee invoice email failed: {e}")
@@ -570,7 +570,7 @@ def schedule_meeting(application_id):
                 + (f"\nNotes: {notes}\n" if notes else "")
             ),
             cta_label="View My Applications" if meeting_type == 'virtual' else None,
-            cta_url=url_for('candidate.dashboard', _external=True) if meeting_type == 'virtual' else None,
+            cta_url=external_url('candidate.dashboard') if meeting_type == 'virtual' else None,
         )
         flash("Meeting scheduled and the candidate has been emailed.", "success")
     except Exception as e:
@@ -640,7 +640,7 @@ def update_status(application_id):
                             f"Please confirm the hire on your dashboard."
                         ),
                         cta_label="Confirm My Hire",
-                        cta_url=url_for('candidate.dashboard', _external=True),
+                        cta_url=external_url('candidate.dashboard'),
                     )
                 else:
                     send_branded_email(
@@ -650,7 +650,7 @@ def update_status(application_id):
                         body_html=copy["body_tpl"].format(company=company.name, job_title=job.title),
                         plain_text=copy["body_tpl"].format(company=company.name, job_title=job.title).replace("<strong>", "").replace("</strong>", ""),
                         cta_label="View My Applications",
-                        cta_url=url_for('candidate.dashboard', _external=True),
+                        cta_url=external_url('candidate.dashboard'),
                     )
             except Exception as e:
                 print(f"Status email send failed ({new_status}):", e)
@@ -722,7 +722,7 @@ def send_candidate_feedback(application_id):
             ),
             plain_text=f"Feedback from {company.name} on your {job.title} application:\n\n{feedback_text}",
             cta_label="View My Applications",
-            cta_url=url_for('candidate.dashboard', _external=True),
+            cta_url=external_url('candidate.dashboard'),
         )
     except Exception as e:
         print("Feedback email failed:", e)
@@ -1079,7 +1079,7 @@ def invite_member():
     db.session.add(invite)
     db.session.commit()
 
-    invite_url = url_for('employer.accept_invite', token=token, _external=True)
+    invite_url = external_url('employer.accept_invite', token=token)
     try:
         send_branded_email(
             to_email=email,
@@ -1220,7 +1220,7 @@ def propose_times(application_id):
                 + (f"\nNotes: {notes}\n" if notes else "")
             ),
             cta_label="Pick a Time",
-            cta_url=url_for('candidate.interviews', _external=True),
+            cta_url=external_url('candidate.interviews'),
         )
         flash(f"Time slots sent to {candidate.first_name or candidate.email}.", "success")
     except Exception:
@@ -1343,7 +1343,7 @@ def create_meeting_room(application_id):
     )
     db.session.add(room)
 
-    join_url = url_for('views.join_meeting', room_name=room_data['name'], _external=True)
+    join_url = external_url('views.join_meeting', room_name=room_data['name'])
     application.scheduled_meeting = json.dumps({
         "type": "virtual",
         "date": date,

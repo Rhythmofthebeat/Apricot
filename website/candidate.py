@@ -14,7 +14,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 
 from . import db, limiter
 from .models import Job, Application, CandidateProfile, Company, Notification, SavedJob, Message, MeetingRoom, MeetingProposal, User, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
-from email_utils import send_branded_email
+from email_utils import send_branded_email, external_url
 
 from ai_services import (
     extract_text_from_file,
@@ -543,7 +543,7 @@ def accept_slot(proposal_id):
     proposal.status = 'accepted'
     proposal.accepted_slot = json.dumps(slot)
 
-    join_url = url_for('views.join_meeting', room_name=room_data['name'], _external=True)
+    join_url = external_url('views.join_meeting', room_name=room_data['name'])
     application.scheduled_meeting = json.dumps({
         'type': 'virtual', 'date': slot['date'], 'time': slot['time'],
         'location_or_url': join_url, 'notes': proposal.notes or '', 'in_app': True,

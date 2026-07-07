@@ -17,6 +17,31 @@ VERIFICATION_MAX_AGE = 60 * 60 * 24  # 24 hours
 LOGO_URL = "https://apricot-u9ap.onrender.com/static/Avants.png"
 
 
+def external_url(endpoint, **values):
+    """Absolute URL for links sent out in emails.
+
+    Emails are opened later, often by someone other than whoever triggered
+    the send, so the link must point at the app's real public domain rather
+    than url_for(_external=True)'s default of the triggering request's Host
+    header — that header is "localhost" for anyone testing against prod data
+    from a dev server, and can be wrong behind a proxy too.
+    """
+    base = current_app.config.get("PUBLIC_BASE_URL")
+    if base:
+        return base.rstrip("/") + url_for(endpoint, **values)
+    return url_for(endpoint, _external=True, **values)
+
+
+def public_base_url():
+    """Same rationale as external_url(), for callers building URLs by hand
+    (e.g. Supabase's redirect_to) instead of through url_for()."""
+    from flask import request
+    base = current_app.config.get("PUBLIC_BASE_URL")
+    if base:
+        return base.rstrip("/")
+    return request.host_url.rstrip("/")
+
+
 def render_branded_email(heading, body_html, cta_label=None, cta_url=None, accent="#4f46e5"):
     """Shared HTML shell for every transactional email — inline styles only."""
     cta_block = ""
@@ -96,7 +121,7 @@ def send_verification_email(user):
         raise RuntimeError("Email sending is not configured (MAIL_USERNAME/MAIL_PASSWORD missing).")
 
     token = generate_verification_token(user.email)
-    verify_url = url_for("auth.verify_email", token=token, _external=True)
+    verify_url = external_url("auth.verify_email", token=token)
 
     send_branded_email(
         to_email=user.email,
