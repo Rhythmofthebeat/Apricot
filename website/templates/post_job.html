@@ -28,6 +28,17 @@
         border-top: 1px solid var(--border);
         margin: 24px 0;
     }
+    .fee-notice {
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        border-radius: var(--radius);
+        padding: 12px 14px;
+        font-size: 0.8rem;
+        color: #92400e;
+        margin-bottom: 20px;
+        display: flex; align-items: flex-start; gap: 8px;
+    }
+    .fee-notice i { flex-shrink: 0; margin-top: 2px; }
 </style>
 {% endblock %}
 
@@ -75,6 +86,14 @@
         <div class="card">
             <div class="card-header"><i class="fas {{ 'fa-pen' if job else 'fa-plus' }} me-2"></i>{{ 'Edit Job' if job else 'Post a Job' }}</div>
             <div class="card-body p-4">
+
+                <div class="fee-notice">
+                    <i class="fas fa-file-contract"></i>
+                    <div>
+                        <strong>15% placement fee</strong> — if you hire a candidate sourced through Avants AI for this role, a fee of 15% of their first-year gross compensation applies, billed only after the candidate confirms the hire. Candidates are never charged. See the <a href="/terms#employer-contract" target="_blank" style="color:#92400e; font-weight:600;">Employer Platform Agreement</a> for full terms.
+                    </div>
+                </div>
+
                 <form method="POST" id="postJobForm" action="{{ url_for('employer.edit_job', job_id=job.id) if job else url_for('employer.post_job') }}">
 
                     <!-- Basics -->
@@ -206,7 +225,7 @@
                                   placeholder="Pay rate, payment schedule, contract type, remote details...">{{ secs.contract_terms if secs else '' }}</textarea>
                         <p class="preview-note mt-1">
                             <i class="fas fa-circle-info me-1"></i>
-                            Upon hire, Avants charges the company a placement fee of <strong>10–15% of first-year compensation</strong>, with the exact rate confirmed before payment. Candidates pay nothing.
+                            Upon hire, Avants charges the company a flat placement fee of <strong>15% of first-year compensation</strong>. Candidates pay nothing.
                         </p>
                     </div>
 
