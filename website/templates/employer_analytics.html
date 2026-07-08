@@ -138,7 +138,7 @@
                     <span>Hired</span>
                     <span class="fw-bold">{{ stats.hired }} ({{ funnel_pct(stats.hired) }}%)</span>
                 </div>
-                <div class="funnel-bar" style="background:var(--success); width:{{ [funnel_pct(stats.hired), 5] | max }}%; min-width:40px;">{{ stats.hired }}</div>
+                <div class="funnel-bar" style="background:var(--success); width:{{ [funnel_pct(stats.hired) | int, 5] | max }}%; min-width:40px;">{{ stats.hired }}</div>
 
                 <hr class="my-3">
                 <div class="d-flex justify-content-between small text-muted">
