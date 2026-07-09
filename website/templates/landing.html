@@ -342,7 +342,7 @@
         <a href="{{ url_for('candidate.browse_jobs') }}" class="btn-hero-primary">
             <i class="fas fa-search"></i> Browse open roles
         </a>
-        <a href="/sign-up?role=employer" class="btn-hero-outline">
+        <a href="{{ url_for('auth.sign_up', role='employer') }}" class="btn-hero-outline">
             <i class="fas fa-briefcase"></i> I'm hiring
         </a>
     </div>
@@ -528,7 +528,7 @@
                         <li><i class="fas fa-check-circle"></i> Schedule, message, and update status in one place</li>
                         <li><i class="fas fa-check-circle"></i> Company page with team members and public profile</li>
                     </ul>
-                    <a href="/sign-up?role=employer" class="btn btn-primary btn-rounded">
+                    <a href="{{ url_for('auth.sign_up', role='employer') }}" class="btn btn-primary btn-rounded">
                         <i class="fas fa-briefcase me-1"></i> Post a job for free
                     </a>
                 </div>
@@ -542,7 +542,7 @@
     <div class="container">
         <h2>Stop applying into the void.</h2>
         <p>Join candidates and companies using Avants AI to hire and get hired, with real AI interviews, real scores, and real answers.</p>
-        <a href="/sign-up" class="btn-cta-white">
+        <a href="{{ url_for('auth.sign_up') }}" class="btn-cta-white">
             Create a free account <i class="fas fa-arrow-right"></i>
         </a>
     </div>

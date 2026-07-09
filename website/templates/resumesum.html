@@ -623,22 +623,6 @@ async function uploadWithRetry(formData, retries = 3) {
     body: formData
 });
 
-if (response.status === 403) {
-    const data = await response.json();
-
-    if (data.error === "trial_expired") {
-    showPricingModal();
-
-    setTimeout(() => {
-        window.location.href = "/pricing";
-    }, 2000); // 2 second delay
-
-    throw new Error("trial_expired");
-}
-
-}
-
-
             if (response.status === 429) {
                 const retryAfter = parseInt(response.headers.get("Retry-After")) || Math.pow(2, i);
                 await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));

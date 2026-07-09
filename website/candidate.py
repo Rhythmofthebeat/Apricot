@@ -180,6 +180,8 @@ def toggle_save_job(job_id):
 @candidate.route('/jobs/<int:job_id>/apply', methods=['GET'])
 @login_required
 def apply(job_id):
+    if current_user.role != 'candidate':
+        abort(403)
     job = Job.query.get_or_404(job_id)
 
     existing = Application.query.filter_by(job_id=job.id, candidate_user_id=current_user.id).first()
@@ -232,6 +234,8 @@ def preview_match(job_id):
 @login_required
 @limiter.limit("10 per hour")
 def submit_application(job_id):
+    if current_user.role != 'candidate':
+        abort(403)
     job = Job.query.get_or_404(job_id)
 
     existing = Application.query.filter_by(job_id=job.id, candidate_user_id=current_user.id).first()
@@ -880,6 +884,8 @@ def interview_coaching(application_id):
 @login_required
 def practice_interview(job_id):
     """Practice the AI interview for a job without it counting as your real attempt."""
+    if current_user.role != 'candidate':
+        abort(403)
     job = Job.query.get_or_404(job_id)
     if job.status != 'open':
         flash("This job is no longer accepting applications.", "info")

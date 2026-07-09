@@ -20,7 +20,7 @@ def _avatar_color(letter):
 @views.route('/')
 @views.route('/home')
 def home():
-    if current_user.is_authenticated and request.path == '/':
+    if current_user.is_authenticated:
         if current_user.role == 'employer':
             return redirect(url_for('employer.dashboard'))
         return redirect(url_for('candidate.browse_jobs'))

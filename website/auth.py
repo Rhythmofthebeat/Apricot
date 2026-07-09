@@ -131,6 +131,9 @@ def reset_password_form():
 @auth.route('/login', methods=['GET', 'POST'])
 @limiter.limit("20 per minute; 5 per 10 seconds")
 def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('views.home'))
+
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
