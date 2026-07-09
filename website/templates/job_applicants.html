@@ -166,7 +166,7 @@
 </div>
 
 {% for app in applications %}
-<div class="pipeline-card" id="card-{{ app.id }}" data-app-id="{{ app.id }}" data-status="{{ app.status }}" data-name="{{ (app.candidate.first_name or '') + ' ' + app.candidate.email }}" onclick="toggleCard({{ app.id }}, event)">
+<div class="pipeline-card" id="card-{{ app.id }}" data-app-id="{{ app.id }}" data-status="{{ app.status }}" data-name="{{ (app.candidate.first_name or '') + ' ' + app.candidate.email }}" data-interview-pending="{{ '0' if app.interview_transcript else '1' }}" onclick="toggleCard({{ app.id }}, event)">
 
     <!-- Summary row (always visible) -->
     <div class="pipeline-header">
@@ -837,6 +837,17 @@ function toggleInAppMeeting(appId, event) {
 
 async function confirmReject(form) {
     const sel = form.querySelector('select[name="status"]');
+    if (sel && sel.value === 'hired') {
+        const card = form.closest('.pipeline-card');
+        if (card && card.dataset.interviewPending === '1') {
+            const candidateName = card.dataset.name || 'This candidate';
+            const proceed = confirm(`${candidateName} hasn't completed the AI interview yet — you'll be marking them hired without that data. Continue anyway?`);
+            if (!proceed) {
+                if (window.event) window.event.preventDefault();
+                return false;
+            }
+        }
+    }
     if (sel && sel.value === 'rejected') {
         // Intercept: submit via AJAX to get feedback draft, then show modal
         const evt = window.event;
