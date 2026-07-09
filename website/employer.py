@@ -23,7 +23,7 @@ from .models import (
     MeetingRoom, Message, MeetingProposal,
     JOB_CATEGORIES, JOB_LOCATIONS, COMPANY_SIZES, INDUSTRIES,
 )
-from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description
+from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description, transcribe_audio
 from email_utils import send_branded_email, external_url
 
 employer = Blueprint('employer', __name__)
@@ -455,6 +455,34 @@ def preview_interview_questions():
         if "rate" in msg.lower():
             return jsonify({"error": "Rate limit hit. Wait a moment and try again."}), 429
         return jsonify({"error": f"Failed to generate questions: {msg}"}), 500
+
+
+@employer.route('/employer/transcribe-question', methods=['POST'])
+@login_required
+@employer_required
+def transcribe_question():
+    """Speech-to-text for an employer recording a custom interview question by voice."""
+    audio = request.files.get('audio')
+    if not audio or not audio.filename:
+        return jsonify({"error": "No audio received."}), 400
+
+    import tempfile
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+            audio.save(tmp.name)
+            tmp_path = tmp.name
+        text = transcribe_audio(tmp_path)
+    except Exception:
+        logger.exception("transcribe-question failed")
+        return jsonify({"error": "Couldn't transcribe that recording. Try again or type the question."}), 500
+    finally:
+        if tmp_path:
+            os.unlink(tmp_path)
+
+    if not text:
+        return jsonify({"error": "Didn't catch any speech — try recording again."}), 400
+    return jsonify({"text": text})
 
 
 # ------------------------------------------------------------------ #

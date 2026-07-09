@@ -262,7 +262,11 @@
                     <div class="preview-questions" id="previewQuestionsBox" style="display:{{ 'block' if job and job.interview_questions else 'none' }};">
                         <p class="preview-note mb-2"><i class="fas fa-circle-info me-1"></i> Edit, remove, or add questions as needed. The AI will make sure to ask these, plus natural follow-ups.</p>
                         <div id="questionsList"></div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="addQuestionBtn"><i class="fas fa-plus"></i> Add Question</button>
+                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="addQuestionBtn"><i class="fas fa-plus"></i> Add Question</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="recordQuestionBtn"><i class="fas fa-microphone"></i> Record Question</button>
+                            <span class="text-muted" id="recordQuestionStatus" style="font-size:0.78rem;"></span>
+                        </div>
                     </div>
                     <input type="hidden" name="interview_questions" id="interviewQuestionsField">
 
@@ -332,6 +336,66 @@ function addQuestionRow(text) {
 existingQuestions.forEach(addQuestionRow);
 
 document.getElementById("addQuestionBtn").addEventListener("click", () => addQuestionRow(""));
+
+// ── Record a custom question by voice ────────────────────────────────────
+let questionRecorder = null;
+let questionChunks = [];
+let isRecordingQuestion = false;
+
+document.getElementById("recordQuestionBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("recordQuestionBtn");
+    const status = document.getElementById("recordQuestionStatus");
+
+    if (isRecordingQuestion) {
+        questionRecorder.stop();
+        return;
+    }
+
+    let stream;
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+        status.textContent = "Microphone access denied.";
+        return;
+    }
+
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    questionRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    questionChunks = [];
+    questionRecorder.addEventListener('dataavailable', e => questionChunks.push(e.data));
+    questionRecorder.addEventListener('stop', async () => {
+        stream.getTracks().forEach(t => t.stop());
+        isRecordingQuestion = false;
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-outline-secondary');
+        btn.innerHTML = '<i class="fas fa-microphone"></i> Record Question';
+        btn.disabled = true;
+        status.textContent = "Transcribing…";
+
+        const blob = new Blob(questionChunks, { type: 'audio/webm' });
+        const fd = new FormData();
+        fd.append('audio', blob, 'question.webm');
+
+        try {
+            const res = await fetch("{{ url_for('employer.transcribe_question') }}", { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Transcription failed.");
+            addQuestionRow(data.text);
+            status.textContent = "Added below — edit if needed.";
+        } catch (e) {
+            status.textContent = e.message;
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    questionRecorder.start();
+    isRecordingQuestion = true;
+    btn.classList.remove('btn-outline-secondary');
+    btn.classList.add('btn-danger');
+    btn.innerHTML = '<i class="fas fa-stop"></i> Stop Recording';
+    status.textContent = "Recording… click Stop when done.";
+});
 
 document.getElementById("previewQuestionsBtn").addEventListener("click", async () => {
     const btn = document.getElementById("previewQuestionsBtn");
