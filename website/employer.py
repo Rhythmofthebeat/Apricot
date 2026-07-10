@@ -23,7 +23,8 @@ from .models import (
     MeetingRoom, Message, MeetingProposal,
     JOB_CATEGORIES, JOB_LOCATIONS, COMPANY_SIZES, INDUSTRIES,
 )
-from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description, transcribe_audio
+from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description, transcribe_audio, compare_resume_to_job
+from .candidate import _extract_score
 from email_utils import send_branded_email, external_url
 
 employer = Blueprint('employer', __name__)
@@ -485,6 +486,34 @@ def transcribe_question():
     if not text:
         return jsonify({"error": "Didn't catch any speech — try recording again."}), 400
     return jsonify({"text": text})
+
+
+@employer.route('/employer/jobs/<int:job_id>/score-resume', methods=['POST'])
+@login_required
+@employer_required
+@limiter.limit("20 per hour")
+def score_resume(job_id):
+    """Score an externally-sourced resume (referral, LinkedIn candidate, etc.)
+    against one of this employer's jobs — no application gets created, this
+    is just a quick sourcing/screening check."""
+    company = get_owned_company()
+    job = Job.query.get_or_404(job_id)
+    if job.company_id != company.id:
+        abort(403)
+
+    data = request.get_json() or {}
+    resume_text = (data.get('resume_text') or '').strip()
+    if not resume_text:
+        return jsonify({"error": "Add resume content first."}), 400
+
+    try:
+        result = compare_resume_to_job(job.description_text, resume_text)
+    except Exception:
+        logger.exception("score-resume failed")
+        return jsonify({"error": "Failed to score this resume. Please try again."}), 500
+
+    score = _extract_score(result)
+    return jsonify({"score": score, "explanation": result.replace('*', '')})
 
 
 # ------------------------------------------------------------------ #

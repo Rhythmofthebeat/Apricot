@@ -123,9 +123,14 @@
                 &middot; sorted by overall score (resume + interview + authenticity)
             </p>
         </div>
-        <a href="{{ url_for('employer.edit_job', job_id=job.id) }}" class="btn btn-outline-secondary btn-sm">
-            <i class="fas fa-pen me-1"></i> Edit Job
-        </a>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#scoreResumeModal">
+                <i class="fas fa-magnifying-glass-chart me-1"></i> Score a Resume
+            </button>
+            <a href="{{ url_for('employer.edit_job', job_id=job.id) }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-pen me-1"></i> Edit Job
+            </a>
+        </div>
     </div>
 </div>
 
@@ -1036,6 +1041,67 @@ async function bulkUpdateStatus(status) {
     }));
     location.reload();
 }
+
+// ── Score a Resume (external sourcing) ────────────────────────
+const scoreResumeUrl = "{{ url_for('employer.score_resume', job_id=job.id) }}";
+
+document.getElementById("scoreFileInput")?.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const status = document.getElementById("scoreResumeStatus");
+    status.textContent = "Reading file…";
+    try {
+        const fd = new FormData();
+        fd.append("resume", file);
+        const res = await fetch("/extract-resume-text", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to read file.");
+        document.getElementById("scoreResumeText").value = data.resume_text;
+        status.textContent = "File loaded — edit below if needed, then click Score.";
+    } catch (err) {
+        status.textContent = err.message;
+    }
+});
+
+document.getElementById("scoreResumeBtn")?.addEventListener("click", async () => {
+    const text = document.getElementById("scoreResumeText").value.trim();
+    const status = document.getElementById("scoreResumeStatus");
+    const resultBox = document.getElementById("scoreResumeResult");
+    if (!text) {
+        status.textContent = "Paste or upload resume content first.";
+        return;
+    }
+    const btn = document.getElementById("scoreResumeBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Scoring…';
+    status.textContent = "";
+    resultBox.style.display = "none";
+
+    try {
+        const res = await fetch(scoreResumeUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ resume_text: text }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to score resume.");
+
+        const color = data.score >= 70 ? 'var(--success)' : (data.score >= 40 ? 'var(--warning)' : 'var(--danger)');
+        resultBox.innerHTML = `
+            <div class="d-flex align-items-center gap-3 mb-2">
+                <span style="font-size:1.6rem; font-weight:800; color:${color};">${data.score}</span>
+                <span class="text-muted small">/ 100 match score</span>
+            </div>
+            <div style="font-size:0.85rem; white-space:pre-wrap; line-height:1.6;">${data.explanation}</div>
+        `;
+        resultBox.style.display = "block";
+    } catch (err) {
+        status.textContent = err.message;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-magnifying-glass-chart me-1"></i> Score';
+    }
+});
 </script>
 
 <!-- Rejection Feedback Modal -->
@@ -1056,6 +1122,32 @@ async function bulkUpdateStatus(status) {
                 <button class="btn btn-outline-secondary btn-sm" onclick="sendFeedback(true)">Skip (no feedback)</button>
                 <button class="btn btn-primary btn-sm" id="sendFeedbackBtn" onclick="sendFeedback(false)">
                     <i class="fas fa-paper-plane me-1"></i> Send Feedback
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Score a Resume Modal (external sourcing — no application created) -->
+<div class="modal fade" id="scoreResumeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold">Score a resume against {{ job.title }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p class="text-muted small mb-3">For candidates you've found outside Avants — referrals, LinkedIn, etc. This doesn't create an application.</p>
+                <label class="form-label fw-bold" style="font-size:0.85rem;">Upload a resume file (optional)</label>
+                <input type="file" class="form-control mb-3" id="scoreFileInput" accept=".pdf,.docx,.txt">
+                <label class="form-label fw-bold" style="font-size:0.85rem;">Or paste resume text</label>
+                <textarea class="form-control mb-2" id="scoreResumeText" rows="10" placeholder="Paste resume content here..." style="font-size:0.85rem;"></textarea>
+                <p class="text-muted mb-2" id="scoreResumeStatus" style="font-size:0.78rem;"></p>
+                <div id="scoreResumeResult" style="display:none; background:var(--bg); border-radius:var(--radius); padding:16px; border:1px solid var(--border);"></div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button class="btn btn-primary btn-sm" id="scoreResumeBtn">
+                    <i class="fas fa-magnifying-glass-chart me-1"></i> Score
                 </button>
             </div>
         </div>
