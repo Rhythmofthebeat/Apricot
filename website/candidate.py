@@ -13,7 +13,7 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import getSampleStyleSheet
 
 from . import db, limiter
-from .models import Job, Application, CandidateProfile, Company, Notification, SavedJob, Message, MeetingRoom, MeetingProposal, User, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
+from .models import Job, Application, CandidateProfile, Company, CompanyMember, Notification, SavedJob, Message, MeetingRoom, MeetingProposal, User, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
 from email_utils import send_branded_email, external_url
 
 from ai_services import (
@@ -158,9 +158,15 @@ def job_detail(job_id):
         if current_user.is_authenticated else False
     )
 
+    is_own_posting = False
+    if current_user.is_authenticated and current_user.role == 'employer':
+        is_owner = job.company.owner_user_id == current_user.id
+        is_member = CompanyMember.query.filter_by(company_id=job.company_id, user_id=current_user.id).first() is not None
+        is_own_posting = is_owner or is_member
+
     return render_template("job_detail.html", job=job, existing=existing,
                            rank=rank, total_applicants=total_applicants, percentile=percentile,
-                           is_saved=is_saved)
+                           is_saved=is_saved, is_own_posting=is_own_posting)
 
 
 @candidate.route('/jobs/<int:job_id>/save', methods=['POST'])
@@ -189,11 +195,15 @@ def apply(job_id):
         flash("You've already applied to this job.", "error")
         return redirect(url_for('candidate.job_detail', job_id=job.id))
 
-    return render_template("apply.html", job=job, countries=COUNTRIES)
+    profile = CandidateProfile.query.filter_by(user_id=current_user.id).first()
+    saved_resume_text = (profile.resume_text or '').strip() if profile else ''
+
+    return render_template("apply.html", job=job, countries=COUNTRIES, saved_resume_text=saved_resume_text or None)
 
 
 @candidate.route('/extract-resume-text', methods=['POST'])
 @login_required
+@limiter.limit("20 per hour")
 def extract_resume_text():
     """Pull text out of an uploaded resume file — used by the apply wizard's
     first step before the candidate moves on to checking their match score."""
@@ -210,6 +220,7 @@ def extract_resume_text():
 
 @candidate.route('/jobs/<int:job_id>/preview-match', methods=['POST'])
 @login_required
+@limiter.limit("20 per hour")
 def preview_match(job_id):
     """Score a resume against the job WITHOUT creating an application — lets
     the candidate revise their resume and re-check as many times as they want
@@ -329,6 +340,7 @@ def save_interview_session(job_id, application_id):
 
 @candidate.route('/jobs/<int:job_id>/apply/<int:application_id>/interview-chat', methods=['POST'])
 @login_required
+@limiter.limit("60 per hour")
 def interview_chat(job_id, application_id):
     application = Application.query.get_or_404(application_id)
     if application.candidate_user_id != current_user.id:
@@ -661,6 +673,7 @@ def save_profile():
 
 @candidate.route('/profile/generate-resume', methods=['POST'])
 @login_required
+@limiter.limit("15 per hour")
 def generate_profile_resume():
     """Intake pasted LinkedIn profile content and turn it into a structured resume."""
     data = request.get_json() or {}
@@ -746,6 +759,7 @@ def download_profile_resume():
 
 @candidate.route('/profile/suggested-jobs')
 @login_required
+@limiter.limit("30 per hour")
 def suggested_jobs():
     """AI-ranked open jobs/companies on the platform that fit this candidate's profile."""
     candidate_profile = CandidateProfile.query.filter_by(user_id=current_user.id).first()
@@ -895,6 +909,7 @@ def practice_interview(job_id):
 
 @candidate.route('/jobs/<int:job_id>/practice-chat', methods=['POST'])
 @login_required
+@limiter.limit("40 per hour")
 def practice_interview_chat(job_id):
     """Stateless practice interview turn — no DB writes, returns coaching at conclusion."""
     job = Job.query.get_or_404(job_id)

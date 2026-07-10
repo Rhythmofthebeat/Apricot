@@ -248,6 +248,12 @@
                         <a href="{{ url_for('auth.login') }}?next={{ request.path }}" class="btn btn-outline-secondary w-100 btn-sm">
                             Already have an account? Log in
                         </a>
+                    {% elif current_user.role == 'employer' and is_own_posting %}
+                        <h5 class="fw-bold mb-1">This is your job posting</h5>
+                        <p class="text-muted small mb-3">Employer accounts can't apply. Manage applicants from your dashboard instead.</p>
+                        <a href="{{ url_for('employer.applicants', job_id=job.id) }}" class="btn btn-primary w-100">
+                            <i class="fas fa-users me-1"></i> View Applicants
+                        </a>
                     {% elif current_user.role == 'employer' %}
                         <h5 class="fw-bold mb-1">You're signed in as an employer</h5>
                         <p class="text-muted small mb-0">Employer accounts can't apply to jobs. Sign in with a candidate account to apply.</p>

@@ -249,14 +249,28 @@
                     <h2 class="mb-3">Add your resume</h2>
 
                     <div class="btn-group resume-toggle w-100 mb-4" role="group">
-                        <input type="radio" class="btn-check" name="resumeMode" id="modeUpload" value="upload" checked>
-                        <label class="btn btn-outline-primary" for="modeUpload"><i class="fas fa-file-arrow-up me-1"></i> Upload Resume</label>
+                        {% if saved_resume_text %}
+                        <input type="radio" class="btn-check" name="resumeMode" id="modeSaved" value="saved" checked>
+                        <label class="btn btn-outline-primary" for="modeSaved"><i class="fas fa-clock-rotate-left me-1"></i> Use Saved Resume</label>
+                        {% endif %}
+
+                        <input type="radio" class="btn-check" name="resumeMode" id="modeUpload" value="upload" {{ '' if saved_resume_text else 'checked' }}>
+                        <label class="btn btn-outline-primary" for="modeUpload"><i class="fas fa-file-arrow-up me-1"></i> Upload {{ 'a Different Resume' if saved_resume_text else 'Resume' }}</label>
 
                         <input type="radio" class="btn-check" name="resumeMode" id="modeLinkedin" value="linkedin">
                         <label class="btn btn-outline-primary" for="modeLinkedin"><i class="fa-brands fa-linkedin me-1"></i> No Resume: Use LinkedIn</label>
                     </div>
 
-                    <div id="uploadSection">
+                    {% if saved_resume_text %}
+                    <div id="savedSection">
+                        <div class="p-3" style="background:var(--bg); border-radius:var(--radius); border:1px solid var(--border);">
+                            <p class="fw-bold mb-1" style="font-size:0.88rem;"><i class="fas fa-file-lines me-1" style="color:var(--primary);"></i>Resume from your last application</p>
+                            <p class="text-muted mb-0" style="font-size:0.82rem; max-height:80px; overflow:hidden;">{{ saved_resume_text[:280] }}{{ '…' if saved_resume_text|length > 280 }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div id="uploadSection" style="display:{{ 'none' if saved_resume_text else 'block' }};">
                         <label class="form-label fw-bold">Resume (PDF, DOCX, or TXT)</label>
                         <input type="file" class="form-control" id="resumeFile" accept=".pdf,.docx,.txt">
                     </div>
@@ -459,23 +473,29 @@
 <script>
 const jobId = {{ job.id }};
 const jobDescription = {{ job.description|tojson }};
-let resumeText = "";
+const savedResumeText = {{ saved_resume_text|tojson if saved_resume_text else 'null' }};
+let resumeText = savedResumeText || "";
 let workAuthorization = null;
 let lastCheckedScore = null;
 let lastExplanation = "";
 let chatHistory = [];
 let unlockedStep = 1;
 
+const modeSaved = document.getElementById("modeSaved");
 const modeUpload = document.getElementById("modeUpload");
 const modeLinkedin = document.getElementById("modeLinkedin");
+const savedSection = document.getElementById("savedSection");
 const uploadSection = document.getElementById("uploadSection");
 const linkedinSection = document.getElementById("linkedinSection");
 
 function syncMode() {
+    const isSaved = modeSaved && modeSaved.checked;
     const isLinkedin = modeLinkedin.checked;
-    uploadSection.style.display = isLinkedin ? "none" : "block";
+    if (savedSection) savedSection.style.display = isSaved ? "block" : "none";
+    uploadSection.style.display = (!isSaved && !isLinkedin) ? "block" : "none";
     linkedinSection.style.display = isLinkedin ? "block" : "none";
 }
+if (modeSaved) modeSaved.addEventListener("change", syncMode);
 modeUpload.addEventListener("change", syncMode);
 modeLinkedin.addEventListener("change", syncMode);
 
@@ -541,7 +561,9 @@ document.getElementById("toStep2Btn").addEventListener("click", async () => {
     const btn = document.getElementById("toStep2Btn");
     showError("step1Error", null);
 
-    if (modeUpload.checked) {
+    if (modeSaved && modeSaved.checked) {
+        resumeText = savedResumeText;
+    } else if (modeUpload.checked) {
         const file = document.getElementById("resumeFile").files[0];
         if (!file) {
             showError("step1Error", "Choose a resume file first.");

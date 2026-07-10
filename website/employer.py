@@ -16,7 +16,7 @@ try:
 except ImportError:
     pass
 
-from . import db
+from . import db, limiter
 from .models import (
     Company, Job, Application, Notification,
     CompanyMember, CompanyInvite, CandidateProfile, User,
@@ -434,6 +434,7 @@ def publish_job(job_id):
 @employer.route('/employer/preview-interview-questions', methods=['POST'])
 @login_required
 @employer_required
+@limiter.limit("15 per hour")
 def preview_interview_questions():
     data = request.get_json() or {}
     title = (data.get('title') or '').strip()
@@ -460,6 +461,7 @@ def preview_interview_questions():
 @employer.route('/employer/transcribe-question', methods=['POST'])
 @login_required
 @employer_required
+@limiter.limit("20 per hour")
 def transcribe_question():
     """Speech-to-text for an employer recording a custom interview question by voice."""
     audio = request.files.get('audio')
@@ -761,6 +763,7 @@ def send_candidate_feedback(application_id):
 @employer.route('/employer/jobs/analyze-jd', methods=['POST'])
 @login_required
 @employer_required
+@limiter.limit("15 per hour")
 def analyze_jd():
     data = request.get_json() or {}
     try:
