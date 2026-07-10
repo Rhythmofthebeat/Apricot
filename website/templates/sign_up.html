@@ -13,13 +13,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const feeCheck = document.getElementById("feeAgreementCheck");
 
     const emailInput = document.getElementById("email");
+    const nextParam = {{ next|tojson if next else 'null' }};
     function toggle() {
         const isEmployer = employerRadio.checked;
         companyGroup.style.display = isEmployer ? "block" : "none";
         companyInput.required = isEmployer;
         if (feeBlock) feeBlock.style.display = isEmployer ? "block" : "none";
         if (feeCheck) feeCheck.required = isEmployer;
-        if (googleLink) googleLink.href = "/login/google?role=" + (isEmployer ? "employer" : "candidate");
+        if (googleLink) {
+            let href = "/login/google?role=" + (isEmployer ? "employer" : "candidate");
+            if (nextParam) href += "&next=" + encodeURIComponent(nextParam);
+            googleLink.href = href;
+        }
         if (emailInput) emailInput.placeholder = isEmployer ? "you@company.com" : "your@email.com";
     }
 
@@ -108,6 +113,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <p class="auth-sub">Join Avants AI. It's free.</p>
 
         <form method="POST">
+            <input type="hidden" name="next" value="{{ next or '' }}">
             <!-- Role selector -->
             <div class="role-toggle">
                 <input type="radio" name="role" id="roleCandidate" value="candidate" checked>
@@ -178,7 +184,7 @@ document.addEventListener("DOMContentLoaded", () => {
         </a>
 
         <p class="text-center text-muted mt-4 mb-0" style="font-size:0.85rem;">
-            Already have an account? <a href="{{ url_for('auth.login') }}" class="fw-semibold text-decoration-none">Log in</a>
+            Already have an account? <a href="{{ url_for('auth.login', next=next) if next else url_for('auth.login') }}" class="fw-semibold text-decoration-none">Log in</a>
         </p>
     </div>
 </div>

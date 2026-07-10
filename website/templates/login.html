@@ -59,6 +59,7 @@
         <p class="auth-sub">Log in to your Avants account</p>
 
         <form method="POST">
+            <input type="hidden" name="next" value="{{ next or '' }}">
             <div class="mb-3">
                 <label for="email" class="form-label fw-semibold" style="font-size:0.85rem;">Email address</label>
                 <input type="email" class="form-control" id="email" name="email" placeholder="you@company.com" required autocomplete="email">
@@ -76,13 +77,13 @@
 
         <div class="divider-line">or</div>
 
-        <a href="{{ url_for('auth.login_google') }}" class="google-btn">
+        <a href="{{ url_for('auth.login_google', next=next) if next else url_for('auth.login_google') }}" class="google-btn">
             <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" style="width:18px;height:18px;">
             Continue with Google
         </a>
 
         <p class="text-center text-muted mt-4 mb-0" style="font-size:0.85rem;">
-            No account yet? <a href="{{ url_for('auth.sign_up') }}" class="fw-semibold text-decoration-none">Sign up free</a>
+            No account yet? <a href="{{ url_for('auth.sign_up', next=next) if next else url_for('auth.sign_up') }}" class="fw-semibold text-decoration-none">Sign up free</a>
         </p>
     </div>
 </div>

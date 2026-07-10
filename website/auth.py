@@ -19,6 +19,14 @@ supabase = create_client(
 
 auth = Blueprint('auth', __name__)
 
+
+def _safe_next(next_url):
+    """Only allow same-site relative redirects for ?next= — rejects absolute/
+    protocol-relative URLs so this can't be used as an open redirect."""
+    if not next_url or not next_url.startswith('/') or next_url.startswith('//'):
+        return None
+    return next_url
+
 # ------------------------------------------------ #
 # ---------------- PASSWORD RESET ---------------- #
 # ------------------------------------------------ #
@@ -131,8 +139,10 @@ def reset_password_form():
 @auth.route('/login', methods=['GET', 'POST'])
 @limiter.limit("20 per minute; 5 per 10 seconds")
 def login():
+    next_url = _safe_next(request.values.get('next'))
+
     if current_user.is_authenticated:
-        return redirect(url_for('views.home'))
+        return redirect(next_url or url_for('views.home'))
 
     if request.method == 'POST':
         email = request.form.get('email')
@@ -150,18 +160,22 @@ def login():
                 flash("Please verify your email before signing in. Check your inbox for a confirmation link.", "error")
                 resp = make_response(redirect(url_for("auth.verify_email_prompt")))
                 resp.set_cookie("pending_verify_email", email, max_age=900, httponly=True, samesite="Lax")
+                if next_url:
+                    resp.set_cookie("pending_next", next_url, max_age=900, httponly=True, samesite="Lax")
                 return resp
             flash("Invalid email or password.", "error")
-            return render_template("login.html")
+            return render_template("login.html", next=next_url)
 
         if not hasattr(res, 'user') or not res.user:
             flash("Invalid email or password.", "error")
-            return render_template("login.html")
+            return render_template("login.html", next=next_url)
 
         if not res.user.email_confirmed_at:
             flash("Please verify your email before signing in. Check your inbox for a confirmation link.", "error")
             resp = make_response(redirect(url_for("auth.verify_email_prompt")))
             resp.set_cookie("pending_verify_email", email, max_age=900, httponly=True, samesite="Lax")
+            if next_url:
+                resp.set_cookie("pending_next", next_url, max_age=900, httponly=True, samesite="Lax")
             return resp
 
         # Ensure local user exists for Flask-Login
@@ -177,9 +191,9 @@ def login():
 
         login_user(local_user, remember=True)
         flash("Logged in successfully!", "success")
-        return redirect(url_for('views.home'))
+        return redirect(next_url or url_for('views.home'))
 
-    return render_template("login.html")
+    return render_template("login.html", next=next_url)
 
 @auth.route('/logout')
 @login_required
@@ -191,8 +205,10 @@ def logout():
 @auth.route('/sign-up', methods=['GET', 'POST'])
 @limiter.limit("10 per hour")
 def sign_up():
+    next_url = _safe_next(request.values.get('next'))
+
     if current_user.is_authenticated:
-        return redirect(url_for('views.home'))
+        return redirect(next_url or url_for('views.home'))
 
     if request.method == 'POST':
         email = request.form.get('email')
@@ -258,19 +274,21 @@ def sign_up():
 
                 resp = make_response(redirect(url_for("auth.verify_email_prompt")))
                 resp.set_cookie("pending_verify_email", email, max_age=900, httponly=True, samesite="Lax")
+                if next_url:
+                    resp.set_cookie("pending_next", next_url, max_age=900, httponly=True, samesite="Lax")
                 return resp
 
             except Exception as e:
                 err = str(e).lower()
                 if "already registered" in err or "already been registered" in err or "duplicate" in err:
                     flash("Email already exists. Try logging in instead.", "error")
-                    return redirect(url_for("auth.login"))
+                    return redirect(url_for("auth.login", next=next_url) if next_url else url_for("auth.login"))
 
                 print("Signup unexpected error:", e)
                 flash("Something went wrong. Try again.", "error")
-                return redirect(url_for("auth.sign_up"))
+                return redirect(url_for("auth.sign_up", next=next_url) if next_url else url_for("auth.sign_up"))
 
-    return render_template("sign_up.html")
+    return render_template("sign_up.html", next=next_url)
 
 # ------------------------------------------------ #
 # ----------- VERIFY EMAIL PROMPT PAGE ------------ #
@@ -402,10 +420,16 @@ def verify_email(token):
     login_user(user, remember=True)
     flash("Email verified! Welcome to Avants.", "success")
 
-    if user.role == 'employer' and not Company.query.filter_by(owner_user_id=user.id).first():
-        return redirect(url_for("auth.complete_employer_profile"))
+    next_url = _safe_next(request.cookies.get("pending_next"))
 
-    return redirect(url_for("views.home"))
+    if user.role == 'employer' and not Company.query.filter_by(owner_user_id=user.id).first():
+        target = url_for("auth.complete_employer_profile")
+    else:
+        target = next_url or url_for("views.home")
+
+    resp = make_response(redirect(target))
+    resp.delete_cookie("pending_next")
+    return resp
 
 
 # ------------------------------------------------ #
@@ -420,6 +444,7 @@ def login_google():
     # doesn't silently end up as a candidate.
     role = request.args.get("role", "candidate")
     session["oauth_role"] = role if role in ("candidate", "employer") else "candidate"
+    session["oauth_next"] = _safe_next(request.args.get("next"))
 
     # Redirect user to Supabase Google OAuth
     res = supabase.auth.sign_in_with_oauth({
@@ -480,11 +505,12 @@ def login_google_finish():
             db.session.commit()
 
         login_user(local_user, remember=True)
+        next_url = _safe_next(session.pop("oauth_next", None))
 
         if is_new_user and local_user.role == 'employer':
             return redirect(url_for("auth.complete_employer_profile"))
 
-        return redirect(url_for("views.home"))
+        return redirect(next_url or url_for("views.home"))
 
     except Exception as e:
         print("Google OAuth error:", e)
@@ -505,6 +531,7 @@ def employer_email_conflict():
         choice = request.form.get('choice')
         session.pop('oauth_pending_email', None)
         session.pop('oauth_pending_name', None)
+        next_url = _safe_next(session.pop('oauth_next', None))
 
         if choice == 'candidate':
             local_user = User.query.filter_by(email=email).first()
@@ -514,9 +541,9 @@ def employer_email_conflict():
                 db.session.commit()
             login_user(local_user, remember=True)
             flash("Signed up as a candidate account.", "success")
-            return redirect(url_for('views.home'))
+            return redirect(next_url or url_for('views.home'))
 
-        return redirect(url_for('auth.sign_up'))
+        return redirect(url_for('auth.sign_up', next=next_url) if next_url else url_for('auth.sign_up'))
 
     return render_template("employer_email_conflict.html", email=email)
 
