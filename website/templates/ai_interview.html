@@ -136,12 +136,14 @@
         <!-- Pre-interview tips screen -->
         <div class="interview-card" id="tipsScreen">
             <div class="interview-avatar" style="margin:0 auto 20px;"><i class="fas fa-lightbulb" style="color:#d97706;"></i></div>
-            <p class="interview-progress">Before You Begin</p>
-            <h2 class="interview-question" style="font-size:1.15rem; margin-bottom:28px;">A few tips to get the best result</h2>
+            <p class="interview-progress">{{ 'Welcome Back' if saved_session else 'Before You Begin' }}</p>
+            <h2 class="interview-question" style="font-size:1.15rem; margin-bottom:28px;">
+                {{ 'Pick up where you left off — your progress was saved.' if saved_session else 'A few tips to get the best result' }}
+            </h2>
             <div style="text-align:left; max-width:460px; margin:0 auto 28px;">
                 <div class="d-flex gap-3 mb-3 align-items-start">
                     <i class="fas fa-video text-primary mt-1" style="width:18px; flex-shrink:0;"></i>
-                    <span class="small"><strong>Camera required.</strong> Your video will be turned on for the duration of the interview. Make sure you're in a well-lit space.</span>
+                    <span class="small"><strong>Camera optional.</strong> A self-view helps you stay engaged, but you can interview with audio only if you'd rather not use your camera.</span>
                 </div>
                 <div class="d-flex gap-3 mb-3 align-items-start">
                     <i class="fas fa-microphone text-primary mt-1" style="width:18px; flex-shrink:0;"></i>
@@ -156,11 +158,14 @@
                     <span class="small"><strong>One submission only.</strong> You can save and resume, but the final interview can only be submitted once.</span>
                 </div>
             </div>
-            <div id="cameraError" style="display:none;" class="alert alert-danger text-start mb-3" style="font-size:0.85rem;">
-                <i class="fas fa-video-slash me-2"></i><strong>Camera access denied.</strong> Please allow camera access in your browser settings and try again.
+            <div id="cameraError" style="display:none;" class="alert alert-warning text-start mb-3" style="font-size:0.85rem;">
+                <i class="fas fa-video-slash me-2"></i><strong>Camera access denied or unavailable.</strong> Starting with audio only instead.
             </div>
-            <button class="btn btn-primary btn-lg" id="startInterviewBtn" onclick="beginInterview()">
-                <i class="fas fa-video me-2"></i> Allow Camera & Start
+            <button class="btn btn-primary btn-lg" id="startInterviewBtn" onclick="beginInterview(true)">
+                <i class="fas fa-video me-2"></i> {{ 'Allow Camera & Resume' if saved_session else 'Allow Camera & Start' }}
+            </button>
+            <button class="btn btn-link btn-sm mt-2 d-block mx-auto" id="skipCameraBtn" onclick="beginInterview(false)">
+                {{ 'Resume without camera' if saved_session else 'Continue without camera' }}
             </button>
         </div>
         <div class="interview-card" id="mainInterviewCard" style="display:none;">
@@ -181,12 +186,16 @@
                 <div id="recordSection" style="display:none;">
                     <button id="recordBtn" class="record-btn"><i class="fas fa-microphone"></i></button>
                     <p class="record-status" id="recordStatus">Tap to record your answer</p>
-                    <div class="mt-3">
+                    <div class="mt-3 d-flex gap-2 justify-content-center">
+                        <button id="saveExitBtn" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-floppy-disk me-1"></i> Save &amp; Exit
+                        </button>
                         <button id="wrapUpBtn" class="btn btn-outline-secondary btn-sm"
                                 data-bs-toggle="modal" data-bs-target="#wrapUpModal">
                             End Interview Early
                         </button>
                     </div>
+                    <p class="text-muted mt-2" style="font-size:0.72rem;">Save & Exit keeps your answers so far — come back anytime to continue. End Interview Early submits a final verdict now.</p>
                 </div>
             </div>
 
@@ -260,6 +269,8 @@
 <script>
 const chatUrl = "{{ url_for('candidate.interview_chat', job_id=job.id, application_id=application.id) }}";
 const dashboardUrl = "{{ url_for('candidate.dashboard') }}";
+const saveSessionUrl = "{{ url_for('candidate.save_interview_session', job_id=job.id, application_id=application.id) }}";
+const savedSession = {{ saved_session|tojson if saved_session else 'null' }};
 let history         = [];
 let currentQuestion = null;
 let concluded       = false;
@@ -269,6 +280,7 @@ let audioChunks     = [];
 let isRecording     = false;
 let questionNum     = 0;
 let cameraStream    = null;
+let interviewStarted = false;
 
 // Estimated total questions by interview length
 const ESTIMATED_TOTAL = { short: 4, standard: 7, thorough: 10 }["{{ job.interview_length }}"] || 7;
@@ -426,6 +438,19 @@ async function sendTurn(audioBlob, wrapUp = false) {
 }
 
 async function startInterview() {
+    // Resuming a saved session — replay the last unanswered question instead
+    // of asking the AI for a fresh one (which would desync the conversation).
+    if (savedSession && savedSession.length > 0) {
+        const lastAssistant = [...savedSession].reverse().find(m => m.role === "assistant");
+        if (lastAssistant) {
+            history = savedSession.slice();
+            questionNum = history.filter(m => m.role === "assistant").length - 1;
+            setQuestion(lastAssistant.content, null);
+            recordSection.style.display = "block";
+            return;
+        }
+    }
+
     try {
         const result = await sendTurn(null, false);
         setQuestion(result.reply, result.reply_audio_url);
@@ -435,6 +460,25 @@ async function startInterview() {
         questionText.textContent = e.message;
     }
 }
+
+document.getElementById("saveExitBtn").addEventListener("click", async () => {
+    if (concluded || wrappingUp) return;
+    const btn = document.getElementById("saveExitBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+
+    try {
+        await fetch(saveSessionUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ history }),
+        });
+    } catch (e) {
+        // Best-effort — fall through to dashboard either way rather than trap the user here.
+    }
+    interviewStarted = false; // saved on purpose, don't also force-submit via beforeunload
+    window.location.href = dashboardUrl;
+});
 
 async function setupRecorder() {
     try {
@@ -536,31 +580,40 @@ document.getElementById("confirmWrapUpBtn").addEventListener("click", async () =
     }
 });
 
-async function beginInterview() {
+async function beginInterview(withCamera) {
     const btn = document.getElementById('startInterviewBtn');
+    const skipBtn = document.getElementById('skipCameraBtn');
     const errBox = document.getElementById('cameraError');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Enabling camera…';
     errBox.style.display = 'none';
 
-    try {
-        cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        document.getElementById("selfVideo").srcObject = cameraStream;
-    } catch (e) {
-        errBox.style.display = '';
+    if (withCamera) {
+        btn.disabled = true;
+        skipBtn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Enabling camera…';
+
+        try {
+            cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            document.getElementById("selfVideo").srcObject = cameraStream;
+        } catch (e) {
+            errBox.style.display = '';
+            // Camera failed — fall through and start audio-only rather than blocking entry.
+        }
+
         btn.disabled = false;
+        skipBtn.disabled = false;
         btn.innerHTML = '<i class="fas fa-video me-2"></i> Allow Camera & Start';
-        return;
     }
 
+    document.getElementById('selfViewWrap').style.display = cameraStream ? '' : 'none';
     document.getElementById('tipsScreen').style.display = 'none';
     document.getElementById('mainInterviewCard').style.display = 'block';
+    interviewStarted = true;
     startInterview();
 }
 
 // Auto-submit via sendBeacon when the page is closed mid-interview
 window.addEventListener("beforeunload", () => {
-    if (!concluded && history.length > 0 && cameraStream) {
+    if (!concluded && interviewStarted && history.length > 0) {
         const fd = new FormData();
         fd.append("history", JSON.stringify(history));
         fd.append("wrap_up", "true");
