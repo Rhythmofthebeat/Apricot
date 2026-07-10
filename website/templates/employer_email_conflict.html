@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Company Email Needed | Avants{% endblock %}
+
+{% block head %}
+<style>
+    .auth-wrap {
+        min-height: calc(100vh - 140px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 16px;
+    }
+    .auth-card {
+        width: 100%;
+        max-width: 460px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 44px 40px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+        text-align: center;
+    }
+    .conflict-icon {
+        width: 64px;
+        height: 64px;
+        background: var(--primary-soft);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 24px;
+        font-size: 1.75rem;
+        color: var(--primary);
+    }
+    .conflict-title {
+        font-size: 1.4rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        margin-bottom: 10px;
+    }
+    .conflict-sub {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        line-height: 1.6;
+        margin-bottom: 24px;
+    }
+    .email-highlight { font-weight: 700; color: var(--text); }
+    .divider-line {
+        display: flex; align-items: center; gap: 12px;
+        color: var(--text-muted); font-size: 0.78rem; font-weight: 500;
+        margin: 20px 0;
+    }
+    .divider-line:before, .divider-line:after { content: ''; flex: 1; height: 1px; background: var(--border); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrap">
+    <div class="auth-card">
+        <div class="conflict-icon">
+            <i class="fas fa-building-circle-exclamation"></i>
+        </div>
+
+        <h1 class="conflict-title">Employer accounts need a company email</h1>
+        <p class="conflict-sub">
+            You signed in with <span class="email-highlight">{{ email }}</span>, which is a personal email
+            provider. We require a company email for employer accounts to keep the marketplace trustworthy.
+        </p>
+
+        <a href="{{ url_for('auth.sign_up', role='employer') }}" class="btn btn-primary w-100" style="padding:11px;">
+            <i class="fas fa-arrow-left me-2"></i>Go back and use a company email
+        </a>
+
+        <div class="divider-line">or</div>
+
+        <form method="POST">
+            <input type="hidden" name="choice" value="candidate">
+            <button type="submit" class="btn btn-outline-secondary w-100" style="padding:11px;">
+                Continue as a candidate account instead
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

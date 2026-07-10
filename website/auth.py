@@ -461,8 +461,13 @@ def login_google_finish():
             email_domain = email.split('@')[-1].lower() if '@' in email else ''
 
             if role == 'employer' and email_domain in FREE_EMAIL_DOMAINS:
-                role = 'candidate'
-                flash("Signed up as a candidate — employer accounts need a company email, not a personal one.", "error")
+                # Don't silently create the wrong kind of account — Google only
+                # gave us a personal-domain email, but they asked for employer.
+                # Let them explicitly choose instead of trapping them as a
+                # candidate with no way back.
+                session['oauth_pending_email'] = email
+                session['oauth_pending_name'] = name
+                return redirect(url_for('auth.employer_email_conflict'))
 
             local_user = User(
                 email=email,
@@ -485,6 +490,35 @@ def login_google_finish():
         print("Google OAuth error:", e)
         flash("Google login failed.", "error")
         return redirect(url_for("auth.login"))
+
+
+@auth.route("/employer-email-conflict", methods=["GET", "POST"])
+def employer_email_conflict():
+    """Landing spot for a Google sign-up that asked for an employer account
+    but only offered a personal-domain email — see login_google_finish."""
+    email = session.get('oauth_pending_email')
+    name = session.get('oauth_pending_name')
+    if not email:
+        return redirect(url_for('auth.sign_up'))
+
+    if request.method == "POST":
+        choice = request.form.get('choice')
+        session.pop('oauth_pending_email', None)
+        session.pop('oauth_pending_name', None)
+
+        if choice == 'candidate':
+            local_user = User.query.filter_by(email=email).first()
+            if not local_user:
+                local_user = User(email=email, first_name=name, password=None, role='candidate', email_verified=True)
+                db.session.add(local_user)
+                db.session.commit()
+            login_user(local_user, remember=True)
+            flash("Signed up as a candidate account.", "success")
+            return redirect(url_for('views.home'))
+
+        return redirect(url_for('auth.sign_up'))
+
+    return render_template("employer_email_conflict.html", email=email)
 
 
 @auth.route("/complete-employer-profile", methods=["GET", "POST"])
