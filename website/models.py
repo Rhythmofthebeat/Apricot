@@ -96,7 +96,7 @@ FREE_EMAIL_DOMAINS = {
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(150), unique=True)
-    password = db.Column(db.String(150))
+    password = db.Column(db.String(255))  # werkzeug's scrypt hashes run ~162 chars, longer than the old 150 cap
     first_name = db.Column(db.String(150))
     role = db.Column(db.String(20), nullable=False, default="candidate")  # "candidate" | "employer"
     email_verified = db.Column(db.Boolean, nullable=False, default=True)

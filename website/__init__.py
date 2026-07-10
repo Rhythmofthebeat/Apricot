@@ -96,6 +96,10 @@ def _run_migrations(db):
         # application — candidate must confirm a hire before the fee invoice fires
         "ALTER TABLE application ADD COLUMN candidate_confirmed_hire BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE application ADD COLUMN hire_confirmed_at TIMESTAMP WITH TIME ZONE",
+        # user — werkzeug's scrypt password hashes run ~162 chars, longer than
+        # the original 150-char cap, so every email/password signup was
+        # failing with a StringDataRightTruncation error
+        "ALTER TABLE \"user\" ALTER COLUMN password TYPE VARCHAR(255)",
     ]
     for stmt in new_columns:
         try:
