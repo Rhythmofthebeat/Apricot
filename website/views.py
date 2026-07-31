@@ -83,7 +83,8 @@ def stripe_webhook():
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        app_id = (session.get("metadata") or {}).get("application_id")
+        metadata = session["metadata"] if "metadata" in session else {}
+        app_id = metadata["application_id"] if "application_id" in metadata else None
         if app_id:
             application = Application.query.get(int(app_id))
             if application and not application.fee_paid:
