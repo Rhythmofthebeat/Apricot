@@ -11,7 +11,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const googleLink = document.getElementById("googleSignupLink");
     const googleDivider = document.getElementById("googleDivider");
     const feeBlock = document.getElementById("employerFeeBlock");
-    const feeCheck = document.getElementById("feeAgreementCheck");
+    const feeCheck = document.getElementById("employerAgreementCheck");
+    const signatureInput = document.getElementById("signatureName");
 
     const emailInput = document.getElementById("email");
     const nextParam = {{ next|tojson if next else 'null' }};
@@ -21,6 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
         companyInput.required = isEmployer;
         if (feeBlock) feeBlock.style.display = isEmployer ? "block" : "none";
         if (feeCheck) feeCheck.required = isEmployer;
+        if (signatureInput) signatureInput.required = isEmployer;
         if (googleLink) {
             // Employers sign up with a company email + password only - Google
             // gives no chance to collect a company name up front.
@@ -161,8 +163,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     <i class="fas fa-file-contract"></i>
                     <div>
                         <strong>Employer Platform Agreement</strong><br>
-                        <span style="font-size:0.82rem;">By creating an employer account you agree to the <a href="/terms#employer-contract" target="_blank" class="fw-semibold" style="color:#92400e;">Employer Platform Agreement</a> (Section 12 of our Terms), which covers the <strong>15% placement fee</strong>, non-circumvention, and candidate data handling obligations.</span>
+                        <span style="font-size:0.82rem;">By creating an employer account you agree to the <a href="/terms#employer-contract" target="_blank" class="fw-semibold" style="color:#92400e;">Employer Platform Agreement</a> (Section 12 of our Terms), which covers the <strong>15-20% placement fee</strong> (15% for salaried roles, 20% of the annualized rate for hourly roles), non-circumvention, and candidate data handling obligations.</span>
                     </div>
+                </div>
+                <div class="mt-3">
+                    <label for="signatureName" class="form-label fw-semibold" style="font-size:0.85rem;">Signature - type your full legal name</label>
+                    <input type="text" class="form-control" id="signatureName" name="signatureName" placeholder="Full legal name" autocomplete="name">
+                    <div class="form-text">This serves as your electronic signature on the Employer Platform Agreement on behalf of your company.</div>
                 </div>
                 <div class="form-check mt-2">
                     <input class="form-check-input" type="checkbox" id="employerAgreementCheck" name="employer_agreement" required>

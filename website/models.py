@@ -127,6 +127,10 @@ class Company(db.Model):
     terms_accepted_at = db.Column(db.DateTime(timezone=True))
     terms_accepted_ip = db.Column(db.String(45))
     terms_version = db.Column(db.String(10))
+    # Typed full legal name of the authorised rep who signed the Employer
+    # Platform Agreement - an e-signature alongside the checkbox, so the
+    # placement-fee obligation reads as an actually-signed contract.
+    terms_signature_name = db.Column(db.String(200))
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
 

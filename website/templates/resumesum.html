@@ -729,11 +729,25 @@ document.getElementById("downloadSummaryPdf")?.addEventListener("click", async (
         return;
     }
 
-    const response = await fetch("/export/summary-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ summary: text })
-    });
+    const btn = document.getElementById("downloadSummaryPdf");
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating PDF...';
+
+    let response;
+    try {
+        response = await fetch("/export/summary-pdf", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ summary: text })
+        });
+        if (!response.ok) throw new Error("Export failed");
+    } catch (e) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        alert("Couldn't generate the PDF. Please try again.");
+        return;
+    }
 
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
@@ -744,6 +758,9 @@ document.getElementById("downloadSummaryPdf")?.addEventListener("click", async (
     document.body.appendChild(a);
     a.click();
     a.remove();
+
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
 });
 
 </script>

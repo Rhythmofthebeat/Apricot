@@ -42,7 +42,28 @@ def compute_composite_score(app, ai_data):
         ai_penalty = (ai_data.get("score", 0) if ai_data else 0)
         return round(resume * 0.45 + verdict * 0.45 + (100 - ai_penalty) * 0.10)
     return resume
-PLATFORM_FEE_PERCENT = 15
+PLATFORM_FEE_PERCENT = 15          # salaried roles: 15% of first-year comp
+HOURLY_PLATFORM_FEE_PERCENT = 20   # hourly roles: 20% of the annualized rate
+
+STANDARD_ANNUAL_HOURS = 2080  # 40hrs/week x 52 weeks - used to annualize hourly rates
+
+
+def _placement_fee_basis(job):
+    """Return (basis_amount, fee_percent) for the placement fee.
+
+    Salaried/monthly roles use first-year compensation directly. Hourly roles
+    have no "first-year salary" on file - job.salary_usd is just the hourly
+    rate - so it's annualized to a comparable full-time figure first, and
+    charged at a higher rate since the actual hours worked are less certain
+    than a salaried hire's.
+    """
+    if not job.salary_usd:
+        return None, None
+    if job.pay_type == 'hourly':
+        return job.salary_usd * STANDARD_ANNUAL_HOURS, HOURLY_PLATFORM_FEE_PERCENT
+    if job.pay_type == 'monthly':
+        return job.salary_usd * 12, PLATFORM_FEE_PERCENT
+    return job.salary_usd, PLATFORM_FEE_PERCENT
 LOGO_ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 LOGO_MAX_SIZE = (800, 800)
 INTERVIEW_LENGTH_OPTIONS = ["short", "standard", "thorough"]
@@ -127,7 +148,12 @@ def send_hire_fee_invoice(application, job, company, candidate, employer_user):
             application.stripe_payment_link = payment_link_url
             db.session.commit()
 
-    fee_amount = int(job.salary_usd * PLATFORM_FEE_PERCENT / 100) if job.salary_usd else None
+    basis_amount, fee_percent = _placement_fee_basis(job)
+    fee_amount = int(basis_amount * fee_percent / 100) if basis_amount else None
+    basis_label = (
+        f"annualized rate of ${basis_amount:,}/yr (${job.salary_usd:,}/hr x {STANDARD_ANNUAL_HOURS:,} hrs)"
+        if job.pay_type == 'hourly' else f"first-year compensation of ${basis_amount:,}"
+    )
     try:
         if payment_link_url and fee_amount:
             send_branded_email(
@@ -138,19 +164,20 @@ def send_hire_fee_invoice(application, job, company, candidate, employer_user):
                     f"<strong>{candidate.first_name}</strong> has confirmed their hire for "
                     f"<strong>{job.title}</strong> through Avants AI.<br><br>"
                     f"The platform placement fee is <strong>${fee_amount:,}</strong> "
-                    f"(15% of first-year compensation of ${job.salary_usd:,}).<br><br>"
+                    f"({fee_percent}% of {basis_label}).<br><br>"
                     f"This is due within 30 days of the candidate's start date. "
                     f"Click below to pay securely via Stripe."
                 ),
                 plain_text=(
                     f"{candidate.first_name} has confirmed their hire for {job.title} through Avants AI.\n\n"
-                    f"Placement fee: ${fee_amount:,} (15% of ${job.salary_usd:,} first-year salary).\n"
+                    f"Placement fee: ${fee_amount:,} ({fee_percent}% of {basis_label}).\n"
                     f"Pay here: {payment_link_url}"
                 ),
                 cta_label="Pay Placement Fee",
                 cta_url=payment_link_url,
             )
         else:
+            fee_percent_display = fee_percent or PLATFORM_FEE_PERCENT
             send_branded_email(
                 to_email=employer_user.email,
                 subject=f"Placement fee - {candidate.first_name} / {job.title}",
@@ -158,13 +185,13 @@ def send_hire_fee_invoice(application, job, company, candidate, employer_user):
                 body_html=(
                     f"<strong>{candidate.first_name}</strong> has confirmed their hire for "
                     f"<strong>{job.title}</strong> through Avants AI.<br><br>"
-                    f"A placement fee of <strong>15% of first-year compensation</strong> "
+                    f"A placement fee of <strong>{fee_percent_display}% of first-year compensation</strong> "
                     f"is due within 30 days of the candidate's start date. "
                     f"Our team will follow up with an invoice."
                 ),
                 plain_text=(
                     f"{candidate.first_name} has confirmed their hire for {job.title} through Avants AI.\n\n"
-                    f"A 15% placement fee will be invoiced to you within 30 days of the start date."
+                    f"A {fee_percent_display}% placement fee will be invoiced to you within 30 days of the start date."
                 ),
                 cta_label="View Dashboard",
                 cta_url=external_url('employer.dashboard'),
@@ -175,9 +202,10 @@ def send_hire_fee_invoice(application, job, company, candidate, employer_user):
 
 def _create_stripe_payment_link(application, job, company, candidate):
     stripe.api_key = current_app.config.get("STRIPE_SECRET_KEY")
-    if not stripe.api_key or not job.salary_usd:
+    basis_amount, fee_percent = _placement_fee_basis(job)
+    if not stripe.api_key or not basis_amount:
         return None
-    fee_cents = int(job.salary_usd * PLATFORM_FEE_PERCENT / 100 * 100)
+    fee_cents = int(basis_amount * fee_percent / 100 * 100)
     if fee_cents <= 0:
         return None
     try:

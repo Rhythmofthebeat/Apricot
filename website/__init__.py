@@ -106,6 +106,8 @@ def _run_migrations(db):
         # company - work-email domain, so later employer signups from the same
         # company land in the same hub instead of each creating a new Company
         "ALTER TABLE company ADD COLUMN email_domain VARCHAR(150)",
+        # company - typed e-signature on the Employer Platform Agreement
+        "ALTER TABLE company ADD COLUMN terms_signature_name VARCHAR(200)",
     ]
     for stmt in new_columns:
         try:

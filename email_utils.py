@@ -14,9 +14,6 @@ VERIFICATION_SALT = "employer-email-verification"
 VERIFICATION_MAX_AGE = 60 * 60 * 24  # 24 hours
 
 
-LOGO_URL = "https://apricot-u9ap.onrender.com/static/Avants.png"
-
-
 def external_url(endpoint, **values):
     """Absolute URL for links sent out in emails.
 
@@ -55,8 +52,12 @@ def render_branded_email(heading, body_html, cta_label=None, cta_url=None, accen
             </td>
         </tr>
         """
+    logo_url = public_base_url() + url_for('static', filename='Avants.png')
+    # Outlook (and other legacy clients) ignore CSS height/width on <img> and
+    # need the HTML attributes set explicitly, or the logo renders broken/huge.
     logo_html = (
-        f'<img src="{LOGO_URL}" alt="Avants AI" style="height:32px; display:block;" />'
+        f'<img src="{logo_url}" alt="Avants AI" width="106" height="32" '
+        f'style="height:32px; width:106px; display:block; border:0;" />'
     )
 
     return f"""

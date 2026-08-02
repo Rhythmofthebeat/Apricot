@@ -28,11 +28,13 @@ def _safe_next(next_url):
     return next_url
 
 
-def _provision_employer(user, email_domain, company_name):
+def _provision_employer(user, email_domain, company_name, signature_name=None):
     """Get-or-join a Company for a brand-new employer user. Coworkers signing
     up from the same work email domain land in the same hub (as a
     CompanyMember) instead of each spinning up a separate company - only the
-    first signup from a domain actually creates the Company."""
+    first signup from a domain actually creates the Company, and only that
+    founding signup signs the Employer Platform Agreement on the Company's
+    behalf."""
     existing = None
     if email_domain and email_domain not in FREE_EMAIL_DOMAINS:
         existing = Company.query.filter_by(email_domain=email_domain).first()
@@ -53,6 +55,7 @@ def _provision_employer(user, email_domain, company_name):
         terms_accepted_at=datetime.now(timezone.utc),
         terms_accepted_ip=request.remote_addr,
         terms_version='1.0',
+        terms_signature_name=(signature_name or '').strip() or None,
     )
     db.session.add(company)
     db.session.commit()
@@ -261,6 +264,7 @@ def sign_up():
         password2 = request.form.get('password2')
         role = request.form.get('role', 'candidate')
         company_name = request.form.get('companyName', '').strip()
+        signature_name = request.form.get('signatureName', '').strip()
 
         email_domain = email.split('@')[-1].lower() if email and '@' in email else ''
 
@@ -278,6 +282,8 @@ def sign_up():
             flash("Company name is required for employer accounts.", "error")
         elif role == 'employer' and email_domain in FREE_EMAIL_DOMAINS:
             flash("Please sign up with your company email address, not a personal email provider.", "error")
+        elif role == 'employer' and not existing_hub and not signature_name:
+            flash("Type your full legal name to sign the Employer Platform Agreement.", "error")
         else:
             try:
                 admin_supa = create_client(
@@ -307,7 +313,7 @@ def sign_up():
                 db.session.commit()
 
                 if role == 'employer':
-                    _provision_employer(local_user, email_domain, company_name)
+                    _provision_employer(local_user, email_domain, company_name, signature_name)
 
                 try:
                     send_verification_email(local_user)
@@ -622,11 +628,25 @@ def complete_employer_profile():
 
     if request.method == "POST":
         company_name = request.form.get("companyName", "").strip()
+        signature_name = request.form.get("signatureName", "").strip()
+        agreed = request.form.get("agreement") == "on"
+
         if not company_name:
             flash("Company name is required.", "error")
             return render_template("complete_employer_profile.html")
+        if not signature_name or not agreed:
+            flash("Type your full legal name and agree to the Employer Platform Agreement to continue.", "error")
+            return render_template("complete_employer_profile.html")
 
-        company = Company(owner_user_id=current_user.id, name=company_name, email_domain=email_domain or None)
+        company = Company(
+            owner_user_id=current_user.id,
+            name=company_name,
+            email_domain=email_domain or None,
+            terms_accepted_at=datetime.now(timezone.utc),
+            terms_accepted_ip=request.remote_addr,
+            terms_version='1.0',
+            terms_signature_name=signature_name,
+        )
         db.session.add(company)
         db.session.commit()
 

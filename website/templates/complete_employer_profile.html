@@ -13,6 +13,25 @@
                         <label for="companyName" class="form-label fw-bold">Company Name</label>
                         <input type="text" class="form-control" id="companyName" name="companyName" placeholder="Enter your company name" required>
                     </div>
+
+                    <div class="mb-3 p-3 rounded" style="background:#fff7ed;border:1px solid #fed7aa;font-size:0.85rem;color:#92400e;">
+                        <i class="fas fa-file-contract me-1"></i>
+                        By continuing you agree to the <a href="/terms#employer-contract" target="_blank" class="fw-semibold" style="color:#92400e;">Employer Platform Agreement</a> (Section 12 of our Terms), which covers the placement fee, non-circumvention, and candidate data handling obligations.
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="signatureName" class="form-label fw-bold">Signature - Type your full legal name</label>
+                        <input type="text" class="form-control" id="signatureName" name="signatureName" placeholder="Full legal name" required autocomplete="name">
+                        <div class="form-text">This serves as your electronic signature on the Employer Platform Agreement on behalf of your company.</div>
+                    </div>
+
+                    <div class="form-check mb-4">
+                        <input class="form-check-input" type="checkbox" id="agreementCheck" name="agreement" required>
+                        <label class="form-check-label" for="agreementCheck">
+                            I am authorised to sign on behalf of my company and agree to the <a href="/terms#employer-contract" target="_blank">Employer Platform Agreement</a>
+                        </label>
+                    </div>
+
                     <button type="submit" class="btn btn-primary w-100">Continue</button>
                 </form>
             </div>
