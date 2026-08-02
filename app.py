@@ -47,6 +47,15 @@ logger = logging.getLogger(__name__)
 # OpenAI
 client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
+# Short-lived handoff for /resume-jobmatch's Post/Redirect/Get flow. Pasted
+# job descriptions can easily exceed the ~4KB Flask session cookie can hold,
+# so results are stashed here (keyed by a one-time token in the redirect
+# URL) instead of in the session. Safe only because gunicorn runs a single
+# worker (see Procfile) - an in-memory dict wouldn't be shared across
+# workers if that ever changes.
+_RESUME_MATCH_CACHE = {}
+_RESUME_MATCH_CACHE_MAX = 200  # evict oldest if a token is never consumed
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Routes
@@ -60,11 +69,20 @@ def resumesum():
 @app.route('/resume-jobmatch', methods=['GET', 'POST'])
 @limiter.limit("10 per hour", methods=["POST"])
 def resumemat():
-    """Resume job-match page - handles both the form display and form submission."""
-    result        = None
-    score_value   = 0
-    cleaned_result = None   # always defined - avoids NameError on GET
-    job_text      = ''      # always defined
+    """Resume job-match page - handles both the form display and form submission.
+
+    POST redirects back to this same GET route (Post/Redirect/Get) instead of
+    rendering the result directly, so reloading the results page just re-GETs
+    it instead of resubmitting the form - which used to re-run the AI call
+    (burning quota) and drop a duplicate entry into the saved-results list
+    every time, since the AI's wording differs slightly on each run.
+    """
+    def _stash_and_redirect(result, score_value, job_text):
+        if len(_RESUME_MATCH_CACHE) >= _RESUME_MATCH_CACHE_MAX:
+            _RESUME_MATCH_CACHE.pop(next(iter(_RESUME_MATCH_CACHE)), None)
+        token = uuid.uuid4().hex
+        _RESUME_MATCH_CACHE[token] = {"result": result, "score_value": score_value, "job_text": job_text}
+        return redirect(url_for('resumemat', rid=token))
 
     if request.method == 'POST':
         if not current_user.is_authenticated:
@@ -74,7 +92,7 @@ def resumemat():
         resume_file = request.files.get('resume')
 
         if not job_text.strip() or not resume_file:
-            return render_template('resumemat.html', result=None, score_value=0, job_text=job_text)
+            return _stash_and_redirect(None, 0, job_text)
 
         resume_bytes = resume_file.read()
         resume_file.stream.seek(0)
@@ -83,57 +101,42 @@ def resumemat():
 
         if not resume_text.strip():
             logger.error("Extracted resume text is empty")
-            return render_template(
-                'resumemat.html',
-                result="Resume content could not be read. Please upload a readable PDF, DOCX, or TXT file.",
-                score_value=0,
-                job_text=job_text,
+            return _stash_and_redirect(
+                "Resume content could not be read. Please upload a readable PDF, DOCX, or TXT file.",
+                0, job_text,
             )
 
         try:
             result = compare_resume_to_job(job_text, resume_text)
         except RateLimitError:
-            return render_template(
-                'resumemat.html',
-                result="Our AI service is busy right now. Please try again in a minute.",
-                score_value=0,
-                job_text=job_text,
-            )
+            return _stash_and_redirect("Our AI service is busy right now. Please try again in a minute.", 0, job_text)
         except AuthenticationError:
             logger.error("OpenAI authentication failed in /resume-jobmatch")
-            return render_template(
-                'resumemat.html',
-                result="Something went wrong on our end. Please try again shortly.",
-                score_value=0,
-                job_text=job_text,
-            )
+            return _stash_and_redirect("Something went wrong on our end. Please try again shortly.", 0, job_text)
         except Exception as e:
             logger.error(f"compare_resume_to_job failed: {str(e)}")
-            return render_template(
-                'resumemat.html',
-                result="We couldn't analyze your resume right now. Please try again shortly.",
-                score_value=0,
-                job_text=job_text,
-            )
+            return _stash_and_redirect("We couldn't analyze your resume right now. Please try again shortly.", 0, job_text)
 
         # Persist raw result to disk (optional)
         with open("resumemat.txt", "w", encoding="utf-8") as f:
             f.write(result)
 
         # Extract numeric score (first number in 0-100 range)
+        score_value = 0
         for num in re.findall(r"\b(\d{1,3})\b", result):
             val = int(num)
             if 0 <= val <= 100:
                 score_value = val
                 break
 
-        cleaned_result = result.replace('*', '')
+        return _stash_and_redirect(result.replace('*', ''), score_value, job_text)
 
+    saved = _RESUME_MATCH_CACHE.pop(request.args.get('rid'), None) or {}
     return render_template(
         'resumemat.html',
-        result=cleaned_result,
-        score_value=score_value,
-        job_text=job_text,
+        result=saved.get('result'),
+        score_value=saved.get('score_value', 0),
+        job_text=saved.get('job_text', ''),
     )
 
 
