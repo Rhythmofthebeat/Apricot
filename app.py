@@ -4,6 +4,7 @@ from flask import Flask, render_template, request, jsonify, current_app, Respons
 from flask_login import login_required, current_user
 import openai
 import io
+import json
 import re
 import os
 import logging
@@ -318,6 +319,20 @@ def resume_chat():
         return jsonify({"error": "Failed to get a response. Please try again."}), 500
 
 
+def _google_tts_credentials():
+    """Explicit credentials built from GOOGLE_CREDENTIALS_JSON (the service
+    account key pasted as a plain env var), if set. Preferred over
+    GOOGLE_APPLICATION_CREDENTIALS's file-path/Secret-File mounting, which
+    has repeatedly failed to actually land the file on disk in production.
+    Returns None to fall back to the default file-based lookup."""
+    raw = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+    if not raw:
+        return None
+    from google.oauth2 import service_account
+    info = json.loads(raw)
+    return service_account.Credentials.from_service_account_info(info)
+
+
 @app.route("/speak", methods=["POST"])
 @login_required
 @limiter.limit("20 per hour")
@@ -335,7 +350,11 @@ def speak_summary():
         filename = f"{uuid.uuid4()}.mp3"
         filepath = os.path.join(audio_folder, filename)
 
-        tts_client  = texttospeech.TextToSpeechClient()
+        credentials = _google_tts_credentials()
+        tts_client = (
+            texttospeech.TextToSpeechClient(credentials=credentials)
+            if credentials else texttospeech.TextToSpeechClient()
+        )
         input_text  = texttospeech.SynthesisInput(text=summary_text)
         voice_name  = data.get("voice", "en-US-Wavenet-D")
         voice       = texttospeech.VoiceSelectionParams(

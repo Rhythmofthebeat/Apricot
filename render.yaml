@@ -24,6 +24,13 @@ services:
         value: "587"
       - key: GOOGLE_APPLICATION_CREDENTIALS
         value: /etc/secrets/google-credentials.json
+      # Preferred over GOOGLE_APPLICATION_CREDENTIALS - paste the full service
+      # account JSON key as this variable's value directly. Render's Secret
+      # Files (mounted at the path above) repeatedly failed to actually land
+      # on disk in production, so app.py checks this first and only falls
+      # back to the file path if it's unset.
+      - key: GOOGLE_CREDENTIALS_JSON
+        sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
