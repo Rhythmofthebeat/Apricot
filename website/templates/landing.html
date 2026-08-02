@@ -5,12 +5,25 @@
 <style>
     /* ── Hero ── */
     .hero-wrap {
+        position: relative;
         background: #fff;
         border-bottom: 1px solid var(--border);
-        padding: 96px 20px 80px;
+        padding: 104px 20px 88px;
         margin: -28px -20px 0;
         text-align: center;
+        overflow: hidden;
     }
+    .hero-glow {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background:
+            radial-gradient(560px 360px at 18% -10%, rgba(79,70,229,0.16), transparent 65%),
+            radial-gradient(520px 340px at 85% 8%, rgba(16,185,129,0.13), transparent 65%),
+            radial-gradient(480px 320px at 50% 105%, rgba(79,70,229,0.08), transparent 70%);
+    }
+    .hero-wrap > * { position: relative; z-index: 1; }
     .hero-badge {
         display: inline-flex;
         align-items: center;
@@ -33,13 +46,38 @@
         color: var(--text);
         margin-bottom: 20px;
     }
-    .hero-title span { color: var(--primary); }
+    .hero-title span {
+        background: linear-gradient(100deg, var(--primary) 10%, #10b981 90%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
     .hero-sub {
         font-size: 1.1rem;
         line-height: 1.7;
         color: var(--text-muted);
         max-width: 540px;
         margin: 0 auto 36px;
+    }
+
+    /* ── Scroll-reveal ── */
+    .reveal {
+        opacity: 0;
+        transform: translateY(22px);
+        transition: opacity 0.6s cubic-bezier(0.2,0.7,0.2,1), transform 0.6s cubic-bezier(0.2,0.7,0.2,1);
+    }
+    .reveal.in-view { opacity: 1; transform: translateY(0); }
+    .reveal-stagger.in-view > * { animation: revealItem 0.55s cubic-bezier(0.2,0.7,0.2,1) both; }
+    .reveal-stagger.in-view > *:nth-child(1) { animation-delay: 0.03s; }
+    .reveal-stagger.in-view > *:nth-child(2) { animation-delay: 0.10s; }
+    .reveal-stagger.in-view > *:nth-child(3) { animation-delay: 0.17s; }
+    .reveal-stagger.in-view > *:nth-child(4) { animation-delay: 0.24s; }
+    @keyframes revealItem {
+        from { opacity: 0; transform: translateY(18px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .reveal, .reveal-stagger > * { opacity: 1 !important; transform: none !important; animation: none !important; transition: none !important; }
     }
     .hero-cta-group { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
     .btn-hero-primary {
@@ -288,6 +326,42 @@
     }
     .check-list li i { color: var(--success); flex-shrink: 0; margin-top: 2px; }
 
+    /* ── More than hiring ── */
+    .platform-section { padding: 72px 20px; background: var(--bg); margin: 0 -20px; }
+    .platform-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        max-width: 980px;
+        margin: 40px auto 0;
+    }
+    .platform-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 28px 24px;
+        text-decoration: none;
+        color: inherit;
+        display: block;
+        transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+    }
+    .platform-card:hover {
+        border-color: var(--primary);
+        box-shadow: 0 8px 24px rgba(79,70,229,0.1);
+        transform: translateY(-2px);
+        color: inherit;
+    }
+    .platform-icon {
+        width: 44px; height: 44px;
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.1rem;
+        margin-bottom: 16px;
+    }
+    .platform-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .platform-card p { font-size: 0.85rem; color: var(--text-muted); line-height: 1.65; margin-bottom: 14px; }
+    .platform-link { font-size: 0.82rem; font-weight: 700; color: var(--primary); }
+
     /* ── Bottom CTA ── */
     .bottom-cta {
         background: var(--primary);
@@ -332,11 +406,12 @@
 
 <!-- ── HERO ── -->
 <div class="hero-wrap">
+    <div class="hero-glow"></div>
     <div class="hero-badge"><i class="fas fa-microphone-lines"></i> The First AI Interview Process</div>
     <h1 class="hero-title">Apply once.<br><span>Get a real answer.</span></h1>
     <p class="hero-sub">
-        Avants AI scores your resume, runs your interview, and puts you at the top of the employer's shortlist
-        so you hear back in hours, not weeks.
+        Every candidate gets a real AI voice interview and an instant resume match score. Every employer gets a
+        ranked, pre-screened shortlist instead of a pile of PDFs. No more silence, no more guessing.
     </p>
     <div class="hero-cta-group">
         <a href="{{ url_for('candidate.browse_jobs') }}" class="btn-hero-primary">
@@ -358,7 +433,7 @@
 </div>
 
 <!-- ── STATS BAR ── -->
-<div class="stats-bar">
+<div class="stats-bar reveal">
     <div class="stats-bar-inner">
         <div class="stat-item">
             <div class="stat-val">{{ open_job_count if open_job_count else '-' }}</div>
@@ -380,13 +455,13 @@
 </div>
 
 <!-- ── WHAT MAKES US DIFFERENT ── -->
-<div class="diff-section">
+<div class="diff-section reveal">
     <div class="container">
         <div class="text-center mb-4">
             <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--primary);margin-bottom:8px;">Why Avants</div>
             <h2 style="font-size:1.6rem;font-weight:800;letter-spacing:-0.03em;margin:0;">Not another job board.</h2>
         </div>
-        <div class="diff-grid">
+        <div class="diff-grid reveal-stagger">
             <div class="diff-card">
                 <div class="diff-tag">Only on Avants</div>
                 <div class="diff-icon"><i class="fas fa-microphone"></i></div>
@@ -411,7 +486,7 @@
 
 <!-- ── LATEST ROLES ── -->
 {% if job_data %}
-<div class="roles-section">
+<div class="roles-section reveal">
     <div class="container">
         <div class="roles-header">
             <h2>Latest roles</h2>
@@ -464,13 +539,13 @@
 {% endif %}
 
 <!-- ── HOW IT WORKS ── -->
-<div class="hiw-section">
+<div class="hiw-section reveal">
     <div class="container">
         <div class="text-center">
             <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--primary);margin-bottom:8px;">How it works</div>
             <h2 style="font-size:1.6rem;font-weight:800;letter-spacing:-0.03em;margin:0;">From application to offer in hours</h2>
         </div>
-        <div class="hiw-steps">
+        <div class="hiw-steps reveal-stagger">
             <div class="hiw-step">
                 <div class="hiw-num">Step 01</div>
                 <h3>Apply in minutes</h3>
@@ -496,7 +571,7 @@
 </div>
 
 <!-- ── FOR CANDIDATES / EMPLOYERS ── -->
-<div class="value-section">
+<div class="value-section reveal">
     <div class="container">
         <div class="row g-4">
             <div class="col-md-6">
@@ -537,6 +612,37 @@
     </div>
 </div>
 
+<!-- ── MORE THAN HIRING ── -->
+<div class="platform-section reveal">
+    <div class="container">
+        <div class="text-center mb-4">
+            <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--primary);margin-bottom:8px;">One platform</div>
+            <h2 style="font-size:1.6rem;font-weight:800;letter-spacing:-0.03em;margin:0;">More than a hiring site.</h2>
+            <p class="text-muted mt-2 mb-0" style="font-size:0.95rem;">Advanced Artificial Intelligence, applied to hiring, resumes, and the data that trains the models behind it all.</p>
+        </div>
+        <div class="platform-grid reveal-stagger">
+            <a href="{{ url_for('candidate.browse_jobs') }}" class="platform-card">
+                <div class="platform-icon" style="background:var(--primary-soft); color:var(--primary);"><i class="fas fa-microphone"></i></div>
+                <h3>AI Hiring</h3>
+                <p>Voice-interview-powered hiring for candidates and employers - the core of Avants. Apply, get scored, get interviewed, get a real answer.</p>
+                <span class="platform-link">Browse open roles <i class="fas fa-arrow-right ms-1"></i></span>
+            </a>
+            <a href="{{ url_for('resumemat') }}" class="platform-card">
+                <div class="platform-icon" style="background:#dcfce7; color:#15803d;"><i class="fas fa-file-circle-check"></i></div>
+                <h3>Community Edition</h3>
+                <p>Free resume tools open to everyone - job match scoring and an AI resume summarizer, no application required.</p>
+                <span class="platform-link">Try it free <i class="fas fa-arrow-right ms-1"></i></span>
+            </a>
+            <a href="{{ url_for('earn.tasks') }}" class="platform-card">
+                <div class="platform-icon" style="background:#fef3c7; color:#b45309;"><i class="fas fa-circle-dollar-to-slot"></i></div>
+                <h3>Earn</h3>
+                <p>Get paid for your professional expertise. Rank, rate, fact-check, and write the training data that makes AI models better.</p>
+                <span class="platform-link">Start earning <i class="fas fa-arrow-right ms-1"></i></span>
+            </a>
+        </div>
+    </div>
+</div>
+
 <!-- ── BOTTOM CTA ── -->
 <div class="bottom-cta">
     <div class="container">
@@ -548,4 +654,25 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var targets = document.querySelectorAll('.reveal');
+    if (!('IntersectionObserver' in window) || targets.length === 0) {
+        targets.forEach(function (el) { el.classList.add('in-view'); });
+        return;
+    }
+    var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('in-view');
+                observer.unobserve(entry.target);
+            }
+        });
+    }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+    targets.forEach(function (el) { observer.observe(el); });
+})();
+</script>
 {% endblock %}
