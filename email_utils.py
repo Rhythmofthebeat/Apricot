@@ -4,14 +4,52 @@ needed; the email send depends on MAIL_USERNAME/MAIL_PASSWORD being set in
 .env (Gmail SMTP + App Password) — until then, sending raises and callers
 should surface a clear "couldn't send" message rather than pretending it worked.
 """
+import base64
+import io
+import os
+
 from itsdangerous import URLSafeTimedSerializer
 from flask import current_app, url_for
 from flask_mail import Message
+from PIL import Image
 
 from website import mail
 
 VERIFICATION_SALT = "employer-email-verification"
 VERIFICATION_MAX_AGE = 60 * 60 * 24  # 24 hours
+
+_LOGO_DATA_URI_CACHE = None
+
+
+def _logo_data_uri():
+    """Base64-embedded logo for emails, generated once and cached.
+
+    A remote <img src="https://.../Avants.png"> was silently not rendering
+    for some recipients — most likely their mail client blocking remote
+    images by default (standard Gmail/Outlook behavior until the sender is
+    trusted), possibly compounded by Cloudflare (fronting this Render app)
+    treating the mail client's image-fetching proxy as a bot. Embedding the
+    logo directly as a data URI removes the network fetch entirely, so it
+    always renders regardless of either issue. Resized small (2x the
+    display size, for retina) since the full-resolution source PNG is
+    ~350KB — far too large to inline into every email.
+    """
+    global _LOGO_DATA_URI_CACHE
+    if _LOGO_DATA_URI_CACHE is not None:
+        return _LOGO_DATA_URI_CACHE
+
+    logo_path = os.path.join(os.path.dirname(__file__), "website", "static", "Avants.png")
+    img = Image.open(logo_path)
+    w, h = img.size
+    target_h = 64  # displayed at 32px height; 2x for retina
+    target_w = round(w * target_h / h)
+    resized = img.resize((target_w, target_h), Image.LANCZOS)
+
+    buf = io.BytesIO()
+    resized.save(buf, format="PNG", optimize=True)
+    encoded = base64.b64encode(buf.getvalue()).decode("ascii")
+    _LOGO_DATA_URI_CACHE = f"data:image/png;base64,{encoded}"
+    return _LOGO_DATA_URI_CACHE
 
 
 def external_url(endpoint, **values):
@@ -52,11 +90,11 @@ def render_branded_email(heading, body_html, cta_label=None, cta_url=None, accen
             </td>
         </tr>
         """
-    logo_url = public_base_url() + url_for('static', filename='Avants.png')
+    # Embedded as a data URI, not a remote URL - see _logo_data_uri().
     # Outlook (and other legacy clients) ignore CSS height/width on <img> and
     # need the HTML attributes set explicitly, or the logo renders broken/huge.
     logo_html = (
-        f'<img src="{logo_url}" alt="Avants AI" width="106" height="32" '
+        f'<img src="{_logo_data_uri()}" alt="Avants AI" width="106" height="32" '
         f'style="height:32px; width:106px; display:block; border:0;" />'
     )
 

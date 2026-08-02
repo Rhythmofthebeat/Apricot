@@ -429,8 +429,10 @@ Include 3-7 issues total. Be specific to this actual posting — do not give gen
 
 def generate_interview_coaching(transcript, job_title, requirements, verdict, match_score):
     """Analyze a candidate's interview transcript and produce a private coaching report.
-    Returns a dict with: communication_score, strengths (list), improvements (list), tips (list)."""
-    prompt = f"""You are an expert communication coach analyzing a job interview. Your report is private — the candidate will use it to improve.
+    Returns a dict with: communication_score, strengths (list), improvements (list), tips (list).
+    Raises ValueError if the model's output doesn't parse into a usable report - callers
+    should treat that as "temporarily unavailable," not silently show a fabricated score."""
+    prompt = f"""You are a strict, critical communication coach analyzing a job interview. Your report is private — the candidate will use it to improve. Grade rigorously: most real candidates should NOT score above 75. Do not be encouraging or generous — an unspecific, rambling, or filler-heavy answer is a weak answer regardless of confidence or tone.
 
 Job: {job_title}
 Requirements: {(requirements or '')[:400]}
@@ -441,12 +443,18 @@ Interview transcript:
 {transcript[:3000]}
 
 Produce a coaching report with:
-1. A Communication Score (0–100) based on confidence, clarity, depth, and specificity
-2. 2–3 specific Strengths (what they did well, with a specific example from the transcript)
-3. 2–3 specific Improvements (concrete gaps, not generic advice)
-4. 2–3 actionable Tips for their next interview
+1. A Communication Score (0–100) based on confidence, clarity, depth, and specificity. Score anchors:
+   - 90-100: exceptional — every answer specific, quantified, and directly relevant. Rare.
+   - 70-89: solid — mostly specific with concrete examples, a few vague moments.
+   - 50-69: mixed — some substance but noticeably vague, generic, or unfocused answers.
+   - Below 50: weak — mostly vague, evasive, filler-heavy, or off-topic answers.
+2. Exactly 2-3 Strengths — each MUST quote or closely paraphrase a specific moment from the transcript. Do not invent generic strengths ("good communicator") with no textual basis.
+3. Exactly 2-3 Improvements — concrete, specific gaps tied to actual answers given, not generic advice like "be more confident."
+4. Exactly 2-3 actionable Tips for their next interview, specific to the gaps you identified above.
 
-Respond EXACTLY in this format:
+If the transcript is too short or low-effort to support a real assessment, say so honestly with a low score rather than padding the report.
+
+Respond EXACTLY in this format, with no extra commentary:
 CommunicationScore: <number>
 Strength: <1 sentence referencing something specific they said>
 Strength: <1 sentence>
@@ -460,12 +468,12 @@ Tip: <1 sentence>"""
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=600,
-        temperature=0.3,
+        temperature=0.2,
     )
     content = response.choices[0].message.content.strip()
 
     result = {
-        "communication_score": 70,
+        "communication_score": None,
         "strengths": [],
         "improvements": [],
         "tips": [],
@@ -473,16 +481,20 @@ Tip: <1 sentence>"""
     for line in content.splitlines():
         line = line.strip()
         if line.startswith("CommunicationScore:"):
-            try:
-                result["communication_score"] = int(re.search(r"\d+", line).group())
-            except Exception:
-                pass
+            match = re.search(r"\d+", line)
+            if match:
+                result["communication_score"] = max(0, min(100, int(match.group())))
         elif line.startswith("Strength:"):
             result["strengths"].append(line[9:].strip())
         elif line.startswith("Improvement:"):
             result["improvements"].append(line[12:].strip())
         elif line.startswith("Tip:"):
             result["tips"].append(line[4:].strip())
+
+    if (result["communication_score"] is None or not result["strengths"]
+            or not result["improvements"] or not result["tips"]):
+        raise ValueError(f"Coaching report did not parse into a complete result: {content[:200]!r}")
+
     return result
 
 

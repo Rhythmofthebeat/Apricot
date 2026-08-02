@@ -20,7 +20,7 @@ from . import db, limiter
 from .models import (
     Company, Job, Application, Notification,
     CompanyMember, CompanyInvite, CandidateProfile, User,
-    MeetingRoom, Message, MeetingProposal,
+    MeetingRoom, Message, MeetingProposal, SavedJob,
     JOB_CATEGORIES, JOB_LOCATIONS, COMPANY_SIZES, INDUSTRIES,
 )
 from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description, transcribe_audio, compare_resume_to_job
@@ -457,6 +457,26 @@ def publish_job(job_id):
     job.status = 'open'
     db.session.commit()
     flash("Job published successfully.", "success")
+    return redirect(url_for('employer.dashboard'))
+
+
+@employer.route('/employer/jobs/<int:job_id>/delete', methods=['POST'])
+@login_required
+@employer_required
+def delete_job(job_id):
+    company = get_owned_company()
+    job = Job.query.get_or_404(job_id)
+    if job.company_id != company.id:
+        abort(403)
+
+    if Application.query.filter_by(job_id=job.id).count() > 0:
+        flash("This job has applicants, so it can't be deleted - close it instead to stop new applications while keeping candidate history.", "error")
+        return redirect(url_for('employer.dashboard'))
+
+    SavedJob.query.filter_by(job_id=job.id).delete()
+    db.session.delete(job)
+    db.session.commit()
+    flash("Job deleted.", "success")
     return redirect(url_for('employer.dashboard'))
 
 
