@@ -40,7 +40,9 @@
         display: flex; align-items: center; justify-content: center;
         font-weight: 800; font-size: 1.3rem;
         flex-shrink: 0;
+        overflow: hidden;
     }
+    .company-logo img { width: 100%; height: 100%; object-fit: cover; }
     .unverified-banner {
         background: var(--warning-soft);
         border: 1px solid #fcd34d;
@@ -69,7 +71,13 @@
 <!-- Company header -->
 <div class="company-header">
     <div class="d-flex align-items-center gap-3">
-        <div class="company-logo">{{ company.name[0]|upper }}</div>
+        <div class="company-logo">
+            {% if company.logo_filename %}
+                <img src="{{ url_for('static', filename='logos/' + company.logo_filename) }}?v={{ company.logo_version or 0 }}" alt="{{ company.name }} logo">
+            {% else %}
+                {{ company.name[0]|upper }}
+            {% endif %}
+        </div>
         <div>
             <h1 class="h4 fw-bold mb-0">{{ company.name }}</h1>
             <div class="text-muted small">
