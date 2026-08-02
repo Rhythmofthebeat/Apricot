@@ -605,7 +605,7 @@ function showFullSummary(title, content) {
             } else {
                 playAudioBtn.disabled = false;
                 playAudioBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
-                alert("Audio not available");
+                alert(result.error || "Audio not available. Please try again.");
             }
         } catch (error) {
             playAudioBtn.disabled = false;

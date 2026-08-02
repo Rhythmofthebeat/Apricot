@@ -869,17 +869,29 @@ function toggleInAppMeeting(appId, event) {
 
 async function confirmReject(form) {
     const sel = form.querySelector('select[name="status"]');
+
     if (sel && sel.value === 'hired') {
+        // Marking someone hired kicks off the placement fee process, so it
+        // needs a deliberate second confirmation (via the shared modal in
+        // base.html) on top of picking "Hired" and clicking Update.
         const card = form.closest('.pipeline-card');
-        if (card && card.dataset.interviewPending === '1') {
-            const candidateName = card.dataset.name || 'This candidate';
-            const proceed = confirm(`${candidateName} hasn't completed the AI interview yet - you'll be marking them hired without that data. Continue anyway?`);
-            if (!proceed) {
-                if (window.event) window.event.preventDefault();
-                return false;
-            }
-        }
+        const candidateName = card?.dataset?.name || 'this candidate';
+        const interviewPending = card && card.dataset.interviewPending === '1';
+
+        form.dataset.confirmTitle = 'Mark as hired?';
+        form.dataset.confirmMessage = interviewPending
+            ? `${candidateName} hasn't completed the AI interview yet, so you'd be marking them hired without that data. This starts the placement fee process once they confirm. Continue?`
+            : `This marks ${candidateName} as hired and starts the placement fee process once they confirm. Continue?`;
+        form.dataset.confirmBtn = 'Yes, mark as hired';
+        return true; // shared submit listener picks up data-confirm-title and shows the modal
     }
+
+    // Any other status change must not reuse a stale confirm prompt left
+    // over from a previous "Hired" attempt that was cancelled.
+    delete form.dataset.confirmTitle;
+    delete form.dataset.confirmMessage;
+    delete form.dataset.confirmBtn;
+
     if (sel && sel.value === 'rejected') {
         // Intercept: submit via AJAX to get feedback draft, then show modal
         const evt = window.event;

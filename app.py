@@ -320,6 +320,7 @@ def resume_chat():
 @limiter.limit("20 per hour")
 def speak_summary():
     from google.cloud import texttospeech
+    from google.auth.exceptions import DefaultCredentialsError
     data         = request.get_json()
     summary_text = data.get("text", "").strip()
 
@@ -350,9 +351,12 @@ def speak_summary():
             out.write(tts_response.audio_content)
 
         return jsonify({"audio_url": f"/audio/{filename}"})
+    except DefaultCredentialsError as e:
+        logger.error(f"Google TTS credentials not configured: {str(e)}")
+        return jsonify({"error": "Text-to-speech isn't configured on the server (missing Google credentials)."}), 500
     except Exception as e:
         logger.error(f"Google TTS error: {str(e)}", exc_info=True)
-        return jsonify({"error": "Audio generation failed"}), 500
+        return jsonify({"error": "Audio generation failed. Please try again."}), 500
 
 
 @app.route("/audio/<filename>")
