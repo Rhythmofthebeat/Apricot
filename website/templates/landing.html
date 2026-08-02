@@ -410,8 +410,9 @@
     <div class="hero-badge"><i class="fas fa-microphone-lines"></i> The First AI Interview Process</div>
     <h1 class="hero-title">Apply once.<br><span>Get a real answer.</span></h1>
     <p class="hero-sub">
-        Every candidate gets a real AI voice interview and an instant resume match score. Every employer gets a
-        ranked, pre-screened shortlist instead of a pile of PDFs. No more silence, no more guessing.
+        <strong style="color:var(--text);">Avants AI is an AI-powered hiring platform.</strong>
+        Candidates get interviewed by AI and scored instantly. Employers post a job and every applicant is
+        automatically interviewed, scored, and ranked for them - no piles of resumes, no weeks of silence.
     </p>
     <div class="hero-cta-group">
         <a href="{{ url_for('candidate.browse_jobs') }}" class="btn-hero-primary">
@@ -660,19 +661,36 @@
 <script>
 (function () {
     var targets = document.querySelectorAll('.reveal');
-    if (!('IntersectionObserver' in window) || targets.length === 0) {
+    if (targets.length === 0) return;
+
+    function revealAll() {
         targets.forEach(function (el) { el.classList.add('in-view'); });
-        return;
     }
-    var observer = new IntersectionObserver(function (entries) {
-        entries.forEach(function (entry) {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('in-view');
-                observer.unobserve(entry.target);
-            }
-        });
-    }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
-    targets.forEach(function (el) { observer.observe(el); });
+
+    // Safety net: a public landing page must never end up with content
+    // stuck invisible - if anything goes wrong with the observer below (or
+    // it's just slow), everything is forced visible after 2s regardless.
+    var fallback = setTimeout(revealAll, 2000);
+
+    try {
+        if (!('IntersectionObserver' in window)) {
+            clearTimeout(fallback);
+            revealAll();
+            return;
+        }
+        var observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('in-view');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+        targets.forEach(function (el) { observer.observe(el); });
+    } catch (e) {
+        clearTimeout(fallback);
+        revealAll();
+    }
 })();
 </script>
 {% endblock %}
