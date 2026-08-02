@@ -44,8 +44,7 @@ def compute_composite_score(app, ai_data):
         ai_penalty = (ai_data.get("score", 0) if ai_data else 0)
         return round(resume * 0.45 + verdict * 0.45 + (100 - ai_penalty) * 0.10)
     return resume
-PLATFORM_FEE_PERCENT = 15          # salaried roles: 15% of first-year comp
-HOURLY_PLATFORM_FEE_PERCENT = 20   # hourly roles: 20% of the annualized rate
+PLATFORM_FEE_PERCENT = 15  # flat rate across every pay type
 
 STANDARD_ANNUAL_HOURS = 2080  # 40hrs/week x 52 weeks - used to annualize hourly rates
 
@@ -62,16 +61,16 @@ def _placement_fee_basis(application, job):
     posting only for legacy applications hired before this existed.
 
     Salaried/monthly roles use first-year compensation directly. Hourly
-    roles are annualized to a comparable full-time figure first, and
-    charged at a higher rate since the actual hours worked are less certain
-    than a salaried hire's.
+    roles are annualized to a comparable full-time figure first (then
+    billed monthly for as long as the engagement is active - see
+    _create_stripe_subscription_link). Same flat 15% rate throughout.
     """
     salary = application.hire_salary_usd or job.salary_usd
     pay_type = application.hire_pay_type or job.pay_type
     if not salary:
         return None, None
     if pay_type == 'hourly':
-        return salary * STANDARD_ANNUAL_HOURS, HOURLY_PLATFORM_FEE_PERCENT
+        return salary * STANDARD_ANNUAL_HOURS, PLATFORM_FEE_PERCENT
     if pay_type == 'monthly':
         return salary * 12, PLATFORM_FEE_PERCENT
     return salary, PLATFORM_FEE_PERCENT
