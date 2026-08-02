@@ -1001,6 +1001,7 @@ def confirm_hire(application_id):
     if not application.candidate_confirmed_hire:
         application.candidate_confirmed_hire = True
         application.hire_confirmed_at = func.now()
+        application.hire_salary_disputed = False  # confirming clears any earlier dispute
         db.session.commit()
 
         job = Job.query.get(application.job_id)
@@ -1020,6 +1021,65 @@ def confirm_hire(application_id):
             send_hire_fee_invoice(application, job, company, current_user, employer_user)
 
     flash("Thanks for confirming! We've let the employer know.", "success")
+    return redirect(url_for('candidate.dashboard'))
+
+
+@candidate.route('/applications/<int:application_id>/dispute-hire', methods=['POST'])
+@login_required
+def dispute_hire(application_id):
+    """Candidate says the compensation the employer entered isn't accurate.
+    Flags the application instead of confirming - the placement fee invoice
+    stays on hold until the employer corrects it and the candidate confirms."""
+    application = Application.query.get_or_404(application_id)
+    if application.candidate_user_id != current_user.id:
+        abort(403)
+    if application.status != 'hired':
+        abort(400)
+
+    application.hire_salary_disputed = True
+    application.candidate_confirmed_hire = False
+    application.hire_confirmed_at = None
+
+    from .employer import _save_hire_evidence
+    evidence_filename = _save_hire_evidence(application.id, request.files.get('hire_evidence'))
+    if evidence_filename:
+        application.hire_evidence_filename = evidence_filename
+
+    db.session.commit()
+
+    job = Job.query.get(application.job_id)
+    company = Company.query.get(job.company_id)
+    employer_user = User.query.get(company.owner_user_id)
+
+    if employer_user:
+        notif = Notification(
+            user_id=employer_user.id,
+            message=f"{current_user.first_name} disputed the hire compensation for {job.title} - the placement fee invoice is on hold.",
+            link=url_for('employer.applicants', job_id=job.id),
+        )
+        db.session.add(notif)
+        db.session.commit()
+        try:
+            send_branded_email(
+                to_email=employer_user.email,
+                subject=f"Hire compensation disputed - {job.title}",
+                heading="Candidate flagged the compensation figure",
+                body_html=(
+                    f"<strong>{current_user.first_name}</strong> says the compensation entered for their hire as "
+                    f"<strong>{job.title}</strong> isn't accurate. The placement fee invoice is on hold until you "
+                    f"correct it and they re-confirm."
+                ),
+                plain_text=(
+                    f"{current_user.first_name} disputed the hire compensation for {job.title}. "
+                    f"The placement fee invoice is on hold until you correct it and they re-confirm."
+                ),
+                cta_label="Review Applicant",
+                cta_url=external_url('employer.applicants', job_id=job.id),
+            )
+        except Exception as e:
+            print("Dispute notification email failed:", e)
+
+    flash("We've flagged this for the employer to review. The placement fee won't be invoiced until it's corrected.", "info")
     return redirect(url_for('candidate.dashboard'))
 
 

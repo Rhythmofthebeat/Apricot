@@ -219,6 +219,14 @@ class Application(db.Model):
     status = db.Column(db.String(20), nullable=False, default="applied")  # applied | interviewing | rejected | hired
     candidate_confirmed_hire = db.Column(db.Boolean, nullable=False, default=False)  # candidate must confirm before the fee invoice fires
     hire_confirmed_at = db.Column(db.DateTime(timezone=True))
+    # Actual negotiated compensation at hire time, entered by the employer -
+    # the placement fee is calculated from this, not the job posting's
+    # advertised salary, which the employer has no incentive to keep
+    # accurate once someone's actually hired.
+    hire_salary_usd = db.Column(db.Integer)
+    hire_pay_type = db.Column(db.String(20))  # yearly | hourly | monthly | stipend | contract
+    hire_salary_disputed = db.Column(db.Boolean, nullable=False, default=False)  # candidate says the entered figure is wrong
+    hire_evidence_filename = db.Column(db.String(200))  # optional offer-letter/screenshot upload
     fee_paid = db.Column(db.Boolean, nullable=False, default=False)
     stripe_payment_link = db.Column(db.String(500))  # Stripe Payment Link URL sent to employer on hire
     employer_notes = db.Column(db.Text)  # private notes visible only to employer

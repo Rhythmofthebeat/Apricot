@@ -306,15 +306,38 @@
                     <i class="fas fa-xmark"></i> Reject
                 </button>
                 {% endif %}
-                <form method="POST" action="{{ url_for('employer.update_status', application_id=app.id) }}" class="d-flex gap-1"
-                      onsubmit="return confirmReject(this)">
-                    <select name="status" class="form-select form-select-sm" style="min-width:130px;">
+                <form method="POST" action="{{ url_for('employer.update_status', application_id=app.id) }}" class="d-flex gap-1 flex-wrap align-items-start"
+                      enctype="multipart/form-data" onsubmit="return confirmReject(this)">
+                    <select name="status" class="form-select form-select-sm" style="min-width:130px;" onchange="toggleHireSalaryFields({{ app.id }}, this.value)">
                         <option value="applied"      {{ 'selected' if app.status == 'applied' }}>Applied</option>
                         <option value="interviewing" {{ 'selected' if app.status == 'interviewing' }}>Interviewing</option>
                         <option value="hired"        {{ 'selected' if app.status == 'hired' }}>Hired ✓</option>
                         <option value="rejected"     {{ 'selected' if app.status == 'rejected' }}>Rejected</option>
                     </select>
                     <button type="submit" class="btn btn-primary btn-sm">Update</button>
+
+                    <div id="hireSalaryFields-{{ app.id }}" class="d-flex gap-1 flex-wrap align-items-center w-100 mt-1" style="display:{{ 'flex' if app.status == 'hired' else 'none' }} !important;">
+                        <span class="text-muted" style="font-size:0.72rem; width:100%;">Actual hire compensation - this is what the placement fee is based on, not the job posting:</span>
+                        <input type="number" name="hire_salary_usd" min="1" step="1" class="form-control form-control-sm" style="max-width:110px;"
+                               placeholder="Amount" value="{{ app.hire_salary_usd or '' }}" required>
+                        <select name="hire_pay_type" class="form-select form-select-sm" style="max-width:130px;" required>
+                            <option value="yearly"  {{ 'selected' if app.hire_pay_type == 'yearly' or not app.hire_pay_type }}>Per year</option>
+                            <option value="hourly"  {{ 'selected' if app.hire_pay_type == 'hourly' }}>Per hour</option>
+                            <option value="monthly" {{ 'selected' if app.hire_pay_type == 'monthly' }}>Per month</option>
+                            <option value="stipend" {{ 'selected' if app.hire_pay_type == 'stipend' }}>Stipend (total)</option>
+                            <option value="contract" {{ 'selected' if app.hire_pay_type == 'contract' }}>Contract (total)</option>
+                        </select>
+                        <label class="btn btn-outline-secondary btn-sm mb-0" style="font-size:0.75rem;" title="Optional: attach an offer letter or screenshot">
+                            <i class="fas fa-paperclip me-1"></i>Evidence
+                            <input type="file" name="hire_evidence" accept=".png,.jpg,.jpeg,.pdf" class="d-none">
+                        </label>
+                        {% if app.hire_evidence_filename %}
+                        <a href="{{ url_for('employer.hire_evidence', application_id=app.id) }}" target="_blank" class="small text-muted"><i class="fas fa-file me-1"></i>Current file</a>
+                        {% endif %}
+                        {% if app.hire_salary_disputed %}
+                        <span class="badge-status rejected" style="font-size:0.68rem;"><i class="fas fa-triangle-exclamation me-1"></i>Candidate disputed this figure</span>
+                        {% endif %}
+                    </div>
                 </form>
                 <button class="btn btn-outline-primary btn-sm" onclick="toggleSchedule({{ app.id }}, 'virtual', event)">
                     <i class="fas fa-video me-1"></i> Video Call
@@ -722,6 +745,11 @@
 
 {% block scripts %}
 <script>
+function toggleHireSalaryFields(appId, status) {
+    const el = document.getElementById(`hireSalaryFields-${appId}`);
+    if (el) el.style.setProperty('display', status === 'hired' ? 'flex' : 'none', 'important');
+}
+
 function toggleCard(appId, event) {
     if (event.target.closest('form, button, select, input, textarea, a, .card-tab')) return;
     const card = document.getElementById(`card-${appId}`);

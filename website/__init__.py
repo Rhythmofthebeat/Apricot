@@ -108,6 +108,11 @@ def _run_migrations(db):
         "ALTER TABLE company ADD COLUMN email_domain VARCHAR(150)",
         # company - typed e-signature on the Employer Platform Agreement
         "ALTER TABLE company ADD COLUMN terms_signature_name VARCHAR(200)",
+        # application - actual hire compensation (fee basis), candidate dispute flag, evidence upload
+        "ALTER TABLE application ADD COLUMN hire_salary_usd INTEGER",
+        "ALTER TABLE application ADD COLUMN hire_pay_type VARCHAR(20)",
+        "ALTER TABLE application ADD COLUMN hire_salary_disputed BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE application ADD COLUMN hire_evidence_filename VARCHAR(200)",
     ]
     for stmt in new_columns:
         try:

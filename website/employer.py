@@ -6,7 +6,7 @@ import secrets
 logger = logging.getLogger(__name__)
 
 import stripe
-from flask import Blueprint, render_template, request, flash, redirect, url_for, abort, jsonify, current_app
+from flask import Blueprint, render_template, request, flash, redirect, url_for, abort, jsonify, current_app, send_from_directory
 from flask_login import login_required, current_user
 from functools import wraps
 from PIL import Image
@@ -48,22 +48,55 @@ HOURLY_PLATFORM_FEE_PERCENT = 20   # hourly roles: 20% of the annualized rate
 STANDARD_ANNUAL_HOURS = 2080  # 40hrs/week x 52 weeks - used to annualize hourly rates
 
 
-def _placement_fee_basis(job):
+def _placement_fee_basis(application, job):
     """Return (basis_amount, fee_percent) for the placement fee.
 
-    Salaried/monthly roles use first-year compensation directly. Hourly roles
-    have no "first-year salary" on file - job.salary_usd is just the hourly
-    rate - so it's annualized to a comparable full-time figure first, and
+    Uses the actual negotiated compensation entered by the employer when
+    marking the candidate hired (application.hire_salary_usd/hire_pay_type),
+    not the job posting's advertised salary - an employer has no incentive
+    to keep the posting accurate once someone's actually hired, and the
+    candidate cross-checks this figure before it's ever invoiced (see
+    candidate.confirm_hire / candidate.dispute_hire). Falls back to the job
+    posting only for legacy applications hired before this existed.
+
+    Salaried/monthly roles use first-year compensation directly. Hourly
+    roles are annualized to a comparable full-time figure first, and
     charged at a higher rate since the actual hours worked are less certain
     than a salaried hire's.
     """
-    if not job.salary_usd:
+    salary = application.hire_salary_usd or job.salary_usd
+    pay_type = application.hire_pay_type or job.pay_type
+    if not salary:
         return None, None
-    if job.pay_type == 'hourly':
-        return job.salary_usd * STANDARD_ANNUAL_HOURS, HOURLY_PLATFORM_FEE_PERCENT
-    if job.pay_type == 'monthly':
-        return job.salary_usd * 12, PLATFORM_FEE_PERCENT
-    return job.salary_usd, PLATFORM_FEE_PERCENT
+    if pay_type == 'hourly':
+        return salary * STANDARD_ANNUAL_HOURS, HOURLY_PLATFORM_FEE_PERCENT
+    if pay_type == 'monthly':
+        return salary * 12, PLATFORM_FEE_PERCENT
+    return salary, PLATFORM_FEE_PERCENT
+
+
+HIRE_EVIDENCE_ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "pdf"}
+
+
+def _hire_evidence_dir():
+    path = os.path.join(current_app.config["UPLOAD_FOLDER"], "hire_evidence")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _save_hire_evidence(application_id, file_storage):
+    """Save an optional offer-letter/screenshot upload for a hire. Returns
+    the stored filename, or None if no valid file was given."""
+    if not file_storage or not file_storage.filename:
+        return None
+    ext = file_storage.filename.rsplit('.', 1)[-1].lower() if '.' in file_storage.filename else ''
+    if ext not in HIRE_EVIDENCE_ALLOWED_EXTENSIONS:
+        return None
+    filename = f"{application_id}_{secrets.token_hex(8)}.{ext}"
+    file_storage.save(os.path.join(_hire_evidence_dir(), filename))
+    return filename
+
+
 LOGO_ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 LOGO_MAX_SIZE = (800, 800)
 INTERVIEW_LENGTH_OPTIONS = ["short", "standard", "thorough"]
@@ -148,11 +181,14 @@ def send_hire_fee_invoice(application, job, company, candidate, employer_user):
             application.stripe_payment_link = payment_link_url
             db.session.commit()
 
-    basis_amount, fee_percent = _placement_fee_basis(job)
+    hire_salary = application.hire_salary_usd or job.salary_usd
+    hire_pay_type = application.hire_pay_type or job.pay_type
+
+    basis_amount, fee_percent = _placement_fee_basis(application, job)
     fee_amount = int(basis_amount * fee_percent / 100) if basis_amount else None
     basis_label = (
-        f"annualized rate of ${basis_amount:,}/yr (${job.salary_usd:,}/hr x {STANDARD_ANNUAL_HOURS:,} hrs)"
-        if job.pay_type == 'hourly' else f"first-year compensation of ${basis_amount:,}"
+        f"annualized rate of ${basis_amount:,}/yr (${hire_salary:,}/hr x {STANDARD_ANNUAL_HOURS:,} hrs)"
+        if hire_pay_type == 'hourly' else f"first-year compensation of ${basis_amount:,}"
     )
     try:
         if payment_link_url and fee_amount:
@@ -202,7 +238,7 @@ def send_hire_fee_invoice(application, job, company, candidate, employer_user):
 
 def _create_stripe_payment_link(application, job, company, candidate):
     stripe.api_key = current_app.config.get("STRIPE_SECRET_KEY")
-    basis_amount, fee_percent = _placement_fee_basis(job)
+    basis_amount, fee_percent = _placement_fee_basis(application, job)
     if not stripe.api_key or not basis_amount:
         return None
     fee_cents = int(basis_amount * fee_percent / 100 * 100)
@@ -699,6 +735,28 @@ def update_status(application_id):
 
     new_status = request.form.get('status')
     if new_status in ('applied', 'interviewing', 'rejected', 'hired'):
+        if new_status == 'hired':
+            # The placement fee is based on this figure, not the job posting's
+            # advertised salary - require it up front rather than invoicing
+            # off a number the employer has no incentive to keep accurate.
+            salary_raw = request.form.get('hire_salary_usd', '').strip()
+            pay_type = request.form.get('hire_pay_type', '').strip()
+            try:
+                salary_value = int(float(salary_raw)) if salary_raw else None
+            except ValueError:
+                salary_value = None
+            if not salary_value or salary_value <= 0 or pay_type not in ('yearly', 'hourly', 'monthly', 'stipend', 'contract'):
+                flash("Enter the candidate's actual compensation (amount and pay type) to mark them hired - the placement fee is calculated from this, not the job posting.", "error")
+                return redirect(url_for('employer.applicants', job_id=job.id))
+
+            application.hire_salary_usd = salary_value
+            application.hire_pay_type = pay_type
+            application.hire_salary_disputed = False  # fresh hire event, not yet re-disputed
+
+            evidence_filename = _save_hire_evidence(application.id, request.files.get('hire_evidence'))
+            if evidence_filename:
+                application.hire_evidence_filename = evidence_filename
+
         status_changed = application.status != new_status
         application.status = new_status
         db.session.commit()
@@ -786,6 +844,25 @@ def update_status(application_id):
         flash("Status updated.", "success")
 
     return redirect(url_for('employer.applicants', job_id=job.id))
+
+
+@employer.route('/employer/applications/<int:application_id>/hire-evidence')
+@login_required
+def hire_evidence(application_id):
+    """Serves the optional hire-salary evidence upload. Viewable by the
+    employer who owns the job or the candidate the application belongs to -
+    nobody else."""
+    application = Application.query.get_or_404(application_id)
+    job = Job.query.get_or_404(application.job_id)
+
+    user_company = get_user_company() if current_user.role == 'employer' else None
+    is_owning_employer = user_company is not None and job.company_id == user_company.id
+    is_owning_candidate = current_user.id == application.candidate_user_id
+    if not (is_owning_employer or is_owning_candidate):
+        abort(403)
+    if not application.hire_evidence_filename:
+        abort(404)
+    return send_from_directory(_hire_evidence_dir(), application.hire_evidence_filename)
 
 
 @employer.route('/employer/applications/<int:application_id>/send-feedback', methods=['POST'])
