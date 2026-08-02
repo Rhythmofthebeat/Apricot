@@ -17,14 +17,7 @@ def _avatar_color(letter):
     return _AVATAR_COLORS[ord(letter.upper()) % len(_AVATAR_COLORS)]
 
 
-@views.route('/')
-@views.route('/home')
-def home():
-    if current_user.is_authenticated:
-        if current_user.role == 'employer':
-            return redirect(url_for('employer.dashboard'))
-        return redirect(url_for('candidate.browse_jobs'))
-
+def _landing_context():
     latest_jobs = (Job.query
         .filter_by(status='open')
         .order_by(Job.created_at.desc())
@@ -48,16 +41,31 @@ def home():
                 })
         job_data.append({"job": job, "app_count": app_count, "avatars": avatars})
 
-    open_job_count = Job.query.filter_by(status='open').count()
-    candidate_count = User.query.filter_by(role='candidate').count()
-    company_count = Company.query.count()
+    return {
+        "job_data": job_data,
+        "open_job_count": Job.query.filter_by(status='open').count(),
+        "candidate_count": User.query.filter_by(role='candidate').count(),
+        "company_count": Company.query.count(),
+    }
 
-    return render_template("landing.html",
-        job_data=job_data,
-        open_job_count=open_job_count,
-        candidate_count=candidate_count,
-        company_count=company_count,
-    )
+
+@views.route('/')
+@views.route('/home')
+def home():
+    if current_user.is_authenticated:
+        if current_user.role == 'employer':
+            return redirect(url_for('employer.dashboard'))
+        return redirect(url_for('candidate.browse_jobs'))
+
+    return render_template("landing.html", **_landing_context())
+
+
+@views.route('/site')
+def public_site():
+    """Marketing landing page for signed-in users — home() bounces them
+    straight to their dashboard, so this is the only way to see it again
+    while logged in."""
+    return render_template("landing.html", **_landing_context())
 
 
 @views.route('/stripe/webhook', methods=['POST'])

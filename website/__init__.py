@@ -100,6 +100,12 @@ def _run_migrations(db):
         # the original 150-char cap, so every email/password signup was
         # failing with a StringDataRightTruncation error
         "ALTER TABLE \"user\" ALTER COLUMN password TYPE VARCHAR(255)",
+        # user — link to a DataBuyer account (outside company subscribed to Earn task exports)
+        "ALTER TABLE \"user\" ADD COLUMN data_buyer_id INTEGER REFERENCES data_buyer(id)",
+        "ALTER TABLE \"user\" ADD COLUMN is_data_buyer_admin BOOLEAN NOT NULL DEFAULT FALSE",
+        # company — work-email domain, so later employer signups from the same
+        # company land in the same hub instead of each creating a new Company
+        "ALTER TABLE company ADD COLUMN email_domain VARCHAR(150)",
     ]
     for stmt in new_columns:
         try:
@@ -108,6 +114,29 @@ def _run_migrations(db):
                 conn.commit()
         except Exception:
             pass
+
+    _backfill_company_email_domains(db)
+
+
+def _backfill_company_email_domains(db):
+    """One-time backfill for companies created before email_domain existed —
+    derives it from the owner's email so old companies also become joinable
+    by domain. No-ops once every company already has a domain set."""
+    from .models import Company, User, FREE_EMAIL_DOMAINS
+
+    try:
+        companies = Company.query.filter(Company.email_domain.is_(None)).all()
+        for company in companies:
+            owner = User.query.get(company.owner_user_id)
+            if not owner or not owner.email or '@' not in owner.email:
+                continue
+            domain = owner.email.split('@')[-1].lower()
+            if domain in FREE_EMAIL_DOMAINS:
+                continue
+            company.email_domain = domain
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 def create_app():
     app = Flask(__name__)
@@ -143,7 +172,7 @@ def create_app():
     os.makedirs(audio_path, exist_ok=True)
     os.makedirs(upload_path, exist_ok=True)
 
-    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission, SavedJob, ContractorProfile, MeetingRoom, Message, EmployerSubscription, MeetingProposal
+    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission, SavedJob, ContractorProfile, MeetingRoom, Message, EmployerSubscription, MeetingProposal, DataBuyer
 
     with app.app_context():
         db.create_all()
@@ -155,6 +184,7 @@ def create_app():
     from .candidate import candidate
     from .earn import earn
     from .admin import admin_bp
+    from .data_market import data_market
 
     app.register_blueprint(views, url_prefix='/')
     app.register_blueprint(auth, url_prefix='/')
@@ -162,6 +192,7 @@ def create_app():
     app.register_blueprint(candidate, url_prefix='/')
     app.register_blueprint(earn, url_prefix='/')
     app.register_blueprint(admin_bp, url_prefix='/')
+    app.register_blueprint(data_market, url_prefix='/')
 
     from datetime import datetime, timezone
     from flask_login import current_user as _cu
@@ -170,7 +201,7 @@ def create_app():
     def inject_globals():
         if not _cu.is_authenticated:
             return {"unread_messages": 0}
-        from .models import Message, Application, Job, Company
+        from .models import Message, Application, Job, Company, CompanyMember
         try:
             base_q = (
                 db.session.query(db.func.count(Message.id))
@@ -179,6 +210,9 @@ def create_app():
             )
             if _cu.role == 'employer':
                 company = Company.query.filter_by(owner_user_id=_cu.id).first()
+                if not company:
+                    membership = CompanyMember.query.filter_by(user_id=_cu.id).first()
+                    company = membership.company if membership else None
                 count = (
                     base_q.join(Job, Job.id == Application.job_id)
                     .filter(Job.company_id == company.id)

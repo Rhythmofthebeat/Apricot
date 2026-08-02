@@ -103,12 +103,19 @@ class User(db.Model, UserMixin):
     notifications_enabled = db.Column(db.Boolean, nullable=False, default=True)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
     supabase_uid = db.Column(db.String(200), unique=True)
+    data_buyer_id = db.Column(db.Integer, db.ForeignKey("data_buyer.id"))
+    is_data_buyer_admin = db.Column(db.Boolean, nullable=False, default=False)
 
 
 class Company(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     owner_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     name = db.Column(db.String(200), nullable=False)
+    # Domain of the founding employer's work email (e.g. "acme.com") — lets later
+    # signups from the same company email land in this same hub instead of each
+    # getting their own Company. Null for companies created before this existed,
+    # or whose founder signed up via a free-webmail-flagged edge case.
+    email_domain = db.Column(db.String(150))
     website = db.Column(db.String(300))
     description = db.Column(db.Text)
     industry = db.Column(db.String(100))
@@ -380,3 +387,18 @@ class CompanyInvite(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     company = db.relationship("Company", backref="invites")
+
+
+class DataBuyer(db.Model):
+    """An outside company subscribed to download the Earn marketplace's
+    graded task data (rankings, ratings, factchecks, writing) as training data."""
+    __tablename__ = "data_buyer"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    contact_email = db.Column(db.String(150), nullable=False)
+    stripe_customer_id = db.Column(db.String(100))
+    stripe_subscription_id = db.Column(db.String(100))
+    subscription_status = db.Column(db.String(20), nullable=False, default="inactive")  # inactive | active | canceled
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    members = db.relationship("User", backref="data_buyer", foreign_keys="User.data_buyer_id")

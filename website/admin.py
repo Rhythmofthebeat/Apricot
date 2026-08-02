@@ -7,6 +7,7 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 from flask_login import login_required, current_user
 from . import db
 from .models import EarnTask, TaskSubmission, User, EARN_DOMAINS, ContractorProfile
+from .dataset_export import shape_submission
 
 logger = logging.getLogger(__name__)
 
@@ -102,47 +103,9 @@ def export_task(task_id):
 
     lines = []
     for sub in submissions:
-        if task.task_type == 'ranking':
-            if sub.response == 'A':
-                chosen, rejected = task.option_a, task.option_b
-            elif sub.response == 'B':
-                chosen, rejected = task.option_b, task.option_a
-            else:
-                continue  # skip "tie" responses for preference data
-            lines.append(json.dumps({
-                "prompt": task.description,
-                "chosen": chosen,
-                "rejected": rejected,
-                "annotator_note": sub.explanation or "",
-            }))
-
-        elif task.task_type == 'rating':
-            try:
-                score = float(sub.response)
-            except (TypeError, ValueError):
-                continue
-            lines.append(json.dumps({
-                "prompt": task.description,
-                "response": task.content,
-                "score": score,
-                "annotator_note": sub.explanation or "",
-            }))
-
-        elif task.task_type == 'factcheck':
-            lines.append(json.dumps({
-                "response": task.content,
-                "label": sub.response,
-                "annotator_note": sub.explanation or "",
-            }))
-
-        elif task.task_type == 'writing':
-            lines.append(json.dumps({
-                "messages": [
-                    {"role": "user", "content": task.description},
-                    {"role": "assistant", "content": sub.response},
-                ],
-                "annotator_note": sub.explanation or "",
-            }))
+        record = shape_submission(task, sub)
+        if record:
+            lines.append(json.dumps(record))
 
     output = "\n".join(lines)
     filename = f"task_{task_id}_{task.task_type}.jsonl"

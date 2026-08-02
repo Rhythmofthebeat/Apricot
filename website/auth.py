@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session, make_response
-from .models import User, Company, FREE_EMAIL_DOMAINS
+from .models import User, Company, CompanyMember, FREE_EMAIL_DOMAINS
 from werkzeug.security import generate_password_hash, check_password_hash
 from . import db, limiter
 from flask_login import login_user, login_required, logout_user, current_user
@@ -26,6 +26,37 @@ def _safe_next(next_url):
     if not next_url or not next_url.startswith('/') or next_url.startswith('//'):
         return None
     return next_url
+
+
+def _provision_employer(user, email_domain, company_name):
+    """Get-or-join a Company for a brand-new employer user. Coworkers signing
+    up from the same work email domain land in the same hub (as a
+    CompanyMember) instead of each spinning up a separate company — only the
+    first signup from a domain actually creates the Company."""
+    existing = None
+    if email_domain and email_domain not in FREE_EMAIL_DOMAINS:
+        existing = Company.query.filter_by(email_domain=email_domain).first()
+
+    if existing:
+        if not CompanyMember.query.filter_by(company_id=existing.id, user_id=user.id).first():
+            db.session.add(CompanyMember(company_id=existing.id, user_id=user.id))
+            db.session.commit()
+        return existing
+
+    if not company_name:
+        return None
+
+    company = Company(
+        owner_user_id=user.id,
+        name=company_name,
+        email_domain=email_domain or None,
+        terms_accepted_at=datetime.now(timezone.utc),
+        terms_accepted_ip=request.remote_addr,
+        terms_version='1.0',
+    )
+    db.session.add(company)
+    db.session.commit()
+    return company
 
 # ------------------------------------------------ #
 # ---------------- PASSWORD RESET ---------------- #
@@ -181,13 +212,26 @@ def login():
         # Ensure local user exists for Flask-Login
         local_user = User.query.filter_by(email=email).first()
         if not local_user:
+            meta = res.user.user_metadata or {}
+            role = meta.get("role", "candidate")
+            company_name = meta.get("company_name", "").strip()
+            email_domain = email.split('@')[-1].lower() if '@' in email else ''
+
+            if role == 'employer' and email_domain in FREE_EMAIL_DOMAINS:
+                role = 'candidate'
+
             local_user = User(
                 email=email,
-                first_name=res.user.user_metadata.get("full_name", ""),
-                password=None
+                first_name=meta.get("full_name", ""),
+                password=None,
+                role=role,
+                email_verified=True,
             )
             db.session.add(local_user)
             db.session.commit()
+
+            if role == 'employer':
+                _provision_employer(local_user, email_domain, company_name)
 
         login_user(local_user, remember=True)
         flash("Logged in successfully!", "success")
@@ -220,13 +264,17 @@ def sign_up():
 
         email_domain = email.split('@')[-1].lower() if email and '@' in email else ''
 
+        existing_hub = None
+        if role == 'employer' and email_domain and email_domain not in FREE_EMAIL_DOMAINS:
+            existing_hub = Company.query.filter_by(email_domain=email_domain).first()
+
         if not email:
             flash("Email is required.", "error")
         elif password1 != password2:
             flash("Passwords do not match.", "error")
         elif len(password1) < 7:
             flash("Password must be at least 7 characters.", "error")
-        elif role == 'employer' and not company_name:
+        elif role == 'employer' and not company_name and not existing_hub:
             flash("Company name is required for employer accounts.", "error")
         elif role == 'employer' and email_domain in FREE_EMAIL_DOMAINS:
             flash("Please sign up with your company email address, not a personal email provider.", "error")
@@ -256,16 +304,10 @@ def sign_up():
                     supabase_uid=res.user.id,
                 )
                 db.session.add(local_user)
-                if role == 'employer' and company_name and email_domain not in FREE_EMAIL_DOMAINS:
-                    company = Company(
-                        owner_user_id=local_user.id,
-                        name=company_name,
-                        terms_accepted_at=datetime.now(timezone.utc),
-                        terms_accepted_ip=request.remote_addr,
-                        terms_version='1.0',
-                    )
-                    db.session.add(company)
                 db.session.commit()
+
+                if role == 'employer':
+                    _provision_employer(local_user, email_domain, company_name)
 
                 try:
                     send_verification_email(local_user)
@@ -357,16 +399,8 @@ def auth_confirm():
             db.session.add(local_user)
             db.session.commit()
 
-            if role == 'employer' and company_name:
-                company = Company(
-                    owner_user_id=local_user.id,
-                    name=company_name,
-                    terms_accepted_at=datetime.now(timezone.utc),
-                    terms_accepted_ip=request.remote_addr,
-                    terms_version='1.0',
-                )
-                db.session.add(company)
-                db.session.commit()
+            if role == 'employer':
+                _provision_employer(local_user, email_domain, company_name)
         else:
             local_user.email_verified = True
             db.session.commit()
@@ -374,7 +408,11 @@ def auth_confirm():
         login_user(local_user, remember=True)
         flash("Email confirmed! Welcome to Avants.", "success")
 
-        if is_new and local_user.role == 'employer' and not Company.query.filter_by(owner_user_id=local_user.id).first():
+        has_company = (
+            Company.query.filter_by(owner_user_id=local_user.id).first()
+            or CompanyMember.query.filter_by(user_id=local_user.id).first()
+        )
+        if is_new and local_user.role == 'employer' and not has_company:
             return redirect(url_for("auth.complete_employer_profile"))
 
         return redirect(url_for("views.home"))
@@ -422,7 +460,11 @@ def verify_email(token):
 
     next_url = _safe_next(request.cookies.get("pending_next"))
 
-    if user.role == 'employer' and not Company.query.filter_by(owner_user_id=user.id).first():
+    has_company = (
+        Company.query.filter_by(owner_user_id=user.id).first()
+        or CompanyMember.query.filter_by(user_id=user.id).first()
+    )
+    if user.role == 'employer' and not has_company:
         target = url_for("auth.complete_employer_profile")
     else:
         target = next_url or url_for("views.home")
@@ -556,8 +598,21 @@ def complete_employer_profile():
     if current_user.role != 'employer':
         return redirect(url_for("views.home"))
 
-    existing_company = Company.query.filter_by(owner_user_id=current_user.id).first()
-    if existing_company:
+    if Company.query.filter_by(owner_user_id=current_user.id).first():
+        return redirect(url_for("views.home"))
+
+    if CompanyMember.query.filter_by(user_id=current_user.id).first():
+        return redirect(url_for("views.home"))
+
+    email_domain = current_user.email.split('@')[-1].lower() if current_user.email and '@' in current_user.email else ''
+    existing_hub = None
+    if email_domain and email_domain not in FREE_EMAIL_DOMAINS:
+        existing_hub = Company.query.filter_by(email_domain=email_domain).first()
+
+    if existing_hub:
+        db.session.add(CompanyMember(company_id=existing_hub.id, user_id=current_user.id))
+        db.session.commit()
+        flash(f"You've joined {existing_hub.name} — your teammates are already set up here.", "success")
         return redirect(url_for("views.home"))
 
     if request.method == "POST":
@@ -566,7 +621,7 @@ def complete_employer_profile():
             flash("Company name is required.", "error")
             return render_template("complete_employer_profile.html")
 
-        company = Company(owner_user_id=current_user.id, name=company_name)
+        company = Company(owner_user_id=current_user.id, name=company_name, email_domain=email_domain or None)
         db.session.add(company)
         db.session.commit()
 

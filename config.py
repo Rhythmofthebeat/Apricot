@@ -12,6 +12,10 @@ class Config:
     DAILY_API_KEY = os.getenv("DAILY_API_KEY")
     STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
     STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+    # Data-marketplace subscription (Earn task exports sold to outside companies) —
+    # separate price/webhook from the placement-fee flow above.
+    STRIPE_DATA_PRICE_ID = os.getenv("STRIPE_DATA_PRICE_ID")
+    STRIPE_DATA_WEBHOOK_SECRET = os.getenv("STRIPE_DATA_WEBHOOK_SECRET")
     MAIL_SERVER = os.getenv("MAIL_SERVER", "smtp.gmail.com")
     MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))
     MAIL_USE_TLS = True
