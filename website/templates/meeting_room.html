@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Interview — {{ application.job.title }}{% endblock %}
+{% block title %}Interview - {{ application.job.title }}{% endblock %}
 
 {% block head %}
 <style>
@@ -68,7 +68,7 @@
     <div>
         <div class="job-info">
             <i class="fas fa-circle-dot me-2" style="color:#818cf8;"></i>
-            {{ application.job.title }} — {{ application.job.company.name }}
+            {{ application.job.title }} - {{ application.job.company.name }}
         </div>
         {% if room.scheduled_date %}
         <div class="job-meta mt-1">
@@ -112,7 +112,7 @@
         </button>
     </div>
     <div id="recContainer" style="padding:18px;color:#64748b;font-size:0.85rem;text-align:center;">
-        Click "Load recordings" after the meeting ends — Daily.co takes a minute or two to process.
+        Click "Load recordings" after the meeting ends - Daily.co takes a minute or two to process.
     </div>
 </div>
 {% endif %}

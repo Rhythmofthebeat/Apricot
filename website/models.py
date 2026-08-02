@@ -45,7 +45,7 @@ JOB_CATEGORIES = [
 
 JOB_LOCATIONS = [
     "Remote",
-    "Remote — US Only",
+    "Remote - US Only",
     "Hybrid",
     "New York, NY",
     "San Francisco, CA",
@@ -85,7 +85,7 @@ COUNTRIES = [
     "South Africa", "Nigeria", "Kenya", "United Arab Emirates", "Other",
 ]
 
-# Consumer/free webmail providers — employers must sign up with a company email instead.
+# Consumer/free webmail providers - employers must sign up with a company email instead.
 FREE_EMAIL_DOMAINS = {
     "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "live.com",
     "aol.com", "icloud.com", "protonmail.com", "proton.me", "mail.com",
@@ -111,7 +111,7 @@ class Company(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     owner_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     name = db.Column(db.String(200), nullable=False)
-    # Domain of the founding employer's work email (e.g. "acme.com") — lets later
+    # Domain of the founding employer's work email (e.g. "acme.com") - lets later
     # signups from the same company email land in this same hub instead of each
     # getting their own Company. Null for companies created before this existed,
     # or whose founder signed up via a free-webmail-flagged edge case.
@@ -222,7 +222,7 @@ class Application(db.Model):
     candidate_feedback = db.Column(db.Text)  # employer-approved AI feedback sent to candidate on rejection
     skills_roadmap = db.Column(db.Text)  # JSON: AI-generated skill gap action plan (generated when score < 65)
     interview_saved_session = db.Column(db.Text)  # JSON: partial history saved for later resumption
-    ai_likelihood = db.Column(db.Text)  # JSON: {score, label, reasons} — AI-generation probability for candidate answers
+    ai_likelihood = db.Column(db.Text)  # JSON: {score, label, reasons} - AI-generation probability for candidate answers
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     job = db.relationship("Job", backref="applications")
@@ -271,7 +271,7 @@ class EarnTask(db.Model):
     status = db.Column(db.String(20), nullable=False, default='open')  # open | closed
     required_domains = db.Column(db.Text)   # JSON list; None means open to all domains
     min_responses = db.Column(db.Integer, nullable=False, default=3)  # workers needed before consensus
-    consensus_answer = db.Column(db.Text)   # JSON {answer, total, distribution} — set once min_responses hit
+    consensus_answer = db.Column(db.Text)   # JSON {answer, total, distribution} - set once min_responses hit
     # For ranking tasks: two AI responses to compare
     option_a = db.Column(db.Text)
     option_b = db.Column(db.Text)

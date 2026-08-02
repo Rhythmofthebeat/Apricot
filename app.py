@@ -60,10 +60,10 @@ def resumesum():
 @app.route('/resume-jobmatch', methods=['GET', 'POST'])
 @limiter.limit("10 per hour", methods=["POST"])
 def resumemat():
-    """Resume job-match page — handles both the form display and form submission."""
+    """Resume job-match page - handles both the form display and form submission."""
     result        = None
     score_value   = 0
-    cleaned_result = None   # always defined — avoids NameError on GET
+    cleaned_result = None   # always defined - avoids NameError on GET
     job_text      = ''      # always defined
 
     if request.method == 'POST':
@@ -261,7 +261,7 @@ def upload_resume():
 @login_required
 @limiter.limit("30 per hour")
 def resume_chat():
-    """Chat endpoint — resume coaching powered by GPT-4o."""
+    """Chat endpoint - resume coaching powered by GPT-4o."""
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
@@ -282,17 +282,17 @@ def resume_chat():
 
     system_prompt = (
         "You are an expert career coach and resume advisor. "
-        "Your role is to give the candidate actionable tips and guidance so they can improve their own resume — "
+        "Your role is to give the candidate actionable tips and guidance so they can improve their own resume - "
         "not to write or rewrite it for them."
         + (f"\n\nYou have the following context:\n{context_block}" if context_block else "")
         + "\n\nGuidelines:\n"
-        "- Give specific, honest tips: explain WHAT is weak and WHY, and HOW to fix it — but do not write the fix.\n"
+        "- Give specific, honest tips: explain WHAT is weak and WHY, and HOW to fix it - but do not write the fix.\n"
         "- NEVER write, rewrite, or generate resume bullets, summaries, job descriptions, or any resume content on behalf of the candidate. "
         "If asked to write a section or bullet, decline and instead explain what makes a strong version of that content so they can write it themselves.\n"
         "- Do not produce text the candidate could copy-paste directly into their resume. "
         "The goal is to coach their thinking and writing, not to do it for them.\n"
         "- Be honest about gaps and weaknesses, and encouraging about genuine strengths.\n"
-        "- Keep advice concrete and easy to act on — suggest structure, keywords, specificity, or metrics they should add.\n"
+        "- Keep advice concrete and easy to act on - suggest structure, keywords, specificity, or metrics they should add.\n"
         "- Politely redirect anything unrelated to resume improvement or career advice."
     )
 

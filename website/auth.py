@@ -21,7 +21,7 @@ auth = Blueprint('auth', __name__)
 
 
 def _safe_next(next_url):
-    """Only allow same-site relative redirects for ?next= — rejects absolute/
+    """Only allow same-site relative redirects for ?next= - rejects absolute/
     protocol-relative URLs so this can't be used as an open redirect."""
     if not next_url or not next_url.startswith('/') or next_url.startswith('//'):
         return None
@@ -31,7 +31,7 @@ def _safe_next(next_url):
 def _provision_employer(user, email_domain, company_name):
     """Get-or-join a Company for a brand-new employer user. Coworkers signing
     up from the same work email domain land in the same hub (as a
-    CompanyMember) instead of each spinning up a separate company — only the
+    CompanyMember) instead of each spinning up a separate company - only the
     first signup from a domain actually creates the Company."""
     existing = None
     if email_domain and email_domain not in FREE_EMAIL_DOMAINS:
@@ -483,11 +483,11 @@ def verify_email(token):
 def login_google():
     next_url = _safe_next(request.args.get("next"))
 
-    # Employers sign up with their company email/password only — Google gives
+    # Employers sign up with their company email/password only - Google gives
     # no chance to collect a company name or verify a work domain up front,
     # so a fresh employer account can't be created through this route.
     if request.args.get("role") == "employer":
-        flash("Employer accounts sign up with a work email and password — Google sign-up is for candidates only.", "error")
+        flash("Employer accounts sign up with a work email and password - Google sign-up is for candidates only.", "error")
         return redirect(url_for("auth.sign_up", next=next_url) if next_url else url_for("auth.sign_up"))
 
     session["oauth_role"] = "candidate"
@@ -533,7 +533,7 @@ def login_google_finish():
             email_domain = email.split('@')[-1].lower() if '@' in email else ''
 
             if role == 'employer' and email_domain in FREE_EMAIL_DOMAINS:
-                # Don't silently create the wrong kind of account — Google only
+                # Don't silently create the wrong kind of account - Google only
                 # gave us a personal-domain email, but they asked for employer.
                 # Let them explicitly choose instead of trapping them as a
                 # candidate with no way back.
@@ -568,7 +568,7 @@ def login_google_finish():
 @auth.route("/employer-email-conflict", methods=["GET", "POST"])
 def employer_email_conflict():
     """Landing spot for a Google sign-up that asked for an employer account
-    but only offered a personal-domain email — see login_google_finish."""
+    but only offered a personal-domain email - see login_google_finish."""
     email = session.get('oauth_pending_email')
     name = session.get('oauth_pending_name')
     if not email:
@@ -617,7 +617,7 @@ def complete_employer_profile():
     if existing_hub:
         db.session.add(CompanyMember(company_id=existing_hub.id, user_id=current_user.id))
         db.session.commit()
-        flash(f"You've joined {existing_hub.name} — your teammates are already set up here.", "success")
+        flash(f"You've joined {existing_hub.name} - your teammates are already set up here.", "success")
         return redirect(url_for("views.home"))
 
     if request.method == "POST":

@@ -370,7 +370,7 @@
             </div>
             <div class="interview-main">
                 <div class="coaching-wrap">
-                    <div class="score-ring-lg" id="scoreRing">—</div>
+                    <div class="score-ring-lg" id="scoreRing">-</div>
                     <div class="fw-bold mb-1" style="font-size:1rem;">Communication Score</div>
                     <div class="score-ring-fill">
                         <div class="score-ring-fill-bar" id="scoreBar"></div>
@@ -508,7 +508,7 @@ async function handleRecordClick() {
 }
 
 async function onRecordStop() {
-    // Wrap-up was triggered mid-recording — discard this audio, wrapUp() owns the turn
+    // Wrap-up was triggered mid-recording - discard this audio, wrapUp() owns the turn
     if (wrappingUp || state === 'done') {
         audioChunks = [];
         return;
@@ -635,7 +635,7 @@ async function wrapUp() {
     if (wrappingUp || state === 'done') return;
     wrappingUp = true;
 
-    // Stop any active recording — onRecordStop will see wrappingUp=true and discard the audio
+    // Stop any active recording - onRecordStop will see wrappingUp=true and discard the audio
     if (state === 'recording' && mediaRecorder) {
         mediaRecorder.stop();
         stopTimer();
@@ -694,7 +694,7 @@ function setQuestion(text) {
     progressFraction.textContent = `Q${questionNum} of ~${ESTIMATED_Q}`;
     progressPct.textContent = pct + '%';
 
-    // Lock input while the question is "presenting" — unlock after 1.5s read time
+    // Lock input while the question is "presenting" - unlock after 1.5s read time
     lockInput('Read the question above, then answer…');
     setTimeout(unlockInput, 1500);
 }

@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (feeBlock) feeBlock.style.display = isEmployer ? "block" : "none";
         if (feeCheck) feeCheck.required = isEmployer;
         if (googleLink) {
-            // Employers sign up with a company email + password only — Google
+            // Employers sign up with a company email + password only - Google
             // gives no chance to collect a company name up front.
             googleLink.style.display = isEmployer ? "none" : "flex";
             if (googleDivider) googleDivider.style.display = isEmployer ? "none" : "block";

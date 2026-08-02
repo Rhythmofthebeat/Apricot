@@ -5,14 +5,14 @@ load_dotenv()
 
 
 class Config:
-    # Real public domain used to build links sent in emails — never inferred
+    # Real public domain used to build links sent in emails - never inferred
     # from the triggering request's Host header (see email_utils.external_url).
     PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://apricot-u9ap.onrender.com")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     DAILY_API_KEY = os.getenv("DAILY_API_KEY")
     STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
     STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-    # Data-marketplace subscription (Earn task exports sold to outside companies) —
+    # Data-marketplace subscription (Earn task exports sold to outside companies) -
     # separate price/webhook from the placement-fee flow above.
     STRIPE_DATA_PRICE_ID = os.getenv("STRIPE_DATA_PRICE_ID")
     STRIPE_DATA_WEBHOOK_SECRET = os.getenv("STRIPE_DATA_WEBHOOK_SECRET")
@@ -23,7 +23,7 @@ class Config:
     MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
     MAIL_DEFAULT_SENDER = ("Avants AI", os.getenv("MAIL_USERNAME")) if os.getenv("MAIL_USERNAME") else None
     GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    # UPLOAD_FOLDER / AUDIO_FOLDER are set as absolute paths in create_app() —
+    # UPLOAD_FOLDER / AUDIO_FOLDER are set as absolute paths in create_app() -
     # not defined here so app.config.from_object(Config) doesn't clobber them.
     ALLOWED_EXTENSIONS = {"pdf", "docx", "txt"}
     MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB

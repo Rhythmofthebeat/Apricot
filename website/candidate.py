@@ -205,7 +205,7 @@ def apply(job_id):
 @login_required
 @limiter.limit("20 per hour")
 def extract_resume_text():
-    """Pull text out of an uploaded resume file — used by the apply wizard's
+    """Pull text out of an uploaded resume file - used by the apply wizard's
     first step before the candidate moves on to checking their match score."""
     resume_file = request.files.get('resume')
     if not resume_file or not resume_file.filename:
@@ -222,7 +222,7 @@ def extract_resume_text():
 @login_required
 @limiter.limit("20 per hour")
 def preview_match(job_id):
-    """Score a resume against the job WITHOUT creating an application — lets
+    """Score a resume against the job WITHOUT creating an application - lets
     the candidate revise their resume and re-check as many times as they want
     before committing to a submission."""
     job = Job.query.get_or_404(job_id)
@@ -263,7 +263,7 @@ def submit_application(job_id):
     try:
         result = compare_resume_to_job(job.description_text, resume_text)
     except Exception as e:
-        return jsonify({"error": "Resume analysis failed — please try again."}), 500
+        return jsonify({"error": "Resume analysis failed - please try again."}), 500
 
     score = _extract_score(result)
 
@@ -290,7 +290,7 @@ def submit_application(job_id):
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": "Could not save your application — please try again."}), 500
+        return jsonify({"error": "Could not save your application - please try again."}), 500
 
     return jsonify({
         "redirect_url": url_for('candidate.apply_next_steps', job_id=job.id, application_id=application.id)
@@ -407,7 +407,7 @@ def interview_chat(job_id, application_id):
             notif = Notification(
                 user_id=current_user.id,
                 message=(
-                    f"Your AI interview for {job.title} is complete — verdict: {verdict}."
+                    f"Your AI interview for {job.title} is complete - verdict: {verdict}."
                     if positive else
                     f"Your AI interview for {job.title} is complete. The employer will review your result."
                 ),
@@ -536,7 +536,7 @@ def accept_slot(proposal_id):
 
     api_key = current_app.config.get('DAILY_API_KEY')
     if not api_key:
-        flash("Video rooms are not configured yet — contact support.", "error")
+        flash("Video rooms are not configured yet - contact support.", "error")
         return redirect(url_for('candidate.interviews'))
 
     try:
@@ -577,7 +577,7 @@ def accept_slot(proposal_id):
     try:
         send_branded_email(
             to_email=employer.email,
-            subject=f"Interview confirmed — {application.job.title}",
+            subject=f"Interview confirmed - {application.job.title}",
             heading="Interview time confirmed",
             body_html=(
                 f"<strong>{current_user.first_name or current_user.email}</strong> has confirmed "
@@ -871,7 +871,7 @@ def similar_jobs(job_id):
 @candidate.route('/applications/<int:application_id>/coaching')
 @login_required
 def interview_coaching(application_id):
-    """Post-interview coaching report — private to the candidate."""
+    """Post-interview coaching report - private to the candidate."""
     application = Application.query.get_or_404(application_id)
     if application.candidate_user_id != current_user.id:
         abort(403)
@@ -911,7 +911,7 @@ def practice_interview(job_id):
 @login_required
 @limiter.limit("40 per hour")
 def practice_interview_chat(job_id):
-    """Stateless practice interview turn — no DB writes, returns coaching at conclusion."""
+    """Stateless practice interview turn - no DB writes, returns coaching at conclusion."""
     job = Job.query.get_or_404(job_id)
 
     history = json.loads(request.form.get("history", "[]"))
@@ -932,7 +932,7 @@ def practice_interview_chat(job_id):
             return jsonify({"error": "Couldn't transcribe your answer. Please try again."}), 500
 
     try:
-        # Never pass the real employer questions — practice uses generated ones
+        # Never pass the real employer questions - practice uses generated ones
         # so the actual interview remains a surprise for the candidate.
         reply = run_interview_turn(
             job.title, job.description_text, user_message, history, force_conclude=wrap_up,
@@ -990,7 +990,7 @@ def withdraw_application(application_id):
 @candidate.route('/applications/<int:application_id>/confirm-hire', methods=['POST'])
 @login_required
 def confirm_hire(application_id):
-    """Candidate-side verification that a hire actually happened — the employer's
+    """Candidate-side verification that a hire actually happened - the employer's
     placement fee invoice only fires after this, not the moment they click 'hired'."""
     application = Application.query.get_or_404(application_id)
     if application.candidate_user_id != current_user.id:

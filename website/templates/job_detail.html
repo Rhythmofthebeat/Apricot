@@ -292,12 +292,12 @@
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end" style="min-width:180px;">
                             <li>
-                                <a class="dropdown-item" href="https://wa.me/?text={{ (job.title + ' at ' + job.company.name + ' — ' + request.url)|urlencode }}" target="_blank">
+                                <a class="dropdown-item" href="https://wa.me/?text={{ (job.title + ' at ' + job.company.name + ' - ' + request.url)|urlencode }}" target="_blank">
                                     <i class="fab fa-whatsapp me-2" style="color:#25d366;width:16px;"></i>WhatsApp
                                 </a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="sms:&body={{ (job.title + ' at ' + job.company.name + ' — ' + request.url)|urlencode }}">
+                                <a class="dropdown-item" href="sms:&body={{ (job.title + ' at ' + job.company.name + ' - ' + request.url)|urlencode }}">
                                     <i class="fas fa-comment-dots me-2" style="color:#34c759;width:16px;"></i>iMessage / SMS
                                 </a>
                             </li>

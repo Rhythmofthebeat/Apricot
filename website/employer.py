@@ -49,15 +49,15 @@ INTERVIEW_LENGTH_OPTIONS = ["short", "standard", "thorough"]
 
 STATUS_EMAIL_COPY = {
     "interviewing": {
-        "subject_tpl": "Your application is moving forward — {job_title}",
+        "subject_tpl": "Your application is moving forward - {job_title}",
         "heading": "You're being considered for the role",
         "body_tpl": (
-            "Good news — {company} has moved your application for <strong>{job_title}</strong> "
+            "Good news - {company} has moved your application for <strong>{job_title}</strong> "
             "into the interviewing stage. They'll be in touch with next steps."
         ),
     },
     "hired": {
-        "subject_tpl": "You're hired — {job_title}",
+        "subject_tpl": "You're hired - {job_title}",
         "heading": "Congratulations!",
         "body_tpl": (
             "{company} has decided to move forward with hiring you for the <strong>{job_title}</strong> "
@@ -65,7 +65,7 @@ STATUS_EMAIL_COPY = {
         ),
     },
     "rejected": {
-        "subject_tpl": "Update on your application — {job_title}",
+        "subject_tpl": "Update on your application - {job_title}",
         "heading": "Application update",
         "body_tpl": (
             "Thank you for applying to <strong>{job_title}</strong> at {company}. After review, they've "
@@ -119,7 +119,7 @@ def is_company_owner():
 
 def send_hire_fee_invoice(application, job, company, candidate, employer_user):
     """Create the Stripe placement-fee payment link and invoice the employer.
-    Only called once the candidate has confirmed the hire — see candidate.confirm_hire."""
+    Only called once the candidate has confirmed the hire - see candidate.confirm_hire."""
     payment_link_url = None
     if not application.stripe_payment_link:
         payment_link_url = _create_stripe_payment_link(application, job, company, candidate)
@@ -132,7 +132,7 @@ def send_hire_fee_invoice(application, job, company, candidate, employer_user):
         if payment_link_url and fee_amount:
             send_branded_email(
                 to_email=employer_user.email,
-                subject=f"Placement fee invoice — {candidate.first_name} / {job.title}",
+                subject=f"Placement fee invoice - {candidate.first_name} / {job.title}",
                 heading="Placement fee due",
                 body_html=(
                     f"<strong>{candidate.first_name}</strong> has confirmed their hire for "
@@ -153,7 +153,7 @@ def send_hire_fee_invoice(application, job, company, candidate, employer_user):
         else:
             send_branded_email(
                 to_email=employer_user.email,
-                subject=f"Placement fee — {candidate.first_name} / {job.title}",
+                subject=f"Placement fee - {candidate.first_name} / {job.title}",
                 heading="Placement fee due",
                 body_html=(
                     f"<strong>{candidate.first_name}</strong> has confirmed their hire for "
@@ -182,7 +182,7 @@ def _create_stripe_payment_link(application, job, company, candidate):
         return None
     try:
         product = stripe.Product.create(
-            name=f"Avants AI Placement Fee — {job.title} at {company.name}",
+            name=f"Avants AI Placement Fee - {job.title} at {company.name}",
             metadata={"application_id": str(application.id)},
         )
         price = stripe.Price.create(product=product.id, unit_amount=fee_cents, currency="usd")
@@ -298,7 +298,7 @@ def post_job():
         work_type = request.form.get('work_type', 'Remote (Worldwide)').strip()
         city = request.form.get('location_city', '').strip()
         if work_type in ('Hybrid', 'On-site') and city:
-            location = f"{work_type} — {city}"
+            location = f"{work_type} - {city}"
         else:
             location = work_type
         employment_type = request.form.get('employment_type', '').strip()
@@ -397,7 +397,7 @@ def edit_job(job_id):
         _edit_city = request.form.get('location_city', '').strip()
         job.title = title
         job.description = description
-        job.location = f"{_edit_work_type} — {_edit_city}" if _edit_work_type in ('Hybrid', 'On-site') and _edit_city else _edit_work_type
+        job.location = f"{_edit_work_type} - {_edit_city}" if _edit_work_type in ('Hybrid', 'On-site') and _edit_city else _edit_work_type
         job.employment_type = request.form.get('employment_type', '').strip()
         job.category = category
         job.interview_length = interview_length
@@ -484,7 +484,7 @@ def transcribe_question():
             os.unlink(tmp_path)
 
     if not text:
-        return jsonify({"error": "Didn't catch any speech — try recording again."}), 400
+        return jsonify({"error": "Didn't catch any speech - try recording again."}), 400
     return jsonify({"text": text})
 
 
@@ -494,7 +494,7 @@ def transcribe_question():
 @limiter.limit("20 per hour")
 def score_resume(job_id):
     """Score an externally-sourced resume (referral, LinkedIn candidate, etc.)
-    against one of this employer's jobs — no application gets created, this
+    against one of this employer's jobs - no application gets created, this
     is just a quick sourcing/screening check."""
     company = get_owned_company()
     job = Job.query.get_or_404(job_id)
@@ -610,7 +610,7 @@ def schedule_meeting(application_id):
     try:
         send_branded_email(
             to_email=candidate.email,
-            subject=f"Meeting scheduled — {job.title} at {company.name}",
+            subject=f"Meeting scheduled - {job.title} at {company.name}",
             heading="A meeting has been scheduled",
             body_html=(
                 f"Hi {candidate.first_name or ''},<br><br>"
@@ -660,7 +660,7 @@ def update_status(application_id):
             candidate = application.candidate
 
             if new_status == 'hired':
-                # Reset confirmation state — this is a fresh hire event, not yet verified by the candidate.
+                # Reset confirmation state - this is a fresh hire event, not yet verified by the candidate.
                 # The placement fee invoice only fires once they confirm (see candidate.confirm_hire).
                 application.candidate_confirmed_hire = False
                 application.hire_confirmed_at = None
@@ -682,20 +682,20 @@ def update_status(application_id):
 
             try:
                 if new_status == 'hired':
-                    # Email the candidate — congratulations + ask them to confirm the hire.
+                    # Email the candidate - congratulations + ask them to confirm the hire.
                     # The employer isn't invoiced for the placement fee until the candidate confirms.
                     send_branded_email(
                         to_email=candidate.email,
-                        subject=f"You're hired — {job.title}",
+                        subject=f"You're hired - {job.title}",
                         heading="You got the job!",
                         body_html=(
-                            f"Congratulations — <strong>{company.name}</strong> has decided to move forward "
+                            f"Congratulations - <strong>{company.name}</strong> has decided to move forward "
                             f"with you for the <strong>{job.title}</strong> role!<br><br>"
                             f"Please confirm the hire on your dashboard so we can let {company.name} know. "
                             f"Best of luck in your new role!"
                         ),
                         plain_text=(
-                            f"Congratulations — {company.name} has offered you the {job.title} role! "
+                            f"Congratulations - {company.name} has offered you the {job.title} role! "
                             f"Please confirm the hire on your dashboard."
                         ),
                         cta_label="Confirm My Hire",
@@ -1105,7 +1105,7 @@ def invite_member():
     from .models import FREE_EMAIL_DOMAINS, User
     domain = email.split('@')[-1]
     if domain in FREE_EMAIL_DOMAINS:
-        flash("Please invite using a company email address — personal email providers like Gmail aren't accepted.", "error")
+        flash("Please invite using a company email address - personal email providers like Gmail aren't accepted.", "error")
         return redirect(url_for('employer.company_settings'))
 
     owner = User.query.get(company.owner_user_id)
@@ -1209,7 +1209,7 @@ def accept_invite(token):
 # ------------------------------------------------------------------ #
 
 # ------------------------------------------------------------------ #
-#  Meeting Scheduling — Propose Times
+#  Meeting Scheduling - Propose Times
 # ------------------------------------------------------------------ #
 
 @employer.route('/employer/applications/<int:application_id>/propose-times', methods=['POST'])
@@ -1250,7 +1250,7 @@ def propose_times(application_id):
     candidate = application.candidate
     notif = Notification(
         user_id=candidate.id,
-        message=f"{company.name} wants to schedule an interview for {job.title} — pick a time!",
+        message=f"{company.name} wants to schedule an interview for {job.title} - pick a time!",
         link=url_for('candidate.interviews'),
     )
     db.session.add(notif)
@@ -1262,7 +1262,7 @@ def propose_times(application_id):
         )
         send_branded_email(
             to_email=candidate.email,
-            subject=f"{company.name} wants to schedule an interview — {job.title}",
+            subject=f"{company.name} wants to schedule an interview - {job.title}",
             heading=f"{company.name} wants to meet you!",
             body_html=(
                 f"Hi {candidate.first_name or 'there'},<br><br>"
@@ -1270,7 +1270,7 @@ def propose_times(application_id):
                 f"for <strong>{job.title}</strong>. Pick whichever time works best for you:<br><br>"
                 f"<ul>{slot_lines}</ul>"
                 + (f"<br><strong>Notes:</strong> {notes}<br>" if notes else "")
-                + "<br>Click below to choose your slot — the interview room will be created instantly."
+                + "<br>Click below to choose your slot - the interview room will be created instantly."
             ),
             plain_text=(
                 f"Hi {candidate.first_name or 'there'},\n\n"
@@ -1284,7 +1284,7 @@ def propose_times(application_id):
         )
         flash(f"Time slots sent to {candidate.first_name or candidate.email}.", "success")
     except Exception:
-        flash("Proposal saved — email notification failed.", "error")
+        flash("Proposal saved - email notification failed.", "error")
 
     return redirect(url_for('employer.applicants', job_id=job.id))
 
@@ -1429,16 +1429,16 @@ def create_meeting_room(application_id):
     try:
         send_branded_email(
             to_email=candidate.email,
-            subject=f"🎉 {company.name} wants to interview you — {job.title}",
+            subject=f"🎉 {company.name} wants to interview you - {job.title}",
             heading=f"{company.name} wants to meet you!",
             body_html=(
                 f"Hi {candidate.first_name or 'there'},<br><br>"
-                f"Great news — <strong>{company.name}</strong> has scheduled a live video interview "
+                f"Great news - <strong>{company.name}</strong> has scheduled a live video interview "
                 f"with you for <strong>{job.title}</strong>.<br><br>"
                 f"<strong>📅 Date:</strong> {date}<br>"
                 f"<strong>🕐 Time:</strong> {time_}<br>"
                 + (f"<strong>📝 Notes:</strong> {notes}<br>" if notes else "")
-                + "<br>The interview takes place directly on Avants — no Zoom needed. "
+                + "<br>The interview takes place directly on Avants - no Zoom needed. "
                 "Click the button below when it's time."
             ),
             plain_text=(
@@ -1451,7 +1451,7 @@ def create_meeting_room(application_id):
             cta_label="Join Interview",
             cta_url=join_url,
         )
-        flash("Interview room created — candidate notified by email and in-app.", "success")
+        flash("Interview room created - candidate notified by email and in-app.", "success")
     except Exception:
         flash("Interview room created and candidate notified in-app (email failed).", "error")
 

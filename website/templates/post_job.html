@@ -90,7 +90,7 @@
                 <div class="fee-notice">
                     <i class="fas fa-file-contract"></i>
                     <div>
-                        <strong>15% placement fee</strong> — if you hire a candidate sourced through Avants AI for this role, a fee of 15% of their first-year gross compensation applies, billed only after the candidate confirms the hire. Candidates are never charged. See the <a href="/terms#employer-contract" target="_blank" style="color:#92400e; font-weight:600;">Employer Platform Agreement</a> for full terms.
+                        <strong>15% placement fee</strong> - if you hire a candidate sourced through Avants AI for this role, a fee of 15% of their first-year gross compensation applies, billed only after the candidate confirms the hire. Candidates are never charged. See the <a href="/terms#employer-contract" target="_blank" style="color:#92400e; font-weight:600;">Employer Platform Agreement</a> for full terms.
                     </div>
                 </div>
 
@@ -125,8 +125,8 @@
                         <div class="col-md-4 mb-3" id="cityInputWrap">
                             <label class="form-label fw-bold">City / Location</label>
                             {% set _city = '' %}
-                            {% if job and job.location and ' — ' in job.location %}
-                                {% set _city = job.location.split(' — ', 1)[1] %}
+                            {% if job and job.location and ' - ' in job.location %}
+                                {% set _city = job.location.split(' - ', 1)[1] %}
                             {% endif %}
                             <input type="text" class="form-control" name="location_city" id="locationCity"
                                    value="{{ _city }}"
@@ -381,7 +381,7 @@ document.getElementById("recordQuestionBtn").addEventListener("click", async () 
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Transcription failed.");
             addQuestionRow(data.text);
-            status.textContent = "Added below — edit if needed.";
+            status.textContent = "Added below - edit if needed.";
         } catch (e) {
             status.textContent = e.message;
         } finally {

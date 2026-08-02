@@ -20,21 +20,21 @@ DB_NAME = "database.db"
 
 def _run_migrations(db):
     """Add columns that were introduced after the initial schema.
-    Each ALTER TABLE is wrapped in try/except — safe to run on every
+    Each ALTER TABLE is wrapped in try/except - safe to run on every
     startup, no-op when the column already exists."""
     new_columns = [
-        # company — extended profile fields
+        # company - extended profile fields
         "ALTER TABLE company ADD COLUMN description TEXT",
         "ALTER TABLE company ADD COLUMN industry VARCHAR(100)",
         "ALTER TABLE company ADD COLUMN size VARCHAR(50)",
         "ALTER TABLE company ADD COLUMN location VARCHAR(200)",
-        # job — salary + interview config
+        # job - salary + interview config
         "ALTER TABLE job ADD COLUMN salary_usd INTEGER",
         "ALTER TABLE job ADD COLUMN employment_type VARCHAR(50)",
         "ALTER TABLE job ADD COLUMN interview_length VARCHAR(20) NOT NULL DEFAULT 'standard'",
         "ALTER TABLE job ADD COLUMN interview_focus TEXT",
         "ALTER TABLE job ADD COLUMN interview_questions TEXT",
-        # application — payment + interview fields
+        # application - payment + interview fields
         "ALTER TABLE application ADD COLUMN work_authorization TEXT",
         "ALTER TABLE application ADD COLUMN scheduled_meeting TEXT",
         "ALTER TABLE application ADD COLUMN match_score INTEGER",
@@ -44,66 +44,66 @@ def _run_migrations(db):
         "ALTER TABLE application ADD COLUMN interview_verdict VARCHAR(20)",
         "ALTER TABLE application ADD COLUMN fee_paid BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE application ADD COLUMN stripe_payment_link VARCHAR(500)",
-        # user — verification + notifications
+        # user - verification + notifications
         "ALTER TABLE \"user\" ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT TRUE",
         "ALTER TABLE \"user\" ADD COLUMN notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE",
-        # company — logo
+        # company - logo
         "ALTER TABLE company ADD COLUMN logo_filename VARCHAR(200)",
         "ALTER TABLE company ADD COLUMN logo_version INTEGER NOT NULL DEFAULT 0",
-        # application — employer notes + withdrawal
+        # application - employer notes + withdrawal
         "ALTER TABLE application ADD COLUMN employer_notes TEXT",
         "ALTER TABLE application ADD COLUMN withdrawn BOOLEAN NOT NULL DEFAULT FALSE",
-        # job — salary range
+        # job - salary range
         "ALTER TABLE job ADD COLUMN salary_max_usd INTEGER",
         "ALTER TABLE job ADD COLUMN pay_type VARCHAR(20) NOT NULL DEFAULT 'yearly'",
-        # application — rejection feedback sent to candidate
+        # application - rejection feedback sent to candidate
         "ALTER TABLE application ADD COLUMN candidate_feedback TEXT",
-        # application — AI-generated skills gap roadmap
+        # application - AI-generated skills gap roadmap
         "ALTER TABLE application ADD COLUMN skills_roadmap TEXT",
-        # company — blind hiring mode
+        # company - blind hiring mode
         "ALTER TABLE company ADD COLUMN blind_mode_enabled BOOLEAN NOT NULL DEFAULT FALSE",
-        # company — employer terms acceptance audit trail
+        # company - employer terms acceptance audit trail
         "ALTER TABLE company ADD COLUMN terms_accepted_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE company ADD COLUMN terms_accepted_ip VARCHAR(45)",
         "ALTER TABLE company ADD COLUMN terms_version VARCHAR(10)",
-        # application — saved interview session for resume-later
+        # application - saved interview session for resume-later
         "ALTER TABLE application ADD COLUMN interview_saved_session TEXT",
-        # user — admin flag
+        # user - admin flag
         "ALTER TABLE \"user\" ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE",
-        # application — AI-generation likelihood score for candidate interview answers
+        # application - AI-generation likelihood score for candidate interview answers
         "ALTER TABLE application ADD COLUMN ai_likelihood TEXT",
-        # user — supabase auth uid for admin API calls
+        # user - supabase auth uid for admin API calls
         "ALTER TABLE \"user\" ADD COLUMN supabase_uid VARCHAR(200)",
-        # candidate_profile — profile basics
+        # candidate_profile - profile basics
         "ALTER TABLE candidate_profile ADD COLUMN headline VARCHAR(200)",
         "ALTER TABLE candidate_profile ADD COLUMN target_roles VARCHAR(300)",
-        # candidate_profile — talent pool opt-in fields
+        # candidate_profile - talent pool opt-in fields
         "ALTER TABLE candidate_profile ADD COLUMN open_to_work BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE candidate_profile ADD COLUMN skills TEXT",
         "ALTER TABLE candidate_profile ADD COLUMN work_preference VARCHAR(50)",
         "ALTER TABLE candidate_profile ADD COLUMN availability VARCHAR(50)",
         "ALTER TABLE candidate_profile ADD COLUMN years_experience VARCHAR(20)",
         "ALTER TABLE candidate_profile ADD COLUMN location VARCHAR(200)",
-        # earn_task — domain gating for contractor network
+        # earn_task - domain gating for contractor network
         "ALTER TABLE earn_task ADD COLUMN required_domains TEXT",
-        # earn_task — consensus scoring
+        # earn_task - consensus scoring
         "ALTER TABLE earn_task ADD COLUMN min_responses INTEGER NOT NULL DEFAULT 3",
         "ALTER TABLE earn_task ADD COLUMN consensus_answer TEXT",
-        # task_submission — per-submission agreement with consensus
+        # task_submission - per-submission agreement with consensus
         "ALTER TABLE task_submission ADD COLUMN agreement_score REAL",
-        # contractor_profile — Stripe Connect payout flag
+        # contractor_profile - Stripe Connect payout flag
         "ALTER TABLE contractor_profile ADD COLUMN payout_enabled BOOLEAN NOT NULL DEFAULT FALSE",
-        # application — candidate must confirm a hire before the fee invoice fires
+        # application - candidate must confirm a hire before the fee invoice fires
         "ALTER TABLE application ADD COLUMN candidate_confirmed_hire BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE application ADD COLUMN hire_confirmed_at TIMESTAMP WITH TIME ZONE",
-        # user — werkzeug's scrypt password hashes run ~162 chars, longer than
+        # user - werkzeug's scrypt password hashes run ~162 chars, longer than
         # the original 150-char cap, so every email/password signup was
         # failing with a StringDataRightTruncation error
         "ALTER TABLE \"user\" ALTER COLUMN password TYPE VARCHAR(255)",
-        # user — link to a DataBuyer account (outside company subscribed to Earn task exports)
+        # user - link to a DataBuyer account (outside company subscribed to Earn task exports)
         "ALTER TABLE \"user\" ADD COLUMN data_buyer_id INTEGER REFERENCES data_buyer(id)",
         "ALTER TABLE \"user\" ADD COLUMN is_data_buyer_admin BOOLEAN NOT NULL DEFAULT FALSE",
-        # company — work-email domain, so later employer signups from the same
+        # company - work-email domain, so later employer signups from the same
         # company land in the same hub instead of each creating a new Company
         "ALTER TABLE company ADD COLUMN email_domain VARCHAR(150)",
     ]
@@ -119,7 +119,7 @@ def _run_migrations(db):
 
 
 def _backfill_company_email_domains(db):
-    """One-time backfill for companies created before email_domain existed —
+    """One-time backfill for companies created before email_domain existed -
     derives it from the owner's email so old companies also become joinable
     by domain. No-ops once every company already has a domain set."""
     from .models import Company, User, FREE_EMAIL_DOMAINS
@@ -154,7 +154,7 @@ def create_app():
             "connect_args": {"options": "-c default_transaction_read_only=off"},
         }
     else:
-        #sqlite is stored at this location — local dev fallback only
+        #sqlite is stored at this location - local dev fallback only
         app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_NAME}'
 
     app.config.from_object(Config)

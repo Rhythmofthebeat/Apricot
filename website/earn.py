@@ -97,7 +97,7 @@ def _maybe_compute_consensus(task):
 
 
 # ------------------------------------------------------------------ #
-#  Onboarding — domain selection (required before accessing tasks)
+#  Onboarding - domain selection (required before accessing tasks)
 # ------------------------------------------------------------------ #
 
 @earn.route('/earn/onboard', methods=['GET', 'POST'])
@@ -306,7 +306,7 @@ def payout_return():
                 db.session.commit()
                 flash("Payout account connected! You'll receive payments directly to your bank.", "success")
             else:
-                flash("Almost there — Stripe needs a bit more information to enable payouts. Come back here to finish.", "info")
+                flash("Almost there - Stripe needs a bit more information to enable payouts. Come back here to finish.", "info")
         except stripe.error.StripeError:
             flash("Payout setup saved. Stripe will notify you when your account is fully verified.", "info")
     return redirect(url_for('earn.history'))
@@ -315,7 +315,7 @@ def payout_return():
 @earn.route('/earn/payouts/refresh')
 @login_required
 def payout_refresh():
-    """Stripe redirects here when the onboarding link expires — just restart the flow."""
+    """Stripe redirects here when the onboarding link expires - just restart the flow."""
     return redirect(url_for('earn.payout_setup'))
 
 

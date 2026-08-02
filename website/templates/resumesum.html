@@ -335,7 +335,7 @@
 
     {% if not current_user.is_authenticated %}
     <div class="alert d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3" style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:14px 20px;">
-      <span style="color:#1e3a5f;font-size:0.95rem;"><i class="fas fa-lock me-2" style="color:#3b82f6;"></i><strong>Sign in to use this tool</strong> — it's free and takes less than a minute.</span>
+      <span style="color:#1e3a5f;font-size:0.95rem;"><i class="fas fa-lock me-2" style="color:#3b82f6;"></i><strong>Sign in to use this tool</strong> - it's free and takes less than a minute.</span>
       <div class="d-flex gap-2">
         <a href="{{ url_for('auth.login', next=request.path) }}" class="btn btn-primary btn-sm btn-rounded"><i class="fas fa-sign-in-alt me-1"></i>Sign In</a>
         <a href="{{ url_for('auth.sign_up', next=request.path) }}" class="btn btn-outline-primary btn-sm btn-rounded"><i class="fas fa-user-plus me-1"></i>Sign Up Free</a>

@@ -347,13 +347,13 @@
         </a>
     </div>
     <p class="mt-3 mb-0" style="font-size:0.95rem;">
-        Or try our free resume tools <span class="badge bg-secondary" style="font-size:0.55rem; font-weight:600; letter-spacing:0.03em; vertical-align:middle;">COMMUNITY EDITION</span> —
+        Or try our free resume tools <span class="badge bg-secondary" style="font-size:0.55rem; font-weight:600; letter-spacing:0.03em; vertical-align:middle;">COMMUNITY EDITION</span> -
         <a href="{{ url_for('resumemat') }}" style="color:var(--primary);text-decoration:none;">
             <i class="fas fa-file-circle-check me-1"></i>Job Match</a>
         ·
         <a href="{{ url_for('resumesum') }}" style="color:var(--primary);text-decoration:none;">
             <i class="fas fa-file-lines me-1"></i>Resume Summarizer</a>
-        — no cost, sign-up only takes a minute
+        - no cost, sign-up only takes a minute
     </p>
 </div>
 
@@ -361,15 +361,15 @@
 <div class="stats-bar">
     <div class="stats-bar-inner">
         <div class="stat-item">
-            <div class="stat-val">{{ open_job_count if open_job_count else '—' }}</div>
+            <div class="stat-val">{{ open_job_count if open_job_count else '-' }}</div>
             <div class="stat-lbl">Open roles</div>
         </div>
         <div class="stat-item">
-            <div class="stat-val">{{ candidate_count if candidate_count else '—' }}</div>
+            <div class="stat-val">{{ candidate_count if candidate_count else '-' }}</div>
             <div class="stat-lbl">Candidates</div>
         </div>
         <div class="stat-item">
-            <div class="stat-val">{{ company_count if company_count else '—' }}</div>
+            <div class="stat-val">{{ company_count if company_count else '-' }}</div>
             <div class="stat-lbl">Companies hiring</div>
         </div>
         <div class="stat-item">

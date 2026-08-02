@@ -62,7 +62,7 @@ def home():
 
 @views.route('/site')
 def public_site():
-    """Marketing landing page for signed-in users — home() bounces them
+    """Marketing landing page for signed-in users - home() bounces them
     straight to their dashboard, so this is the only way to see it again
     while logged in."""
     return render_template("landing.html", **_landing_context())

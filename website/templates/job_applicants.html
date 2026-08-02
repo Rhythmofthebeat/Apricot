@@ -170,7 +170,7 @@
     <span id="filterCount" class="text-muted small ms-1"></span>
 </div>
 
-<!-- Bulk action bar — hidden until 1+ selected -->
+<!-- Bulk action bar - hidden until 1+ selected -->
 <div class="d-flex gap-2 align-items-center mb-3 p-2" id="bulkActionBar" style="display:none; background:var(--primary-soft); border-radius:var(--radius); border:1px solid rgba(99,102,241,0.2);">
     <span class="small fw-semibold ms-1"><span id="bulkSelectedCount">0</span> selected</span>
     <button class="btn btn-sm btn-outline-success" onclick="bulkUpdateStatus('interviewing')">
@@ -212,15 +212,15 @@
                 {% if ai_data %}
                     {% set ai_score = ai_data.score %}
                     {% if ai_score < 35 %}
-                        <span class="ai-badge-human" title="AI Detection: {{ ai_score }}/100 — {{ ai_data.label }}">
+                        <span class="ai-badge-human" title="AI Detection: {{ ai_score }}/100 - {{ ai_data.label }}">
                             <i class="fas fa-user-check" style="font-size:0.65rem;"></i>{{ ai_data.label }}
                         </span>
                     {% elif ai_score < 65 %}
-                        <span class="ai-badge-unsure" title="AI Detection: {{ ai_score }}/100 — {{ ai_data.label }}">
+                        <span class="ai-badge-unsure" title="AI Detection: {{ ai_score }}/100 - {{ ai_data.label }}">
                             <i class="fas fa-circle-question" style="font-size:0.65rem;"></i>{{ ai_data.label }}
                         </span>
                     {% else %}
-                        <span class="ai-badge-ai" title="AI Detection: {{ ai_score }}/100 — {{ ai_data.label }}">
+                        <span class="ai-badge-ai" title="AI Detection: {{ ai_score }}/100 - {{ ai_data.label }}">
                             <i class="fas fa-robot" style="font-size:0.65rem;"></i>{{ ai_data.label }}
                         </span>
                     {% endif %}
@@ -231,9 +231,9 @@
                     {% elif app.stripe_payment_link %}
                         <span class="badge-status applied"><i class="fas fa-clock me-1"></i>Fee Pending</span>
                     {% elif app.candidate_confirmed_hire %}
-                        <span class="badge-status applied"><i class="fas fa-clock me-1"></i>Confirmed — invoice pending</span>
+                        <span class="badge-status applied"><i class="fas fa-clock me-1"></i>Confirmed - invoice pending</span>
                     {% else %}
-                        <span class="badge-status applied" title="The candidate hasn't confirmed the hire yet — no fee invoice will be sent until they do"><i class="fas fa-hourglass-half me-1"></i>Awaiting candidate confirmation</span>
+                        <span class="badge-status applied" title="The candidate hasn't confirmed the hire yet - no fee invoice will be sent until they do"><i class="fas fa-hourglass-half me-1"></i>Awaiting candidate confirmation</span>
                     {% endif %}
                 {% endif %}
             </div>
@@ -260,7 +260,7 @@
         </div>
 
         {% set cscore = composite_scores.get(app.id, app.match_score or 0) %}
-        <div class="d-flex flex-column align-items-center gap-1 flex-shrink-0" title="Overall score — Resume (45%) + Interview (45%) + Authenticity (10%)">
+        <div class="d-flex flex-column align-items-center gap-1 flex-shrink-0" title="Overall score - Resume (45%) + Interview (45%) + Authenticity (10%)">
             <span class="score-pill {{ 'high' if cscore >= 70 else ('mid' if cscore >= 40 else 'low') }}">{{ cscore }}</span>
             <span class="text-muted" style="font-size:0.65rem; font-weight:500;">OVERALL</span>
         </div>
@@ -295,13 +295,13 @@
             <!-- Actions -->
             <div class="action-bar">
                 {% if app.status == 'applied' %}
-                <button type="button" class="btn btn-outline-success btn-sm" title="Advance to Interviewing — one click"
+                <button type="button" class="btn btn-outline-success btn-sm" title="Advance to Interviewing - one click"
                         onclick="quickAdvance({{ app.id }}, event)">
                     <i class="fas fa-forward"></i> Advance
                 </button>
                 {% endif %}
                 {% if app.status in ('applied', 'interviewing') %}
-                <button type="button" class="btn btn-outline-danger btn-sm" title="Reject — one click"
+                <button type="button" class="btn btn-outline-danger btn-sm" title="Reject - one click"
                         onclick="quickReject({{ app.id }}, event)">
                     <i class="fas fa-xmark"></i> Reject
                 </button>
@@ -501,7 +501,7 @@
                             <div style="width:56px;height:56px;margin:0 auto 6px;">
                                 <svg viewBox="0 0 36 36" style="display:block;width:100%;height:100%;">
                                     <path fill="none" stroke="#e5e7eb" stroke-width="3.8" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                                    <text x="18" y="18" fill="#9ca3af" font-size="0.3em" text-anchor="middle" dominant-baseline="middle">—</text>
+                                    <text x="18" y="18" fill="#9ca3af" font-size="0.3em" text-anchor="middle" dominant-baseline="middle">-</text>
                                 </svg>
                             </div>
                             <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">Interview</div>
@@ -531,7 +531,7 @@
                             <div style="width:56px;height:56px;margin:0 auto 6px;">
                                 <svg viewBox="0 0 36 36" style="display:block;width:100%;height:100%;">
                                     <path fill="none" stroke="#e5e7eb" stroke-width="3.8" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                                    <text x="18" y="18" fill="#9ca3af" font-size="0.3em" text-anchor="middle" dominant-baseline="middle">—</text>
+                                    <text x="18" y="18" fill="#9ca3af" font-size="0.3em" text-anchor="middle" dominant-baseline="middle">-</text>
                                 </svg>
                             </div>
                             <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">Authentic</div>
@@ -611,7 +611,7 @@
                     </div>
                     {% endif %}
                 </div>
-                <p class="text-muted mb-0 mt-3" style="font-size:0.72rem;">Automated signal only — use alongside the interview recording and transcript.</p>
+                <p class="text-muted mb-0 mt-3" style="font-size:0.72rem;">Automated signal only - use alongside the interview recording and transcript.</p>
             </div>
             {% endif %}
 
@@ -648,7 +648,7 @@
                 <div class="detail-section-label">Candidate Profile</div>
                 <div class="d-flex flex-column gap-1" style="font-size:0.85rem;">
                     <div><span class="text-muted" style="width:120px;display:inline-block;">Name</span>
-                        {% if blind_mode %}<em class="text-muted">Hidden (Blind Mode)</em>{% else %}{{ app.candidate.first_name or '—' }}{% endif %}</div>
+                        {% if blind_mode %}<em class="text-muted">Hidden (Blind Mode)</em>{% else %}{{ app.candidate.first_name or '-' }}{% endif %}</div>
                     <div><span class="text-muted" style="width:120px;display:inline-block;">Email</span>
                         {% if blind_mode %}<em class="text-muted">Hidden (Blind Mode)</em>{% else %}<a href="mailto:{{ app.candidate.email }}" class="text-decoration-none">{{ app.candidate.email }}</a>{% endif %}</div>
                     {% if profile and profile.headline %}
@@ -665,7 +665,7 @@
                             {{ profile.linkedin_url }}</a></div>
                     {% endif %}
                     <div><span class="text-muted" style="width:120px;display:inline-block;">Applied</span>
-                        {{ app.created_at.strftime('%B %d, %Y') if app.created_at else '—' }}</div>
+                        {{ app.created_at.strftime('%B %d, %Y') if app.created_at else '-' }}</div>
                 </div>
             </div>
 
@@ -873,7 +873,7 @@ async function confirmReject(form) {
         const card = form.closest('.pipeline-card');
         if (card && card.dataset.interviewPending === '1') {
             const candidateName = card.dataset.name || 'This candidate';
-            const proceed = confirm(`${candidateName} hasn't completed the AI interview yet — you'll be marking them hired without that data. Continue anyway?`);
+            const proceed = confirm(`${candidateName} hasn't completed the AI interview yet - you'll be marking them hired without that data. Continue anyway?`);
             if (!proceed) {
                 if (window.event) window.event.preventDefault();
                 return false;
@@ -1057,7 +1057,7 @@ document.getElementById("scoreFileInput")?.addEventListener("change", async (e) 
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to read file.");
         document.getElementById("scoreResumeText").value = data.resume_text;
-        status.textContent = "File loaded — edit below if needed, then click Score.";
+        status.textContent = "File loaded - edit below if needed, then click Score.";
     } catch (err) {
         status.textContent = err.message;
     }
@@ -1128,7 +1128,7 @@ document.getElementById("scoreResumeBtn")?.addEventListener("click", async () =>
     </div>
 </div>
 
-<!-- Score a Resume Modal (external sourcing — no application created) -->
+<!-- Score a Resume Modal (external sourcing - no application created) -->
 <div class="modal fade" id="scoreResumeModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -1137,7 +1137,7 @@ document.getElementById("scoreResumeBtn")?.addEventListener("click", async () =>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body pt-2">
-                <p class="text-muted small mb-3">For candidates you've found outside Avants — referrals, LinkedIn, etc. This doesn't create an application.</p>
+                <p class="text-muted small mb-3">For candidates you've found outside Avants - referrals, LinkedIn, etc. This doesn't create an application.</p>
                 <label class="form-label fw-bold" style="font-size:0.85rem;">Upload a resume file (optional)</label>
                 <input type="file" class="form-control mb-3" id="scoreFileInput" accept=".pdf,.docx,.txt">
                 <label class="form-label fw-bold" style="font-size:0.85rem;">Or paste resume text</label>

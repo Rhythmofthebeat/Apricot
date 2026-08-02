@@ -265,7 +265,7 @@
 
     {% if not current_user.is_authenticated %}
     <div class="alert d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3" style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:14px 20px;">
-      <span style="color:#1e3a5f;font-size:0.95rem;"><i class="fas fa-lock me-2" style="color:#3b82f6;"></i><strong>Sign in to use this tool</strong> — it's free and takes less than a minute.</span>
+      <span style="color:#1e3a5f;font-size:0.95rem;"><i class="fas fa-lock me-2" style="color:#3b82f6;"></i><strong>Sign in to use this tool</strong> - it's free and takes less than a minute.</span>
       <div class="d-flex gap-2">
         <a href="{{ url_for('auth.login', next=request.path) }}" class="btn btn-primary btn-sm btn-rounded"><i class="fas fa-sign-in-alt me-1"></i>Sign In</a>
         <a href="{{ url_for('auth.sign_up', next=request.path) }}" class="btn btn-outline-primary btn-sm btn-rounded"><i class="fas fa-user-plus me-1"></i>Sign Up Free</a>
@@ -282,7 +282,7 @@
                 <div class="card-body position-relative">
                     <div id="loading-overlay" class="spinner-overlay" style="display: none;">
                         <div class="spinner"></div>
-                        <p class="fw-bold text-primary">Comparing resume ⏳ — please wait...</p>
+                        <p class="fw-bold text-primary">Comparing resume ⏳ - please wait...</p>
                         <p class="text-muted fst-italic">This may take 15–30 seconds...</p>
                     </div>
                     
@@ -392,7 +392,7 @@
                 </div>
             </div>
 
-            <!-- Resume Coach Chat — directly below the analysis text -->
+            <!-- Resume Coach Chat - directly below the analysis text -->
             <div class="card" id="chat-card">
                 <div class="card-header d-flex align-items-center justify-content-between">
                     <div class="d-flex align-items-center gap-2">
@@ -406,7 +406,7 @@
                         <div class="chat-message ai-msg">
                             <div class="chat-avatar ai"><i class="fas fa-robot"></i></div>
                             <div class="chat-bubble ai-bubble">
-                                👋 Hi! I'm your Resume Coach. Ask me anything — how to improve your resume,
+                                👋 Hi! I'm your Resume Coach. Ask me anything - how to improve your resume,
                                 what skills to add, how to rewrite bullet points, or how well you match this role.
                                 Run a job match above for personalised advice!
                             </div>
@@ -465,7 +465,7 @@
 
     </div><!-- /row g-4 -->
 
-    {# Always present — provides initial context; JS can override via updateChatContext() #}
+    {# Always present - provides initial context; JS can override via updateChatContext() #}
     <script type="application/json" id="resume-chat-data">{{ {"jobText": job_text or "", "analysis": result or ""} | tojson }}</script>
 
 </div><!-- /container-fluid -->
@@ -592,7 +592,7 @@
 
        
     });
-    // Safely remove junk entries — wrapped so an error here can't block restore
+    // Safely remove junk entries - wrapped so an error here can't block restore
     try {
         let h = JSON.parse(localStorage.getItem("analysisNotes")) || [];
         const before = h.length;
@@ -600,10 +600,10 @@
         if (h.length !== before) localStorage.setItem("analysisNotes", JSON.stringify(h));
     } catch(e) { /* ignore */ }
 
-    // Load saved-results list — wrapped so an error here can't block restore
+    // Load saved-results list - wrapped so an error here can't block restore
     try { loadHistory(); } catch(e) { /* ignore */ }
 
-    // AUTO SAVE — only when the server actually returned a result.
+    // AUTO SAVE - only when the server actually returned a result.
     try {
         const _d = document.getElementById('resume-chat-data');
         if (_d) {
@@ -612,7 +612,7 @@
         }
     } catch(e) { /* ignore */ }
 
-    // AUTO RESTORE — runs last, independently of everything above.
+    // AUTO RESTORE - runs last, independently of everything above.
     // If the server sent no results (refresh / direct navigation) restore the
     // most recent saved analysis from localStorage.
     try {
@@ -658,7 +658,7 @@
                     }, 250);
                 }
 
-                // Update chat context (best-effort — won't break restore if it fails)
+                // Update chat context (best-effort - won't break restore if it fails)
                 try {
                     if (typeof window.updateChatContext === 'function') {
                         const _tmp = document.createElement('div');
@@ -1000,7 +1000,7 @@ if (!exists) {
 
         } catch (err) {
             setTyping(false);
-            appendMessage('ai', 'Connection error — please try again.');
+            appendMessage('ai', 'Connection error - please try again.');
         }
 
         setInputLocked(false);
