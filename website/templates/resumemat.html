@@ -100,6 +100,14 @@
         animation: spin 1s linear infinite;
         margin-bottom: 15px;
     }
+
+    /* Left "Upload & Analyze" form fades out underneath the loading overlay
+       while a match is being generated, so it reads as disabled/busy. */
+    .form-fading {
+        opacity: 0.25;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
     
     @keyframes spin {
         to {
@@ -283,7 +291,7 @@
                     <div id="loading-overlay" class="spinner-overlay" style="display: none;">
                         <div class="spinner"></div>
                         <p class="fw-bold text-primary">Comparing resume ⏳ - please wait...</p>
-                        <p class="text-muted fst-italic">This may take 15–30 seconds...</p>
+                        <p class="text-muted fst-italic">This usually takes up to 15 seconds...</p>
                     </div>
                     
                     <div id="error-message" class="error-message"></div>
@@ -588,9 +596,8 @@
         
         errorMessage.style.display = 'none';
         overlay.style.display = 'flex';
+        form.classList.add('form-fading');
         form.querySelector('button').disabled = true;
-
-       
     });
     // Safely remove junk entries - wrapped so an error here can't block restore
     try {
