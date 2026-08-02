@@ -206,6 +206,17 @@
                     <a href="{{ url_for('employer.edit_job', job_id=job.id) }}" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-pen"></i>
                     </a>
+                    <form method="POST" action="{{ url_for('employer.toggle_job_status', job_id=job.id) }}">
+                        {% if job.status == 'open' %}
+                        <button type="submit" class="btn btn-outline-secondary btn-sm" title="Close job - stops new applications">
+                            <i class="fas fa-lock"></i>
+                        </button>
+                        {% else %}
+                        <button type="submit" class="btn btn-outline-success btn-sm" title="Reopen job">
+                            <i class="fas fa-lock-open"></i>
+                        </button>
+                        {% endif %}
+                    </form>
                     <form method="POST" action="{{ url_for('employer.delete_job', job_id=job.id) }}"
                           data-confirm-title="Delete this job posting?"
                           data-confirm-message="{% if applicant_counts.get(job.id, 0) > 0 %}This job has applicants, so it can't be deleted - close it instead to stop new applications while keeping candidate history.{% else %}This permanently removes the job posting. This can't be undone.{% endif %}"

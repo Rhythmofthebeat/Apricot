@@ -467,7 +467,11 @@ def edit_job(job_id):
         job.interview_length = interview_length
         job.interview_focus = request.form.get('interview_focus', '').strip() or None
         job.interview_questions = _parse_interview_questions(request.form.get('interview_questions', ''))
-        job.status = 'draft' if save_as_draft else 'open'
+        if save_as_draft:
+            job.status = 'draft'
+        else:
+            submitted_status = request.form.get('status', 'open')
+            job.status = submitted_status if submitted_status in ('open', 'closed') else 'open'
         job.salary_usd = int(salary_raw) if salary_raw.isdigit() else None
         job.salary_max_usd = int(salary_max_raw) if salary_max_raw.isdigit() else None
         job.pay_type = pay_type
@@ -493,6 +497,24 @@ def publish_job(job_id):
     job.status = 'open'
     db.session.commit()
     flash("Job published successfully.", "success")
+    return redirect(url_for('employer.dashboard'))
+
+
+@employer.route('/employer/jobs/<int:job_id>/toggle-status', methods=['POST'])
+@login_required
+@employer_required
+def toggle_job_status(job_id):
+    """One-click close/reopen - the alternative to delete() when a job has
+    applicants and can't be permanently removed."""
+    company = get_owned_company()
+    job = Job.query.get_or_404(job_id)
+    if job.company_id != company.id:
+        abort(403)
+    if job.status not in ('open', 'closed'):
+        abort(400)
+    job.status = 'closed' if job.status == 'open' else 'open'
+    db.session.commit()
+    flash(f"Job {'closed' if job.status == 'closed' else 'reopened'}.", "success")
     return redirect(url_for('employer.dashboard'))
 
 
