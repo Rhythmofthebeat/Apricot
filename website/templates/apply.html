@@ -281,6 +281,10 @@
 
                         <label class="form-label fw-bold">Pasted Profile Content</label>
                         <p class="text-muted small">LinkedIn doesn't let us pull this automatically. Paste your About, Experience, and Education sections here.</p>
+                        <div class="p-2 mb-2" style="background:var(--warning-soft); border:1px solid #fcd34d; border-radius:8px; font-size:0.8rem; color:#92400e; display:flex; gap:8px; align-items:flex-start;">
+                            <i class="fas fa-triangle-exclamation mt-1" style="color:var(--warning); flex-shrink:0;"></i>
+                            <span><strong>Review before you apply.</strong> This is a starting draft, not a fact-checker — you're responsible for everything on the generated resume. Use it at your own discretion. Falsified experience, credentials, or qualifications may result in account suspension.</span>
+                        </div>
                         <textarea class="form-control mb-2" id="profileText" rows="8" placeholder="Paste your About, Experience, and Education sections here..."></textarea>
 
                         <button type="button" id="generateBtn" class="btn btn-outline-primary btn-sm">
