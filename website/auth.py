@@ -481,12 +481,17 @@ def verify_email(token):
 
 @auth.route('/login/google')
 def login_google():
-    # Stash the intended role (only relevant for brand-new signups — see
-    # login_google_finish) so an employer choosing "Continue with Google"
-    # doesn't silently end up as a candidate.
-    role = request.args.get("role", "candidate")
-    session["oauth_role"] = role if role in ("candidate", "employer") else "candidate"
-    session["oauth_next"] = _safe_next(request.args.get("next"))
+    next_url = _safe_next(request.args.get("next"))
+
+    # Employers sign up with their company email/password only — Google gives
+    # no chance to collect a company name or verify a work domain up front,
+    # so a fresh employer account can't be created through this route.
+    if request.args.get("role") == "employer":
+        flash("Employer accounts sign up with a work email and password — Google sign-up is for candidates only.", "error")
+        return redirect(url_for("auth.sign_up", next=next_url) if next_url else url_for("auth.sign_up"))
+
+    session["oauth_role"] = "candidate"
+    session["oauth_next"] = next_url
 
     # Redirect user to Supabase Google OAuth
     res = supabase.auth.sign_in_with_oauth({

@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const companyGroup = document.getElementById("companyNameGroup");
     const companyInput = document.getElementById("companyName");
     const googleLink = document.getElementById("googleSignupLink");
+    const googleDivider = document.getElementById("googleDivider");
     const feeBlock = document.getElementById("employerFeeBlock");
     const feeCheck = document.getElementById("feeAgreementCheck");
 
@@ -21,9 +22,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (feeBlock) feeBlock.style.display = isEmployer ? "block" : "none";
         if (feeCheck) feeCheck.required = isEmployer;
         if (googleLink) {
-            let href = "/login/google?role=" + (isEmployer ? "employer" : "candidate");
-            if (nextParam) href += "&next=" + encodeURIComponent(nextParam);
-            googleLink.href = href;
+            // Employers sign up with a company email + password only — Google
+            // gives no chance to collect a company name up front.
+            googleLink.style.display = isEmployer ? "none" : "flex";
+            if (googleDivider) googleDivider.style.display = isEmployer ? "none" : "block";
+            if (!isEmployer) {
+                let href = "/login/google?role=candidate";
+                if (nextParam) href += "&next=" + encodeURIComponent(nextParam);
+                googleLink.href = href;
+            }
         }
         if (emailInput) emailInput.placeholder = isEmployer ? "you@company.com" : "your@email.com";
     }
@@ -176,7 +183,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <button type="submit" class="btn btn-primary w-100" style="padding:11px;">Create account</button>
         </form>
 
-        <div class="divider-line">or</div>
+        <div class="divider-line" id="googleDivider">or</div>
 
         <a id="googleSignupLink" href="/login/google?role=candidate" class="google-btn">
             <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" style="width:18px;height:18px;">
