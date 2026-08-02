@@ -190,12 +190,8 @@
                         <button id="saveExitBtn" class="btn btn-outline-secondary btn-sm">
                             <i class="fas fa-floppy-disk me-1"></i> Save &amp; Exit
                         </button>
-                        <button id="wrapUpBtn" class="btn btn-outline-secondary btn-sm"
-                                data-bs-toggle="modal" data-bs-target="#wrapUpModal">
-                            End Interview Early
-                        </button>
                     </div>
-                    <p class="text-muted mt-2" style="font-size:0.72rem;">Save & Exit keeps your answers so far — come back anytime to continue. End Interview Early submits a final verdict now.</p>
+                    <p class="text-muted mt-2" style="font-size:0.72rem;">Save & Exit keeps your answers so far — come back anytime to continue.</p>
                 </div>
             </div>
 
@@ -239,30 +235,6 @@
     </div>
 </div>
 
-<!-- Wrap-up confirmation modal -->
-<div class="modal fade" id="wrapUpModal" tabindex="-1" aria-labelledby="wrapUpModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content" style="border-radius:var(--radius); border:1px solid var(--border);">
-            <div class="modal-body p-4 text-center">
-                <div style="width:52px;height:52px;border-radius:50%;background:var(--warning-soft);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
-                    <i class="fas fa-triangle-exclamation" style="color:var(--warning);font-size:1.3rem;"></i>
-                </div>
-                <h5 class="fw-bold mb-2">End interview early?</h5>
-                <p class="text-muted small mb-1">Your application will be <strong>submitted immediately</strong> with the answers you've given so far.</p>
-                <p class="text-muted small mb-4">This cannot be undone. You won't be able to continue the interview after confirming.</p>
-                <div class="d-flex gap-2 justify-content-center">
-                    <button class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                        <i class="fas fa-arrow-left me-1"></i> Go back
-                    </button>
-                    <button class="btn btn-danger" id="confirmWrapUpBtn">
-                        <i class="fas fa-check me-1"></i> Yes, submit now
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 {% endblock %}
 
 {% block scripts %}
@@ -274,7 +246,6 @@ const savedSession = {{ saved_session|tojson if saved_session else 'null' }};
 let history         = [];
 let currentQuestion = null;
 let concluded       = false;
-let wrappingUp      = false;
 let mediaRecorder   = null;
 let audioChunks     = [];
 let isRecording     = false;
@@ -355,14 +326,12 @@ function markComplete() {
 
 function lockRecording(msg) {
     recordBtn.disabled = true;
-    document.getElementById("wrapUpBtn").disabled = true;
     recordStatus.textContent = msg || "Wait for the question to finish…";
 }
 
 function unlockRecording() {
     if (concluded) return;
     recordBtn.disabled = false;
-    document.getElementById("wrapUpBtn").disabled = false;
     recordStatus.textContent = "Tap to record your answer";
 }
 
@@ -425,10 +394,10 @@ function showVerdict(replyText) {
     });
 }
 
-async function sendTurn(audioBlob, wrapUp = false) {
+async function sendTurn(audioBlob) {
     const formData = new FormData();
     formData.append("history", JSON.stringify(history));
-    formData.append("wrap_up", wrapUp ? "true" : "false");
+    formData.append("wrap_up", "false");
     if (audioBlob) formData.append("answer_audio", audioBlob, "answer.webm");
 
     const response = await fetch(chatUrl, { method: "POST", body: formData });
@@ -452,7 +421,7 @@ async function startInterview() {
     }
 
     try {
-        const result = await sendTurn(null, false);
+        const result = await sendTurn(null);
         setQuestion(result.reply, result.reply_audio_url);
         history.push({ role: "assistant", content: result.reply });
         recordSection.style.display = "block";
@@ -462,7 +431,7 @@ async function startInterview() {
 }
 
 document.getElementById("saveExitBtn").addEventListener("click", async () => {
-    if (concluded || wrappingUp) return;
+    if (concluded) return;
     const btn = document.getElementById("saveExitBtn");
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
@@ -497,9 +466,7 @@ async function setupRecorder() {
 }
 
 async function onRecordingStop() {
-    // If wrap-up was triggered mid-recording, the wrapUpBtn handler owns the
-    // final turn — discard this audio to avoid a double submission.
-    if (wrappingUp || concluded) {
+    if (concluded) {
         audioChunks = [];
         return;
     }
@@ -510,7 +477,7 @@ async function onRecordingStop() {
     recordStatus.textContent = "Transcribing your answer...";
 
     try {
-        const result = await sendTurn(blob, false);
+        const result = await sendTurn(blob);
         history.push({ role: "user", content: result.transcribed_answer });
         history.push({ role: "assistant", content: result.reply });
 
@@ -548,38 +515,6 @@ recordBtn.addEventListener("click", async () => {
     }
 });
 
-// wrapUpBtn opens the confirmation modal (via data-bs-toggle on the button itself).
-// The actual wrap-up logic runs only when the user confirms.
-document.getElementById("confirmWrapUpBtn").addEventListener("click", async () => {
-    if (concluded || wrappingUp) return;
-
-    // Dismiss the modal first
-    bootstrap.Modal.getInstance(document.getElementById("wrapUpModal")).hide();
-
-    wrappingUp = true;
-    if (isRecording) {
-        mediaRecorder.stop();
-        isRecording = false;
-        recordBtn.classList.remove("recording");
-        recordBtn.innerHTML = '<i class="fas fa-microphone"></i>';
-    }
-    recordBtn.disabled = true;
-    document.getElementById("wrapUpBtn").disabled = true;
-    recordStatus.textContent = "Submitting your interview…";
-
-    try {
-        const result = await sendTurn(null, true);
-        history.push({ role: "assistant", content: result.reply });
-        concluded = true;
-        showVerdict(result.reply);
-    } catch (e) {
-        wrappingUp = false;
-        recordStatus.textContent = e.message;
-        recordBtn.disabled = false;
-        document.getElementById("wrapUpBtn").disabled = false;
-    }
-});
-
 async function beginInterview(withCamera) {
     const btn = document.getElementById('startInterviewBtn');
     const skipBtn = document.getElementById('skipCameraBtn');
@@ -611,13 +546,13 @@ async function beginInterview(withCamera) {
     startInterview();
 }
 
-// Auto-submit via sendBeacon when the page is closed mid-interview
+// Auto-save via sendBeacon when the page is closed mid-interview — Save &
+// Exit is the only way an interview ends early, so this must never
+// force-submit a verdict.
 window.addEventListener("beforeunload", () => {
     if (!concluded && interviewStarted && history.length > 0) {
-        const fd = new FormData();
-        fd.append("history", JSON.stringify(history));
-        fd.append("wrap_up", "true");
-        navigator.sendBeacon(chatUrl, fd);
+        const blob = new Blob([JSON.stringify({ history })], { type: "application/json" });
+        navigator.sendBeacon(saveSessionUrl, blob);
     }
     if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
 });

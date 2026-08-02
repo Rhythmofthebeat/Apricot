@@ -263,7 +263,7 @@
                         {% elif app.status == 'applied' and not app.interview_transcript %}
                             <a href="{{ url_for('candidate.interview', job_id=app.job_id, application_id=app.id) }}"
                                class="btn btn-primary btn-sm">
-                                <i class="fas fa-microphone me-1"></i> Start Interview
+                                <i class="fas fa-microphone me-1"></i> {{ 'Resume Interview' if app.interview_saved_session else 'Start Interview' }}
                             </a>
                         {% endif %}
                     {% endif %}
