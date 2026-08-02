@@ -619,7 +619,10 @@
         const _d = document.getElementById('resume-chat-data');
         if (_d) {
             const _ctx = JSON.parse(_d.textContent);
-            if (_ctx.analysis && _ctx.analysis.trim().length > 10) autoSaveResult();
+            if (_ctx.analysis && _ctx.analysis.trim().length > 10) {
+                const _newId = autoSaveResult();
+                if (_newId && typeof window.setActiveMatchId === 'function') window.setActiveMatchId(_newId);
+            }
         }
     } catch(e) { /* ignore */ }
 
@@ -674,7 +677,7 @@
                     if (typeof window.updateChatContext === 'function') {
                         const _tmp = document.createElement('div');
                         _tmp.innerHTML = _item.analysis;
-                        window.updateChatContext(_item.jobText || '', (_tmp.textContent || '').trim());
+                        window.updateChatContext(_item.jobText || '', (_tmp.textContent || '').trim(), _item.conversation, _item.id);
                     }
                 } catch(_e) { /* ignore chat context errors */ }
             }
@@ -812,7 +815,7 @@ circle.setAttribute("stroke", color);
             const _chatTmp = document.createElement('div');
             _chatTmp.innerHTML = item.analysis || '';
             const _plainAnalysis = (_chatTmp.textContent || _chatTmp.innerText || '').trim();
-            window.updateChatContext(item.jobText || '', _plainAnalysis);
+            window.updateChatContext(item.jobText || '', _plainAnalysis, item.conversation, item.id);
         }
         // Scroll to chat so user notices it updated
         const chatCard = document.getElementById('chat-card');
@@ -853,7 +856,7 @@ const circle = document.querySelector(".circle");
 if (!analysisBox || !percentEl || !jobTextarea || !circle) return;
 
 const analysis = analysisBox.innerHTML.trim();
-if (analysis.length < 20) return;
+if (analysis.length < 20) return null;
 
 const jobText = jobTextarea.value;
 const score = parseInt(percentEl.textContent) || 0;
@@ -862,32 +865,33 @@ const circleColor = circle.getAttribute("stroke");
 let history =
     JSON.parse(localStorage.getItem("analysisNotes")) || [];
 
-const exists = history.some(item =>
+const existing = history.find(item =>
     item.analysis === analysis &&
     item.jobText === jobText
 );
+if (existing) return existing.id;
 
-if (!exists) {
+const newId = Date.now();
+history.unshift({
+    id: newId,
+    title: "Resume Match",
+    jobText: jobText,
+    score: score,
+    analysis: analysis,
+    circleColor: circleColor,
+    conversation: [],
+    time: new Date().toLocaleString()
+});
 
-    history.unshift({
-        id: Date.now(),
-        title: "Resume Match",
-        jobText: jobText,
-        score: score,
-        analysis: analysis,
-        circleColor: circleColor,
-        time: new Date().toLocaleString()
-    });
+history = history.slice(0, 20);
 
-    history = history.slice(0, 20);
+localStorage.setItem(
+    "analysisNotes",
+    JSON.stringify(history)
+);
 
-    localStorage.setItem(
-        "analysisNotes",
-        JSON.stringify(history)
-    );
-
-    loadHistory();
-}
+loadHistory();
+return newId;
 }
 
 
@@ -916,25 +920,52 @@ if (!exists) {
 
     const conversationHistory = [];   // [{role, content}, …]
 
-    // ── context switch (called by "View" in history panel) ────
-    window.updateChatContext = function (jobText, analysis) {
-        chatJobText  = jobText;
-        chatAnalysis = analysis;
+    // Which saved match (analysisNotes entry id) new chat messages persist
+    // into. Set whenever a fresh match is auto-saved, or a saved match is
+    // opened via "View" / auto-restore.
+    let activeMatchId = null;
+    window.setActiveMatchId = function (id) { activeMatchId = id; };
 
-        // Clear conversation history
-        conversationHistory.length = 0;
+    // ── context switch (called on fresh match, "View", and auto-restore) ──
+    window.updateChatContext = function (jobText, analysis, conversation, matchId) {
+        chatJobText   = jobText;
+        chatAnalysis  = analysis;
+        activeMatchId = matchId ?? null;
 
         // Remove all bubbles except the typing indicator
         while (messagesEl.firstChild && messagesEl.firstChild !== typingEl) {
             messagesEl.removeChild(messagesEl.firstChild);
         }
 
-        // New greeting
-        appendMessage('ai',
-            "I've loaded a saved analysis. What would you like to improve on your resume for this role? " +
-            "Ask me about missing skills, experience gaps, formatting, or anything else."
-        );
+        conversationHistory.length = 0;
+
+        if (Array.isArray(conversation) && conversation.length > 0) {
+            // Replay the saved conversation for this match instead of
+            // resetting to a fresh greeting.
+            conversation.forEach(msg => {
+                if (!msg || !msg.content) return;
+                appendMessage(msg.role === 'user' ? 'user' : 'ai', msg.content);
+                conversationHistory.push({ role: msg.role, content: msg.content });
+            });
+        } else {
+            appendMessage('ai',
+                "I've loaded a saved analysis. What would you like to improve on your resume for this role? " +
+                "Ask me about missing skills, experience gaps, formatting, or anything else."
+            );
+        }
     };
+
+    // Persist the current conversation onto its match's saved entry, if any.
+    function persistConversation() {
+        if (activeMatchId == null) return;
+        try {
+            const history = JSON.parse(localStorage.getItem("analysisNotes")) || [];
+            const idx = history.findIndex(h => h.id === activeMatchId);
+            if (idx === -1) return;
+            history[idx].conversation = conversationHistory.slice(-40);
+            localStorage.setItem("analysisNotes", JSON.stringify(history));
+        } catch (e) { /* best-effort - never block chat on a storage error */ }
+    }
 
     // ── helpers ───────────────────────────────────────────────
     function escapeHtml(str) {
@@ -1008,6 +1039,7 @@ if (!exists) {
             const reply = data.reply || 'Sorry, something went wrong. Please try again.';
             appendMessage('ai', reply);
             conversationHistory.push({ role: 'assistant', content: reply });
+            persistConversation();
 
         } catch (err) {
             setTyping(false);
