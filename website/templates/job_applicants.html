@@ -226,7 +226,11 @@
                     {% endif %}
                 {% endif %}
                 {% if app.status == 'hired' %}
-                    {% if app.fee_paid %}
+                    {% if app.hire_pay_type == 'hourly' and app.hire_engagement_ended_at %}
+                        <span class="badge-status applied"><i class="fas fa-circle-stop me-1"></i>Billing ended</span>
+                    {% elif app.hire_pay_type == 'hourly' and app.fee_paid %}
+                        <span class="badge-status hired" title="Bills monthly for as long as the engagement stays active"><i class="fas fa-rotate me-1"></i>Billing active</span>
+                    {% elif app.fee_paid %}
                         <span class="badge-status hired"><i class="fas fa-circle-check me-1"></i>Fee Paid</span>
                     {% elif app.stripe_payment_link %}
                         <span class="badge-status applied"><i class="fas fa-clock me-1"></i>Fee Pending</span>
@@ -356,6 +360,21 @@
                         {% endif %}
                     </div>
                 </form>
+
+                {% if app.status == 'hired' and app.hire_pay_type == 'hourly' and app.hire_billing_subscription_id %}
+                    {% if app.hire_engagement_ended_at %}
+                    <span class="text-muted" style="font-size:0.75rem;"><i class="fas fa-circle-check me-1"></i>Engagement ended - billing stopped</span>
+                    {% else %}
+                    <form method="POST" action="{{ url_for('employer.end_hourly_engagement', application_id=app.id) }}"
+                          data-confirm-title="End this engagement?"
+                          data-confirm-message="This cancels monthly placement-fee billing for {{ app.candidate.first_name or 'this candidate' }} going forward. Use this once the hourly engagement has actually ended - it can't be undone."
+                          data-confirm-btn="Yes, end billing">
+                        <button type="submit" class="btn btn-outline-secondary btn-sm" title="Stop monthly billing - the engagement has ended">
+                            <i class="fas fa-circle-stop me-1"></i> End Engagement
+                        </button>
+                    </form>
+                    {% endif %}
+                {% endif %}
                 {% endif %}
                 <button class="btn btn-outline-primary btn-sm" onclick="toggleSchedule({{ app.id }}, 'virtual', event)">
                     <i class="fas fa-video me-1"></i> Video Call

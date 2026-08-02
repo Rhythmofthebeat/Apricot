@@ -229,6 +229,11 @@ class Application(db.Model):
     hire_evidence_filename = db.Column(db.String(200))  # optional offer-letter/screenshot upload
     fee_paid = db.Column(db.Boolean, nullable=False, default=False)
     stripe_payment_link = db.Column(db.String(500))  # Stripe Payment Link URL sent to employer on hire
+    # Hourly hires bill monthly for as long as the engagement actually runs,
+    # instead of one lump sum assuming a full 2,080-hour year up front -
+    # stripe_payment_link above is a subscription-mode link in this case.
+    hire_billing_subscription_id = db.Column(db.String(100))
+    hire_engagement_ended_at = db.Column(db.DateTime(timezone=True))  # set when the employer stops billing
     employer_notes = db.Column(db.Text)  # private notes visible only to employer
     withdrawn = db.Column(db.Boolean, nullable=False, default=False)
     candidate_feedback = db.Column(db.Text)  # employer-approved AI feedback sent to candidate on rejection

@@ -3,6 +3,8 @@ import logging
 import os
 import secrets
 
+from sqlalchemy.sql import func
+
 logger = logging.getLogger(__name__)
 
 import stripe
@@ -174,24 +176,53 @@ def is_company_owner():
 def send_hire_fee_invoice(application, job, company, candidate, employer_user):
     """Create the Stripe placement-fee payment link and invoice the employer.
     Only called once the candidate has confirmed the hire - see candidate.confirm_hire."""
+    hire_salary = application.hire_salary_usd or job.salary_usd
+    hire_pay_type = application.hire_pay_type or job.pay_type
+    is_hourly = hire_pay_type == 'hourly'
+
     payment_link_url = None
     if not application.stripe_payment_link:
-        payment_link_url = _create_stripe_payment_link(application, job, company, candidate)
+        payment_link_url = (
+            _create_stripe_subscription_link(application, job, company, candidate) if is_hourly
+            else _create_stripe_payment_link(application, job, company, candidate)
+        )
         if payment_link_url:
             application.stripe_payment_link = payment_link_url
             db.session.commit()
 
-    hire_salary = application.hire_salary_usd or job.salary_usd
-    hire_pay_type = application.hire_pay_type or job.pay_type
-
     basis_amount, fee_percent = _placement_fee_basis(application, job)
     fee_amount = int(basis_amount * fee_percent / 100) if basis_amount else None
+    monthly_fee_amount = int(fee_amount / 12) if is_hourly and fee_amount else None
     basis_label = (
         f"annualized rate of ${basis_amount:,}/yr (${hire_salary:,}/hr x {STANDARD_ANNUAL_HOURS:,} hrs)"
-        if hire_pay_type == 'hourly' else f"first-year compensation of ${basis_amount:,}"
+        if is_hourly else f"first-year compensation of ${basis_amount:,}"
     )
     try:
-        if payment_link_url and fee_amount:
+        if payment_link_url and fee_amount and is_hourly:
+            send_branded_email(
+                to_email=employer_user.email,
+                subject=f"Placement fee billing set up - {candidate.first_name} / {job.title}",
+                heading="Monthly placement fee billing",
+                body_html=(
+                    f"<strong>{candidate.first_name}</strong> has confirmed their hire for "
+                    f"<strong>{job.title}</strong> through Avants AI.<br><br>"
+                    f"Since this is an hourly role, the placement fee bills monthly for as long as the "
+                    f"engagement is active - <strong>${monthly_fee_amount:,}/month</strong> "
+                    f"({fee_percent}% of the {basis_label}, split across 12 months), rather than one lump sum. "
+                    f"Billing stops automatically once you mark the engagement ended on your dashboard.<br><br>"
+                    f"Click below to set up billing securely via Stripe."
+                ),
+                plain_text=(
+                    f"{candidate.first_name} has confirmed their hire for {job.title} through Avants AI.\n\n"
+                    f"Since this is an hourly role, the placement fee bills monthly for as long as the "
+                    f"engagement is active: ${monthly_fee_amount:,}/month ({fee_percent}% of the {basis_label}, "
+                    f"split across 12 months). Billing stops once you mark the engagement ended on your dashboard.\n"
+                    f"Set up billing here: {payment_link_url}"
+                ),
+                cta_label="Set Up Monthly Billing",
+                cta_url=payment_link_url,
+            )
+        elif payment_link_url and fee_amount:
             send_branded_email(
                 to_email=employer_user.email,
                 subject=f"Placement fee invoice - {candidate.first_name} / {job.title}",
@@ -237,6 +268,9 @@ def send_hire_fee_invoice(application, job, company, candidate, employer_user):
 
 
 def _create_stripe_payment_link(application, job, company, candidate):
+    """One-time placement fee for salaried/monthly/stipend/contract hires.
+    Hourly hires use _create_stripe_subscription_link instead - see there
+    for why."""
     stripe.api_key = current_app.config.get("STRIPE_SECRET_KEY")
     basis_amount, fee_percent = _placement_fee_basis(application, job)
     if not stripe.api_key or not basis_amount:
@@ -258,6 +292,48 @@ def _create_stripe_payment_link(application, job, company, candidate):
         return link.url
     except Exception as e:
         print("Stripe payment link creation failed:", e)
+        return None
+
+
+def _create_stripe_subscription_link(application, job, company, candidate):
+    """Recurring monthly placement fee for hourly hires.
+
+    The fee basis is the hourly rate annualized to a full 2,080-hour year
+    (see _placement_fee_basis), but an hourly engagement might only last a
+    few weeks - charging the full annualized fee up front the moment
+    someone's hired would bill the employer for a full year of work that
+    may never happen. Instead this bills 1/12th of that annualized fee
+    every month, for as long as the engagement is actually active, so total
+    revenue tracks actual engagement length instead of a one-time guess.
+    Stops the moment the employer marks the engagement ended - see
+    employer.end_hourly_engagement.
+    """
+    stripe.api_key = current_app.config.get("STRIPE_SECRET_KEY")
+    basis_amount, fee_percent = _placement_fee_basis(application, job)
+    if not stripe.api_key or not basis_amount:
+        return None
+    monthly_fee_cents = int(basis_amount * fee_percent / 100 / 12 * 100)
+    if monthly_fee_cents <= 0:
+        return None
+    try:
+        product = stripe.Product.create(
+            name=f"Avants AI Placement Fee (monthly) - {job.title} at {company.name}",
+            metadata={"application_id": str(application.id)},
+        )
+        price = stripe.Price.create(
+            product=product.id,
+            unit_amount=monthly_fee_cents,
+            currency="usd",
+            recurring={"interval": "month"},
+        )
+        link = stripe.PaymentLink.create(
+            line_items=[{"price": price.id, "quantity": 1}],
+            metadata={"application_id": str(application.id)},
+            customer_creation="always",
+        )
+        return link.url
+    except Exception as e:
+        print("Stripe subscription link creation failed:", e)
         return None
 
 
@@ -896,6 +972,40 @@ def hire_evidence(application_id):
     if not application.hire_evidence_filename:
         abort(404)
     return send_from_directory(_hire_evidence_dir(), application.hire_evidence_filename)
+
+
+@employer.route('/employer/applications/<int:application_id>/end-hourly-engagement', methods=['POST'])
+@login_required
+@employer_required
+def end_hourly_engagement(application_id):
+    """Cancels the recurring monthly placement-fee subscription for an
+    hourly hire once the engagement actually ends, so billing stops instead
+    of continuing to charge for work that isn't happening anymore."""
+    company = get_owned_company()
+    application = Application.query.get_or_404(application_id)
+    job = Job.query.get_or_404(application.job_id)
+    if job.company_id != company.id:
+        abort(403)
+
+    if not application.hire_billing_subscription_id:
+        flash("No active billing subscription found for this hire.", "error")
+        return redirect(url_for('employer.applicants', job_id=job.id))
+    if application.hire_engagement_ended_at:
+        flash("This engagement is already marked as ended.", "info")
+        return redirect(url_for('employer.applicants', job_id=job.id))
+
+    stripe.api_key = current_app.config.get("STRIPE_SECRET_KEY")
+    try:
+        stripe.Subscription.cancel(application.hire_billing_subscription_id)
+    except Exception as e:
+        logger.error(f"Failed to cancel Stripe subscription {application.hire_billing_subscription_id}: {e}")
+        flash("Couldn't reach Stripe to cancel billing. Please try again or cancel it directly in your Stripe dashboard.", "error")
+        return redirect(url_for('employer.applicants', job_id=job.id))
+
+    application.hire_engagement_ended_at = func.now()
+    db.session.commit()
+    flash("Engagement marked as ended - monthly billing has been stopped.", "success")
+    return redirect(url_for('employer.applicants', job_id=job.id))
 
 
 @employer.route('/employer/applications/<int:application_id>/send-feedback', methods=['POST'])

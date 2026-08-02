@@ -113,6 +113,9 @@ def _run_migrations(db):
         "ALTER TABLE application ADD COLUMN hire_pay_type VARCHAR(20)",
         "ALTER TABLE application ADD COLUMN hire_salary_disputed BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE application ADD COLUMN hire_evidence_filename VARCHAR(200)",
+        # application - recurring monthly billing for hourly hires, instead of one lump sum
+        "ALTER TABLE application ADD COLUMN hire_billing_subscription_id VARCHAR(100)",
+        "ALTER TABLE application ADD COLUMN hire_engagement_ended_at TIMESTAMP WITH TIME ZONE",
     ]
     for stmt in new_columns:
         try:

@@ -2,6 +2,7 @@ import stripe
 from flask import Blueprint, render_template, redirect, url_for, request, current_app, Response, abort
 from flask_login import current_user, login_required
 from datetime import timezone
+from sqlalchemy.sql import func
 
 from . import db
 from .models import Application, Job, User, Company, MeetingRoom
@@ -95,8 +96,27 @@ def stripe_webhook():
         app_id = metadata["application_id"] if "application_id" in metadata else None
         if app_id:
             application = Application.query.get(int(app_id))
-            if application and not application.fee_paid:
-                application.fee_paid = True
+            if application:
+                if not application.fee_paid:
+                    application.fee_paid = True
+                # Hourly hires check out in subscription mode - capture the
+                # subscription id so employer.end_hourly_engagement can
+                # cancel it later when the engagement actually ends.
+                subscription_id = session.get("subscription")
+                if subscription_id and not application.hire_billing_subscription_id:
+                    application.hire_billing_subscription_id = subscription_id
+                db.session.commit()
+
+    elif event["type"] == "customer.subscription.deleted":
+        # Covers cancellations that happen directly in Stripe (not via the
+        # "End Engagement" button), so the app's state doesn't drift out of
+        # sync with what's actually being billed.
+        subscription = event["data"]["object"]
+        sub_id = subscription.get("id")
+        if sub_id:
+            application = Application.query.filter_by(hire_billing_subscription_id=sub_id).first()
+            if application and not application.hire_engagement_ended_at:
+                application.hire_engagement_ended_at = func.now()
                 db.session.commit()
 
     return "", 200
