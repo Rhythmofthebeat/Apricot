@@ -756,7 +756,19 @@ def update_status(application_id):
         abort(403)
 
     new_status = request.form.get('status')
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
     if new_status in ('applied', 'interviewing', 'rejected', 'hired'):
+        # Hired/rejected are final decisions - the employer can't walk one
+        # back to a different status later. (Resubmitting the SAME status is
+        # still allowed - that's how a disputed hire salary gets corrected.)
+        if application.status in ('hired', 'rejected') and new_status != application.status:
+            message = f"This application was already marked \"{application.status}\" - that decision is final and can't be changed."
+            if is_ajax:
+                return jsonify({"status": "error", "error": message}), 400
+            flash(message, "error")
+            return redirect(url_for('employer.applicants', job_id=job.id))
+
         if new_status == 'hired':
             # The placement fee is based on this figure, not the job posting's
             # advertised salary - require it up front rather than invoicing
@@ -842,7 +854,6 @@ def update_status(application_id):
             except Exception as e:
                 print(f"Status email send failed ({new_status}):", e)
         # For rejections, if the caller wants JSON (AJAX), return a feedback draft
-        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         if new_status == 'rejected' and status_changed and is_ajax:
             try:
                 draft = generate_rejection_feedback(

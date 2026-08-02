@@ -306,15 +306,32 @@
                     <i class="fas fa-xmark"></i> Reject
                 </button>
                 {% endif %}
+
+                {% if app.status == 'rejected' %}
+                <!-- Final decision - not editable. Backend also refuses to change status away from rejected. -->
+                <span class="badge-status rejected" style="font-size:0.8rem;padding:6px 12px;">
+                    <i class="fas fa-lock me-1"></i>Rejected - final decision
+                </span>
+
+                {% else %}
                 <form method="POST" action="{{ url_for('employer.update_status', application_id=app.id) }}" class="d-flex gap-1 flex-wrap align-items-start"
                       enctype="multipart/form-data" onsubmit="return confirmReject(this)">
+                    {% if app.status == 'hired' %}
+                    <!-- Locked to "hired" - the decision itself can't be reversed, but the
+                         compensation figure below can still be corrected (e.g. after a candidate dispute). -->
+                    <input type="hidden" name="status" value="hired">
+                    <span class="badge-status hired" style="font-size:0.8rem;padding:6px 12px;">
+                        <i class="fas fa-lock me-1"></i>Hired - final decision
+                    </span>
+                    {% else %}
                     <select name="status" class="form-select form-select-sm" style="min-width:130px;" onchange="toggleHireSalaryFields({{ app.id }}, this.value)">
                         <option value="applied"      {{ 'selected' if app.status == 'applied' }}>Applied</option>
                         <option value="interviewing" {{ 'selected' if app.status == 'interviewing' }}>Interviewing</option>
                         <option value="hired"        {{ 'selected' if app.status == 'hired' }}>Hired ✓</option>
                         <option value="rejected"     {{ 'selected' if app.status == 'rejected' }}>Rejected</option>
                     </select>
-                    <button type="submit" class="btn btn-primary btn-sm">Update</button>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary btn-sm">{{ 'Update Compensation' if app.status == 'hired' else 'Update' }}</button>
 
                     <div id="hireSalaryFields-{{ app.id }}" class="d-flex gap-1 flex-wrap align-items-center w-100 mt-1" style="display:{{ 'flex' if app.status == 'hired' else 'none' }} !important;">
                         <span class="text-muted" style="font-size:0.72rem; width:100%;">Actual hire compensation - this is what the placement fee is based on, not the job posting:</span>
@@ -339,6 +356,7 @@
                         {% endif %}
                     </div>
                 </form>
+                {% endif %}
                 <button class="btn btn-outline-primary btn-sm" onclick="toggleSchedule({{ app.id }}, 'virtual', event)">
                     <i class="fas fa-video me-1"></i> Video Call
                 </button>
@@ -895,22 +913,53 @@ function toggleInAppMeeting(appId, event) {
     }
 }
 
-async function confirmReject(form) {
-    const sel = form.querySelector('select[name="status"]');
+function confirmAndReject(appId, actionUrl, candidateName, formData) {
+    // Rejection is a final decision the employer can't walk back later, so
+    // it needs a deliberate confirmation before it fires - same modal used
+    // for "Hired," driven manually here since this path isn't always a
+    // native form submit (the quick one-click Reject button has no form).
+    const modalEl = document.getElementById('confirmActionModal');
+    document.getElementById('confirmActionTitle').textContent = 'Reject this candidate?';
+    document.getElementById('confirmActionMessage').textContent =
+        `This marks ${candidateName} as rejected. This is final and can't be changed afterward. Continue?`;
+    const btn = document.getElementById('confirmActionBtn');
+    btn.textContent = 'Yes, reject';
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    btn.onclick = () => { modal.hide(); rejectApplication(appId, actionUrl, candidateName, formData); };
+    modal.show();
+}
 
-    if (sel && sel.value === 'hired') {
-        // Marking someone hired kicks off the placement fee process, so it
-        // needs a deliberate second confirmation (via the shared modal in
-        // base.html) on top of picking "Hired" and clicking Update.
+async function confirmReject(form) {
+    // "hired" now submits either via a live <select> (a fresh transition
+    // into Hired) or a locked hidden input (resubmitting to correct the
+    // compensation figure on an already-hired application) - both need to
+    // read from whichever is actually present.
+    const statusField = form.querySelector('[name="status"]');
+    const statusValue = statusField ? statusField.value : null;
+    const isLockedHired = statusField && statusField.type === 'hidden';
+
+    if (statusValue === 'hired') {
         const card = form.closest('.pipeline-card');
         const candidateName = card?.dataset?.name || 'this candidate';
         const interviewPending = card && card.dataset.interviewPending === '1';
 
-        form.dataset.confirmTitle = 'Mark as hired?';
-        form.dataset.confirmMessage = interviewPending
-            ? `${candidateName} hasn't completed the AI interview yet, so you'd be marking them hired without that data. This starts the placement fee process once they confirm. Continue?`
-            : `This marks ${candidateName} as hired and starts the placement fee process once they confirm. Continue?`;
-        form.dataset.confirmBtn = 'Yes, mark as hired';
+        if (isLockedHired) {
+            // Correcting compensation on an already-final hire - lighter prompt,
+            // the hire decision itself isn't in question here.
+            form.dataset.confirmTitle = 'Update hire compensation?';
+            form.dataset.confirmMessage = `This updates the compensation figure on file for ${candidateName}'s hire, which the placement fee is based on. Continue?`;
+            form.dataset.confirmBtn = 'Yes, update';
+        } else {
+            // Marking someone hired kicks off the placement fee process, so it
+            // needs a deliberate second confirmation (via the shared modal in
+            // base.html) on top of picking "Hired" and clicking Update. This is
+            // also a final decision - it can't be reversed afterward.
+            form.dataset.confirmTitle = 'Mark as hired?';
+            form.dataset.confirmMessage = interviewPending
+                ? `${candidateName} hasn't completed the AI interview yet, so you'd be marking them hired without that data. This is a final decision and starts the placement fee process once they confirm. Continue?`
+                : `This marks ${candidateName} as hired - a final decision that can't be changed afterward - and starts the placement fee process once they confirm. Continue?`;
+            form.dataset.confirmBtn = 'Yes, mark as hired';
+        }
         return true; // shared submit listener picks up data-confirm-title and shows the modal
     }
 
@@ -920,14 +969,14 @@ async function confirmReject(form) {
     delete form.dataset.confirmMessage;
     delete form.dataset.confirmBtn;
 
-    if (sel && sel.value === 'rejected') {
-        // Intercept: submit via AJAX to get feedback draft, then show modal
+    if (statusValue === 'rejected') {
+        // Intercept: confirm first, then submit via AJAX to get a feedback draft
         const evt = window.event;
         if (evt) evt.preventDefault();
 
         const appId = form.action.match(/\/(\d+)\/status/)?.[1];
         const candidateName = form.closest('.pipeline-card')?.dataset?.name || 'this candidate';
-        await rejectApplication(appId, form.action, candidateName, new FormData(form));
+        confirmAndReject(appId, form.action, candidateName, new FormData(form));
         return false;
     }
     return true;
@@ -943,6 +992,11 @@ async function rejectApplication(appId, actionUrl, candidateName, formData) {
         headers: { 'X-Requested-With': 'XMLHttpRequest' },
     });
     const data = await resp.json();
+
+    if (!resp.ok) {
+        alert(data.error || "Couldn't reject this application. Please refresh and try again.");
+        return;
+    }
 
     // Update the card's badge immediately
     const card = document.querySelector(`.pipeline-card[data-app-id="${appId}"]`);
@@ -964,7 +1018,7 @@ function quickReject(appId, event) {
     const card = document.querySelector(`.pipeline-card[data-app-id="${appId}"]`);
     const candidateName = card?.dataset?.name || 'this candidate';
     const actionUrl = `/employer/applications/${appId}/status`;
-    rejectApplication(appId, actionUrl, candidateName);
+    confirmAndReject(appId, actionUrl, candidateName);
 }
 
 async function quickAdvance(appId, event) {
