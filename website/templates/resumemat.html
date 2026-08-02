@@ -296,7 +296,7 @@
                     
                     <div id="error-message" class="error-message"></div>
                     
-                    <form method="POST" enctype="multipart/form-data" action="/resume-jobmatch">
+                    <form id="resumeMatchForm" method="POST" enctype="multipart/form-data" action="/resume-jobmatch">
                         <div class="mb-4">
                             <label class="form-label fw-bold">Job Description</label>
                             <textarea class="form-control" name="job_req" placeholder="Paste the job description here..." rows="8">{{ job_text or '' }}</textarea>
@@ -537,7 +537,11 @@
     const fileNameDisplay = document.getElementById('file-name');
     const errorMessage = document.getElementById('error-message');
     const overlay = document.getElementById('loading-overlay');
-    const form = document.querySelector('form');
+    // Scoped by id, not querySelector('form') - base.html's navbar renders
+    // its own job-search <form> before this page's content for logged-in
+    // candidates, and querySelector('form') would silently grab that one
+    // instead, leaving this form with no submit handler at all.
+    const form = document.getElementById('resumeMatchForm');
     
     // Click on upload area to trigger file input
     uploadArea.addEventListener('click', () => fileInput.click());
