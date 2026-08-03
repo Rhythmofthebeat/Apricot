@@ -162,7 +162,7 @@
                 {% if app.job.company.logo_filename %}
                     <img src="{{ url_for('static', filename='logos/' + app.job.company.logo_filename) }}?v={{ app.job.company.logo_version or 0 }}"
                          alt="{{ app.job.company.name }}"
-                         style="width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;">
+                         style="width:40px;height:40px;border-radius:10px;object-fit:contain;flex-shrink:0;">
                 {% else %}
                     <div class="app-company-dot">{{ app.job.company.name[0]|upper }}</div>
                 {% endif %}
