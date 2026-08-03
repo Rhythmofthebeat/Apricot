@@ -67,6 +67,7 @@ def browse_jobs():
     query = request.args.get('q', '').strip()
     category = request.args.get('category', '').strip()
     location = request.args.get('location', '').strip()
+    city = request.args.get('city', '').strip()
     sort = request.args.get('sort', 'newest').strip()
 
     jobs_query = Job.query.filter_by(status='open')
@@ -78,6 +79,11 @@ def browse_jobs():
         jobs_query = jobs_query.filter_by(category=category)
     if location:
         jobs_query = jobs_query.filter(Job.location.ilike(f"{location}%"))
+    if city:
+        # City isn't its own column - Hybrid/On-site postings store it appended
+        # to location as "Hybrid - New York, NY" (see employer.post_job), so
+        # match it as a substring rather than a separate field.
+        jobs_query = jobs_query.filter(Job.location.ilike(f"%{city}%"))
 
     if sort == 'priority':
         applicant_count_subq = (
@@ -103,6 +109,18 @@ def browse_jobs():
 
     jobs = jobs_query.all()
 
+    # Distinct cities actually in use, for the city filter's suggestions -
+    # parsed from the "<work type> - <city>" format post_job.html stores
+    # (e.g. "Hybrid - New York, NY"); plain "Remote (Worldwide)"/"On-site"
+    # values with no " - " have no city to extract.
+    all_locations = {
+        loc for (loc,) in Job.query.filter_by(status='open')
+        .filter(Job.location.isnot(None)).with_entities(Job.location).distinct().all()
+    }
+    available_cities = sorted({
+        loc.split(' - ', 1)[1].strip() for loc in all_locations if ' - ' in loc
+    })
+
     applied_job_ids = set()
     saved_job_ids = set()
     if current_user.is_authenticated and current_user.role == 'candidate':
@@ -121,9 +139,11 @@ def browse_jobs():
         query=query,
         category=category,
         location=location,
+        city=city,
         sort=sort,
         categories=JOB_CATEGORIES,
         locations=["Remote (Worldwide)", "Remote (US Only)", "Hybrid", "On-site"],
+        available_cities=available_cities,
         applied_job_ids=applied_job_ids,
         saved_job_ids=saved_job_ids,
     )

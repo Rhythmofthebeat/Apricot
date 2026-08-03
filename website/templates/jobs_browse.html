@@ -97,6 +97,13 @@
                     <option value="{{ loc }}" {{ 'selected' if location == loc }}>{{ loc }}</option>
                 {% endfor %}
             </select>
+            <input type="text" name="city" class="form-control" style="max-width:180px;"
+                   placeholder="City" value="{{ city }}" list="cityOptions">
+            <datalist id="cityOptions">
+                {% for c in available_cities %}
+                    <option value="{{ c }}">
+                {% endfor %}
+            </datalist>
             <input type="hidden" name="category" value="{{ category }}">
             <input type="hidden" name="sort" id="sortField" value="{{ sort }}">
             <button type="submit" class="btn btn-primary">Search</button>
@@ -137,10 +144,10 @@
         </form>
 
         <div>
-            <a href="{{ url_for('candidate.browse_jobs', q=query, location=location, sort=sort) }}"
+            <a href="{{ url_for('candidate.browse_jobs', q=query, location=location, city=city, sort=sort) }}"
                class="category-pill {{ 'active' if not category }}">All</a>
             {% for cat in categories %}
-                <a href="{{ url_for('candidate.browse_jobs', q=query, location=location, category=cat, sort=sort) }}"
+                <a href="{{ url_for('candidate.browse_jobs', q=query, location=location, city=city, category=cat, sort=sort) }}"
                    class="category-pill {{ 'active' if category == cat }}">{{ cat }}</a>
             {% endfor %}
         </div>
