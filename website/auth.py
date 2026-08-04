@@ -265,6 +265,7 @@ def sign_up():
         role = request.form.get('role', 'candidate')
         company_name = request.form.get('companyName', '').strip()
         signature_name = request.form.get('signatureName', '').strip()
+        employer_agreement = request.form.get('employer_agreement') == 'on'
 
         email_domain = email.split('@')[-1].lower() if email and '@' in email else ''
 
@@ -284,6 +285,8 @@ def sign_up():
             flash("Please sign up with your company email address, not a personal email provider.", "error")
         elif role == 'employer' and not existing_hub and not signature_name:
             flash("Type your full legal name to sign the Employer Platform Agreement.", "error")
+        elif role == 'employer' and not existing_hub and not employer_agreement:
+            flash("You must agree to the Employer Platform Agreement to create an employer account.", "error")
         else:
             try:
                 admin_supa = create_client(
