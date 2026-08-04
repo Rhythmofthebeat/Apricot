@@ -361,8 +361,18 @@
             color: var(--text-muted); font-size: 0.8rem; font-family: inherit;
         }
         #google_translate_element .goog-te-gadget-icon { display: none; }
-        .goog-te-banner-frame { display: none !important; }
-        body { top: 0 !important; }
+        .goog-te-banner-frame,
+        .goog-te-banner-frame.skiptranslate,
+        iframe.goog-te-banner-frame,
+        #goog-gt-tt, .goog-te-balloon-frame {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+        }
+        html body, html {
+            top: 0 !important;
+            position: static !important;
+        }
         .goog-tooltip, .goog-tooltip:hover { display: none !important; }
         .goog-text-highlight { background: none !important; box-shadow: none !important; }
     </style>
@@ -656,6 +666,31 @@
                 autoDisplay: false
             }, 'google_translate_element');
         }
+
+        // Google's banner sometimes re-applies inline offsets to html/body via
+        // its own JS after translation happens, which can beat plain CSS. Keep
+        // stripping it for as long as the page is open, not just once on load.
+        (function () {
+            function stripGoogleBannerOffset() {
+                document.documentElement.style.top = '0px';
+                document.body.style.top = '0px';
+                document.documentElement.style.marginTop = '0px';
+                document.body.style.marginTop = '0px';
+                document.querySelectorAll('iframe.goog-te-banner-frame, .goog-te-banner-frame').forEach(function (el) {
+                    el.style.display = 'none';
+                    el.style.visibility = 'hidden';
+                    el.style.height = '0px';
+                });
+            }
+            stripGoogleBannerOffset();
+            // Scoped to just html/body's own style attribute and html's direct
+            // children (where Google inserts its banner iframe) - NOT a full
+            // subtree watch, which would fire on every unrelated DOM change
+            // on the page (dropdowns, chat messages, notification polling).
+            var observer = new MutationObserver(stripGoogleBannerOffset);
+            observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'], childList: true });
+            observer.observe(document.body, { attributes: true, attributeFilter: ['style'] });
+        })();
     </script>
     <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 
