@@ -471,6 +471,9 @@
                                 {% if current_user.data_buyer_id %}
                                 <li><a class="dropdown-item" href="{{ url_for('data_market.dashboard') }}"><i class="fas fa-database me-2"></i>Data dashboard</a></li>
                                 {% endif %}
+                                {% if current_user.is_admin %}
+                                <li><a class="dropdown-item" href="{{ url_for('admin_bp.companies') }}"><i class="fas fa-user-shield me-2"></i>Admin</a></li>
+                                {% endif %}
                                 <li><a class="dropdown-item" href="{{ url_for('views.public_site') }}"><i class="fas fa-globe me-2"></i>Visit public site</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Log out</a></li>

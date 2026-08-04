@@ -6,7 +6,7 @@ import stripe
 from flask import Blueprint, render_template, redirect, url_for, request, flash, abort, Response, current_app
 from flask_login import login_required, current_user
 from . import db
-from .models import EarnTask, TaskSubmission, User, EARN_DOMAINS, ContractorProfile
+from .models import EarnTask, TaskSubmission, User, EARN_DOMAINS, ContractorProfile, Company, Job, CompanyMember, Application
 from .dataset_export import shape_submission
 
 logger = logging.getLogger(__name__)
@@ -31,11 +31,63 @@ def dashboard():
     total_submissions = TaskSubmission.query.count()
     total_paid = db.session.query(db.func.sum(TaskSubmission.earnings_cents))\
         .filter_by(paid_out=False).scalar() or 0
+
+    platform_stats = {
+        "total_users": User.query.count(),
+        "total_candidates": User.query.filter_by(role='candidate').count(),
+        "total_employers": User.query.filter_by(role='employer').count(),
+        "total_companies": Company.query.count(),
+        "total_jobs": Job.query.count(),
+        "total_applications": Application.query.count(),
+        "total_interviews": Application.query.filter(Application.interview_verdict.isnot(None)).count(),
+    }
+
     return render_template('admin_dashboard.html',
         tasks=tasks,
         total_submissions=total_submissions,
         total_pending_payout=total_paid,
+        platform_stats=platform_stats,
     )
+
+
+# ------------------------------------------------ #
+# ------------------- COMPANIES ------------------ #
+# ------------------------------------------------ #
+
+@admin_bp.route('/admin/companies')
+@login_required
+def companies():
+    _require_admin()
+    all_companies = Company.query.order_by(Company.created_at.desc()).all()
+    owner_ids = [c.owner_user_id for c in all_companies]
+    owners = {u.id: u for u in User.query.filter(User.id.in_(owner_ids)).all()} if owner_ids else {}
+    job_counts = dict(
+        db.session.query(Job.company_id, db.func.count(Job.id)).group_by(Job.company_id).all()
+    )
+    return render_template('admin_companies.html',
+        companies=all_companies, owners=owners, job_counts=job_counts)
+
+
+@admin_bp.route('/admin/companies/<int:company_id>')
+@login_required
+def company_detail(company_id):
+    _require_admin()
+    company = Company.query.get_or_404(company_id)
+    owner = User.query.get(company.owner_user_id)
+    members = (
+        db.session.query(User, CompanyMember)
+        .join(CompanyMember, CompanyMember.user_id == User.id)
+        .filter(CompanyMember.company_id == company_id)
+        .all()
+    )
+    jobs = Job.query.filter_by(company_id=company_id).order_by(Job.created_at.desc()).all()
+    application_counts = dict(
+        db.session.query(Application.job_id, db.func.count(Application.id))
+        .filter(Application.job_id.in_([j.id for j in jobs]))
+        .group_by(Application.job_id).all()
+    ) if jobs else {}
+    return render_template('admin_company_detail.html',
+        company=company, owner=owner, members=members, jobs=jobs, application_counts=application_counts)
 
 
 # ------------------------------------------------ #
