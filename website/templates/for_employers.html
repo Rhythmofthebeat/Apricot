@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}For Employers | Avants AI{% endblock %}
+
+{% block head %}
+<style>
+    .fe-hero {
+        background: #fff;
+        border-bottom: 1px solid var(--border);
+        padding: 72px 20px 56px;
+        margin: -28px -20px 0;
+        text-align: center;
+    }
+    .fe-hero h1 { font-size: clamp(2rem, 5vw, 2.8rem); font-weight: 800; letter-spacing: -0.04em; margin-bottom: 16px; }
+    .fe-hero p { font-size: 1.05rem; color: var(--text-muted); max-width: 620px; margin: 0 auto 28px; line-height: 1.65; }
+
+    .fe-section { padding: 56px 0; }
+    .fe-section h2 { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 24px; }
+    .fe-eyebrow { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--primary); margin-bottom: 8px; }
+
+    .fe-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .fe-step {
+        background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+        padding: 22px 20px;
+    }
+    .fe-step-num {
+        width: 32px; height: 32px; border-radius: 50%; background: var(--primary-soft); color: var(--primary);
+        display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.85rem; margin-bottom: 12px;
+    }
+    .fe-step h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 6px; }
+    .fe-step p { font-size: 0.84rem; color: var(--text-muted); line-height: 1.55; margin: 0; }
+
+    .fe-rules { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; }
+    .fe-rule { display: flex; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+    .fe-rule:last-child { border-bottom: none; }
+    .fe-rule-icon {
+        width: 36px; height: 36px; border-radius: 10px; background: var(--primary-soft); color: var(--primary);
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 0.95rem;
+    }
+    .fe-rule h4 { font-size: 0.92rem; font-weight: 700; margin-bottom: 4px; }
+    .fe-rule p { font-size: 0.85rem; color: var(--text-muted); line-height: 1.6; margin: 0; }
+
+    .fe-cta {
+        background: var(--primary); border-radius: var(--radius); padding: 48px 32px; text-align: center; margin: 24px 0;
+    }
+    .fe-cta h2 { color: #fff; font-size: 1.5rem; font-weight: 800; margin-bottom: 10px; }
+    .fe-cta p { color: rgba(255,255,255,0.8); margin-bottom: 22px; }
+
+    @media (max-width: 992px) { .fe-steps { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 576px) { .fe-steps { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="fe-hero">
+    <div class="fe-eyebrow">For Employers</div>
+    <h1>Hire without the resume pile.</h1>
+    <p>
+        Post a role and every applicant is automatically resume-scored and voice-interviewed by AI before you review
+        anyone. You get a ranked shortlist with real signal, not a folder of PDFs and a gut feeling.
+    </p>
+    <div class="d-flex gap-2 justify-content-center flex-wrap">
+        <a href="{{ url_for('auth.sign_up', role='employer') }}" class="btn btn-primary btn-rounded">
+            <i class="fas fa-briefcase me-1"></i> Create an employer account
+        </a>
+        <a href="{{ url_for('terms') }}#employer-contract" class="btn btn-outline-secondary btn-rounded">
+            Read the full agreement
+        </a>
+    </div>
+</div>
+
+<!-- What you'll actually do -->
+<div class="fe-section">
+    <div class="container">
+        <div class="fe-eyebrow">What you'll do</div>
+        <h2>From posting to hire</h2>
+        <div class="fe-steps">
+            <div class="fe-step">
+                <div class="fe-step-num">1</div>
+                <h3>Post a job</h3>
+                <p>Write it yourself or let AI help structure the description, requirements, and interview focus. Takes a few minutes.</p>
+            </div>
+            <div class="fe-step">
+                <div class="fe-step-num">2</div>
+                <h3>AI screens every applicant</h3>
+                <p>Each candidate's resume is scored against your job, and they complete a structured voice interview tailored to the role - before you look at anything.</p>
+            </div>
+            <div class="fe-step">
+                <div class="fe-step-num">3</div>
+                <h3>Review a ranked shortlist</h3>
+                <p>See match scores, AI interview verdicts, and transcripts. Message candidates, schedule calls, and move fast on the ones worth your time.</p>
+            </div>
+            <div class="fe-step">
+                <div class="fe-step-num">4</div>
+                <h3>Hire and confirm</h3>
+                <p>Mark a candidate hired with their actual compensation. They confirm it's accurate, and that's what the placement fee is based on.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- The rules -->
+<div class="fe-section" style="background: var(--bg); margin: 0 -20px; padding-left: 20px; padding-right: 20px;">
+    <div class="container">
+        <div class="fe-eyebrow">The rules</div>
+        <h2>What you're agreeing to</h2>
+        <div class="fe-rules">
+            <div class="fe-rule">
+                <div class="fe-rule-icon"><i class="fas fa-envelope"></i></div>
+                <div>
+                    <h4>Company email required</h4>
+                    <p>Employer accounts sign up with a work email address - personal providers like Gmail aren't accepted for the employer role.</p>
+                </div>
+            </div>
+            <div class="fe-rule">
+                <div class="fe-rule-icon"><i class="fas fa-percent"></i></div>
+                <div>
+                    <h4>15% placement fee</h4>
+                    <p>If you hire a candidate sourced through Avants, a fee of 15% of their first-year gross compensation is due within 30 days of their start date. Candidates are never charged. Only fires once the candidate confirms the hire - not the moment you mark someone hired.</p>
+                </div>
+            </div>
+            <div class="fe-rule">
+                <div class="fe-rule-icon"><i class="fas fa-user-shield"></i></div>
+                <div>
+                    <h4>Non-circumvention (12 months)</h4>
+                    <p>You agree not to hire a candidate you met through Avants outside the platform - directly or via a third party - within 12 months of their first application, without paying the placement fee.</p>
+                </div>
+            </div>
+            <div class="fe-rule">
+                <div class="fe-rule-icon"><i class="fas fa-lock"></i></div>
+                <div>
+                    <h4>Candidate data stays candidate data</h4>
+                    <p>Resumes, interview recordings, and personal information can only be used to evaluate that candidate for your open roles - never for marketing, resale, or training your own models.</p>
+                </div>
+            </div>
+            <div class="fe-rule">
+                <div class="fe-rule-icon"><i class="fas fa-scale-balanced"></i></div>
+                <div>
+                    <h4>Equal opportunity, AI as an assistive tool</h4>
+                    <p>Job postings must comply with equal employment opportunity law. AI match scores and interview verdicts are assistive only - you agree not to use them as the sole basis for any hiring decision.</p>
+                </div>
+            </div>
+            <div class="fe-rule">
+                <div class="fe-rule-icon"><i class="fas fa-bullhorn"></i></div>
+                <div>
+                    <h4>Genuine job postings only</h4>
+                    <p>Every listing must be a real, open role. Phantom postings or resume harvesting are grounds for immediate account termination.</p>
+                </div>
+            </div>
+        </div>
+        <p class="text-muted mt-3" style="font-size:0.85rem;">
+            This is a plain-language summary. The binding terms are
+            <a href="{{ url_for('terms') }}#employer-contract" style="color:var(--primary);">Section 12 of the Terms of Service</a>,
+            signed electronically when you create an employer account.
+        </p>
+    </div>
+</div>
+
+<div class="container">
+    <div class="fe-cta">
+        <h2>Ready to post your first role?</h2>
+        <p>Free to post. You only pay if you actually hire someone.</p>
+        <a href="{{ url_for('auth.sign_up', role='employer') }}" class="btn btn-light btn-rounded fw-bold">
+            <i class="fas fa-briefcase me-1"></i> Create an employer account
+        </a>
+    </div>
+</div>
+
+{% endblock %}

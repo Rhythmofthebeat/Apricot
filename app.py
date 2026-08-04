@@ -426,6 +426,11 @@ def faq():
     return render_template("faq.html")
 
 
+@app.route("/for-employers")
+def for_employers():
+    return render_template("for_employers.html")
+
+
 @app.route("/terms")
 def terms():
     return render_template("terms.html")
