@@ -325,7 +325,11 @@
             .stats-strip { flex-direction: column; }
         }
 
-        @media (max-width: 991.98px) {
+        /* Safety net: if the expanded desktop nav ever runs out of horizontal
+           room, wrap onto a second line instead of overflowing/clipping. */
+        .navbar-nav.ms-auto { flex-wrap: wrap; row-gap: 4px; justify-content: flex-end; }
+
+        @media (max-width: 1199.98px) {
             .navbar-nav.ms-auto {
                 align-items: stretch !important;
                 width: 100%;
@@ -366,7 +370,7 @@
     {% block head %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg fixed-top">
+    <nav class="navbar navbar-expand-xl fixed-top">
         <div class="container-fluid px-4 px-lg-5">
             <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('views.home') }}">
                 <img src="{{ url_for('static', filename='Avants.png') }}" alt="Avants" class="logo" />
@@ -462,17 +466,19 @@
                                 </div>
                             </div>
                         {% endif %}
-                        {% if current_user.data_buyer_id %}
-                        <a class="nav-link" href="{{ url_for('data_market.dashboard') }}" title="Data dashboard">
-                            <i class="fas fa-database"></i> <span class="d-lg-none">Data dashboard</span>
-                        </a>
-                        {% endif %}
-                        <a class="nav-link" href="{{ url_for('views.public_site') }}" title="Visit public site">
-                            <i class="fas fa-globe"></i> <span class="d-lg-none">Visit public site</span>
-                        </a>
-                        <a class="nav-link" href="{{ url_for('auth.logout') }}" title="Log out">
-                            <i class="fas fa-sign-out-alt"></i> <span class="d-lg-none">Log out</span>
-                        </a>
+                        <div class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="accountDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Account">
+                                <i class="fas fa-circle-user"></i> <span class="d-xl-none">Account</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="accountDropdown">
+                                {% if current_user.data_buyer_id %}
+                                <li><a class="dropdown-item" href="{{ url_for('data_market.dashboard') }}"><i class="fas fa-database me-2"></i>Data dashboard</a></li>
+                                {% endif %}
+                                <li><a class="dropdown-item" href="{{ url_for('views.public_site') }}"><i class="fas fa-globe me-2"></i>Visit public site</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Log out</a></li>
+                            </ul>
+                        </div>
                     {% else %}
                         <a class="nav-link" href="{{ url_for('candidate.browse_jobs') }}">Find Jobs</a>
                         <div class="nav-item dropdown">
@@ -730,11 +736,9 @@
         </div>
         <div id="siteHelpMessages">
             <div class="she-msg ai">
-                <div class="she-avatar"><i class="fas fa-robot"></i></div>
                 <div class="she-bubble">Hi! I can explain how Avants AI works - applying, interviewing, posting jobs, fees, whatever you're stuck on. What do you want to know?</div>
             </div>
             <div class="she-msg ai" id="siteHelpTyping">
-                <div class="she-avatar"><i class="fas fa-robot"></i></div>
                 <div class="she-bubble" style="display:flex; gap:4px; align-items:center;">
                     <span class="she-dot"></span><span class="she-dot"></span><span class="she-dot"></span>
                 </div>
@@ -780,7 +784,7 @@
             const div = document.createElement('div');
             div.className = 'she-msg ' + (role === 'ai' ? 'ai' : 'user');
             div.innerHTML =
-                '<div class="she-avatar">' + (role === 'ai' ? '<i class="fas fa-robot"></i>' : '<i class="fas fa-user"></i>') + '</div>' +
+                (role === 'ai' ? '' : '<div class="she-avatar"><i class="fas fa-user"></i></div>') +
                 '<div class="she-bubble">' + escapeHtml(text).replace(/\n/g, '<br>') + '</div>';
             messages.insertBefore(div, typing);
             messages.scrollTop = messages.scrollHeight;
