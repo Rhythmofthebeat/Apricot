@@ -64,8 +64,12 @@ def companies():
     job_counts = dict(
         db.session.query(Job.company_id, db.func.count(Job.id)).group_by(Job.company_id).all()
     )
+    member_counts = dict(
+        db.session.query(CompanyMember.company_id, db.func.count(CompanyMember.id))
+        .group_by(CompanyMember.company_id).all()
+    )
     return render_template('admin_companies.html',
-        companies=all_companies, owners=owners, job_counts=job_counts)
+        companies=all_companies, owners=owners, job_counts=job_counts, member_counts=member_counts)
 
 
 @admin_bp.route('/admin/companies/<int:company_id>')

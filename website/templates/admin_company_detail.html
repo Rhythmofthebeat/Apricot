@@ -57,10 +57,14 @@
     </div>
 </div>
 
-{% if members %}
 <div class="card mb-4">
-    <div class="card-header fw-semibold">Team Members</div>
+    <div class="card-header fw-semibold">Members ({{ members|length + 1 }})</div>
     <div class="card-body p-0">
+        <div class="px-4 py-2" style="border-bottom:1px solid var(--border); font-size:0.85rem;">
+            {{ owner.email if owner else 'Unknown' }}
+            <span class="badge bg-primary ms-1" style="font-size:0.6rem;">Owner</span>
+            <span class="text-muted">&middot; joined {{ company.created_at.strftime('%b %d, %Y') if company.created_at else '' }}</span>
+        </div>
         {% for user, member in members %}
         <div class="px-4 py-2" style="border-bottom:1px solid var(--border); font-size:0.85rem;">
             {{ user.email }} <span class="text-muted">&middot; joined {{ member.created_at.strftime('%b %d, %Y') if member.created_at else '' }}</span>
@@ -68,7 +72,6 @@
         {% endfor %}
     </div>
 </div>
-{% endif %}
 
 <div class="card">
     <div class="card-header fw-semibold">Jobs ({{ jobs|length }})</div>
