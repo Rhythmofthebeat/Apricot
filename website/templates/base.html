@@ -432,15 +432,6 @@
                             <a class="nav-link" href="{{ url_for('candidate.interviews') }}">
                                 <i class="fas fa-circle-dot me-1"></i> Interviews
                             </a>
-                            <a class="nav-link" href="{{ url_for('candidate.profile') }}">
-                                <i class="fas fa-id-card me-1"></i> Profile
-                            </a>
-                            <a class="nav-link" href="{{ url_for('earn.tasks') }}">
-                                <i class="fas fa-circle-dollar-to-slot me-1"></i> Earn
-                            </a>
-                            <a class="nav-link" href="{{ url_for('faq') }}" title="Help & FAQ">
-                                <i class="fas fa-circle-question me-1"></i> Help
-                            </a>
                             {% if unread_messages %}
                             <a class="nav-link position-relative" href="{{ url_for('employer.dashboard') if current_user.role == 'employer' else url_for('candidate.dashboard') }}" title="{{ unread_messages }} unread message{{ 's' if unread_messages != 1 }}">
                                 <i class="fas fa-message"></i>
@@ -471,6 +462,12 @@
                                 <i class="fas fa-circle-user"></i> <span class="d-xl-none">Account</span>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="accountDropdown">
+                                {% if current_user.role != 'employer' %}
+                                <li><a class="dropdown-item" href="{{ url_for('candidate.profile') }}"><i class="fas fa-id-card me-2"></i>Profile</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('earn.tasks') }}"><i class="fas fa-circle-dollar-to-slot me-2"></i>Earn</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('faq') }}"><i class="fas fa-circle-question me-2"></i>Help & FAQ</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                {% endif %}
                                 {% if current_user.data_buyer_id %}
                                 <li><a class="dropdown-item" href="{{ url_for('data_market.dashboard') }}"><i class="fas fa-database me-2"></i>Data dashboard</a></li>
                                 {% endif %}
