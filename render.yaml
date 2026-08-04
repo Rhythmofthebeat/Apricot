@@ -35,6 +35,12 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+      # Dataset marketplace subscription (Earn task exports sold to outside
+      # companies) - separate price/webhook from the placement-fee flow above.
+      - key: STRIPE_DATA_PRICE_ID
+        sync: false
+      - key: STRIPE_DATA_WEBHOOK_SECRET
+        sync: false
       - key: DAILY_API_KEY
         sync: false
       - key: SUPABASE_URL
