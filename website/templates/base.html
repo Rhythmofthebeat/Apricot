@@ -325,6 +325,24 @@
             .stats-strip { flex-direction: column; }
         }
 
+        @media (max-width: 991.98px) {
+            .navbar-nav.ms-auto {
+                align-items: stretch !important;
+                width: 100%;
+                padding-bottom: 8px;
+            }
+            .navbar-nav.ms-auto .nav-link {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                justify-content: flex-start;
+                width: 100%;
+                padding: 10px 12px !important;
+            }
+            .navbar-nav.ms-auto .nav-item.dropdown { width: 100%; }
+            .navbar-nav.ms-auto .btn { width: 100%; margin: 6px 0 0 !important; }
+        }
+
         /* ---- Misc ---- */
         .text-primary { color: var(--primary) !important; }
         .feature-icon { font-size: 2rem; color: var(--primary); margin-bottom: 12px; }
@@ -446,14 +464,14 @@
                         {% endif %}
                         {% if current_user.data_buyer_id %}
                         <a class="nav-link" href="{{ url_for('data_market.dashboard') }}" title="Data dashboard">
-                            <i class="fas fa-database"></i>
+                            <i class="fas fa-database"></i> <span class="d-lg-none">Data dashboard</span>
                         </a>
                         {% endif %}
                         <a class="nav-link" href="{{ url_for('views.public_site') }}" title="Visit public site">
-                            <i class="fas fa-globe"></i>
+                            <i class="fas fa-globe"></i> <span class="d-lg-none">Visit public site</span>
                         </a>
                         <a class="nav-link" href="{{ url_for('auth.logout') }}" title="Log out">
-                            <i class="fas fa-sign-out-alt"></i>
+                            <i class="fas fa-sign-out-alt"></i> <span class="d-lg-none">Log out</span>
                         </a>
                     {% else %}
                         <a class="nav-link" href="{{ url_for('candidate.browse_jobs') }}">Find Jobs</a>
