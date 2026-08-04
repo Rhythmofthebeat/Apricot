@@ -328,6 +328,21 @@
         /* ---- Misc ---- */
         .text-primary { color: var(--primary) !important; }
         .feature-icon { font-size: 2rem; color: var(--primary); margin-bottom: 12px; }
+
+        /* ---- Google Translate widget: strip its default chrome to match the nav ---- */
+        #google_translate_element .goog-te-gadget { font-size: 0; }
+        #google_translate_element .goog-te-gadget-simple {
+            background: transparent; border: 1px solid var(--border); border-radius: 999px;
+            padding: 4px 10px; display: inline-flex; align-items: center;
+        }
+        #google_translate_element .goog-te-gadget-simple .goog-te-menu-value {
+            color: var(--text-muted); font-size: 0.8rem; font-family: inherit;
+        }
+        #google_translate_element .goog-te-gadget-icon { display: none; }
+        .goog-te-banner-frame { display: none !important; }
+        body { top: 0 !important; }
+        .goog-tooltip, .goog-tooltip:hover { display: none !important; }
+        .goog-text-highlight { background: none !important; box-shadow: none !important; }
     </style>
 
     {% block head %}{% endblock %}
@@ -356,6 +371,7 @@
                 {% endif %}
 
                 <div class="navbar-nav ms-auto align-items-center gap-1">
+                    <div id="google_translate_element" class="me-1" title="Translate this page"></div>
                     {% if current_user.is_authenticated %}
                         {% if current_user.role == 'employer' %}
                             <a class="nav-link" href="{{ url_for('employer.dashboard') }}">
@@ -605,5 +621,18 @@
     })();
     </script>
     {% endif %}
+
+    <!-- Language switcher - machine-translates the page client-side -->
+    <script type="text/javascript">
+        function googleTranslateElementInit() {
+            new google.translate.TranslateElement({
+                pageLanguage: 'en',
+                includedLanguages: 'es,fr,de,it,pt,zh-CN,zh-TW,ja,ko,hi,ar,ru,vi,tl,pl,nl,tr,th,id,uk',
+                layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
+                autoDisplay: false
+            }, 'google_translate_element');
+        }
+    </script>
+    <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 </body>
 </html>
