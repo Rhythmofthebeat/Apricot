@@ -477,7 +477,6 @@
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="accountDropdown">
                                 {% if current_user.role != 'employer' %}
                                 <li><a class="dropdown-item" href="{{ url_for('candidate.profile') }}"><i class="fas fa-id-card me-2"></i>Profile</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('earn.tasks') }}"><i class="fas fa-circle-dollar-to-slot me-2"></i>Earn</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('faq') }}"><i class="fas fa-circle-question me-2"></i>Help & FAQ</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 {% endif %}
