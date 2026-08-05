@@ -376,6 +376,11 @@
                     {% endif %}
                 {% endif %}
                 {% endif %}
+                {% if app.id in feedback_prompt_ids %}
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openPlatformFeedbackModal({{ app.id }}); event.stopPropagation();">
+                    <i class="fas fa-star me-1"></i> Rate your experience
+                </button>
+                {% endif %}
                 <button class="btn btn-outline-primary btn-sm" onclick="toggleSchedule({{ app.id }}, 'virtual', event)">
                     <i class="fas fa-video me-1"></i> Video Call
                 </button>
@@ -1266,4 +1271,57 @@ document.getElementById("scoreResumeBtn")?.addEventListener("click", async () =>
         </div>
     </div>
 </div>
+
+<!-- Rate your own hiring experience (distinct from the Rejection Feedback modal above,
+     which sends feedback TO a candidate) -->
+<div class="modal fade" id="platformFeedbackModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" id="platformFeedbackForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Rate your hiring experience</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="rating" id="platformFeedbackRatingInput" required>
+                    <div class="d-flex gap-2 justify-content-center mb-3" id="platformFeedbackStars" style="font-size:1.8rem;">
+                        {% for i in range(1, 6) %}
+                        <i class="far fa-star" data-star="{{ i }}" style="cursor:pointer;color:var(--text-muted);" onclick="setPlatformFeedbackRating({{ i }})"></i>
+                        {% endfor %}
+                    </div>
+                    <textarea name="comment" class="form-control" rows="3" placeholder="Anything you'd like to share? (optional)"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary btn-sm">Submit feedback</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+function setPlatformFeedbackRating(n) {
+    document.getElementById('platformFeedbackRatingInput').value = n;
+    document.querySelectorAll('#platformFeedbackStars i').forEach((star) => {
+        const filled = parseInt(star.dataset.star, 10) <= n;
+        star.className = filled ? 'fas fa-star' : 'far fa-star';
+        star.style.color = filled ? '#f59e0b' : 'var(--text-muted)';
+    });
+}
+function openPlatformFeedbackModal(applicationId) {
+    const form = document.getElementById('platformFeedbackForm');
+    form.action = `/employer/applications/${applicationId}/platform-feedback`;
+    document.getElementById('platformFeedbackRatingInput').value = '';
+    document.querySelectorAll('#platformFeedbackStars i').forEach((star) => {
+        star.className = 'far fa-star';
+        star.style.color = 'var(--text-muted)';
+    });
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('platformFeedbackModal')).show();
+}
+document.getElementById('platformFeedbackForm').addEventListener('submit', (e) => {
+    if (!document.getElementById('platformFeedbackRatingInput').value) {
+        e.preventDefault();
+        alert('Please select a rating.');
+    }
+});
+</script>
 {% endblock %}

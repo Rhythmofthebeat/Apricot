@@ -22,7 +22,7 @@ from . import db, limiter
 from .models import (
     Company, Job, Application, Notification,
     CompanyMember, CompanyInvite, CandidateProfile, User,
-    MeetingRoom, Message, MeetingProposal, SavedJob,
+    MeetingRoom, Message, MeetingProposal, SavedJob, Feedback,
     JOB_CATEGORIES, JOB_LOCATIONS, COMPANY_SIZES, INDUSTRIES,
 )
 from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description, transcribe_audio, compare_resume_to_job
@@ -745,6 +745,18 @@ def applicants(job_id):
         for i, app in enumerate(applications, 1):
             blind_labels[app.id] = f"Candidate #{i}"
 
+    # Feedback prompt once a hire is fully closed out (employer marked hired,
+    # candidate confirmed the compensation figure) and this employer hasn't
+    # already rated the experience.
+    already_rated = {
+        f.application_id
+        for f in Feedback.query.filter_by(user_id=current_user.id, role='employer', context='hire_closed').all()
+    }
+    feedback_prompt_ids = {
+        app.id for app in applications
+        if app.status == 'hired' and app.hire_confirmed_at and app.id not in already_rated
+    }
+
     return render_template(
         "job_applicants.html",
         job=job,
@@ -758,6 +770,7 @@ def applicants(job_id):
         blind_labels=blind_labels,
         ai_likelihoods=ai_likelihoods,
         composite_scores=composite_scores,
+        feedback_prompt_ids=feedback_prompt_ids,
     )
 
 
@@ -1004,6 +1017,44 @@ def end_hourly_engagement(application_id):
     application.hire_engagement_ended_at = func.now()
     db.session.commit()
     flash("Engagement marked as ended - monthly billing has been stopped.", "success")
+    return redirect(url_for('employer.applicants', job_id=job.id))
+
+
+@employer.route('/employer/applications/<int:application_id>/platform-feedback', methods=['POST'])
+@login_required
+@employer_required
+def submit_platform_feedback(application_id):
+    """Employer rating their own experience hiring through Avants - distinct
+    from send_candidate_feedback() below, which sends feedback TO a candidate
+    about their application."""
+    company = get_owned_company()
+    application = Application.query.get_or_404(application_id)
+    job = Job.query.get_or_404(application.job_id)
+    if job.company_id != company.id:
+        abort(403)
+
+    rating = request.form.get('rating', type=int)
+    if not rating or rating < 1 or rating > 5:
+        flash("Please select a rating from 1 to 5.", "error")
+        return redirect(url_for('employer.applicants', job_id=job.id))
+
+    comment = (request.form.get('comment') or '').strip()
+
+    existing = Feedback.query.filter_by(
+        user_id=current_user.id, application_id=application_id, context='hire_closed'
+    ).first()
+    if not existing:
+        db.session.add(Feedback(
+            user_id=current_user.id,
+            application_id=application_id,
+            role='employer',
+            context='hire_closed',
+            rating=rating,
+            comment=comment or None,
+        ))
+        db.session.commit()
+
+    flash("Thanks for the feedback!", "success")
     return redirect(url_for('employer.applicants', job_id=job.id))
 
 

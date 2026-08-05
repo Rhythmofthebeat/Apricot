@@ -765,6 +765,74 @@ Reason: <another specific observation>"""
     return result
 
 
+def analyze_platform_feedback(feedback_rows):
+    """Summarize a batch of candidate/employer feedback (rating + comment) into
+    a short overview plus specific, actionable recommendations for admins to
+    review - this only produces suggestions, it never changes anything itself.
+    feedback_rows: list of {role, context, rating, comment} dicts.
+    Returns {summary: str, recommendations: [{title, detail}]}."""
+    if not feedback_rows:
+        return {"summary": "No feedback yet.", "recommendations": []}
+
+    avg_rating = sum(r["rating"] for r in feedback_rows) / len(feedback_rows)
+
+    lines = []
+    for r in feedback_rows[:200]:
+        comment = (r.get("comment") or "").strip().replace("\n", " ")
+        lines.append(f"[{r['role']} | {r['context']} | {r['rating']}/5] {comment or '(no comment)'}")
+    feedback_text = "\n".join(lines)
+
+    prompt = f"""You are analyzing user feedback for an AI-powered hiring platform (candidates apply, get AI-interviewed, \
+get scored; employers post jobs and review AI-screened applicants). Below is a batch of {len(feedback_rows)} feedback \
+entries from candidates and employers, average rating {avg_rating:.1f}/5.
+
+{feedback_text[:8000]}
+
+Identify real, recurring patterns - not one-off complaints. Write a short overall summary, then 2-5 specific, \
+actionable recommendations. Each recommendation must name a concrete, viable change (not vague advice like "improve \
+communication") and say which group it's based on (candidates, employers, or both). If the feedback is too sparse or \
+inconsistent to support a confident recommendation, say so instead of inventing one.
+
+Respond EXACTLY in this format:
+Summary: <2-3 sentences on the overall picture>
+
+Recommendation: <short title (4-8 words)>
+Based on: <candidates / employers / both>
+Detail: <1-2 sentences - the specific, concrete change and why the feedback supports it>
+
+Recommendation: ...
+Based on: ...
+Detail: ..."""
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=700,
+        temperature=0.3,
+    )
+    content = response.choices[0].message.content.strip()
+
+    summary = ""
+    recommendations = []
+    current = None
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith("Summary:"):
+            summary = line[8:].strip()
+        elif line.startswith("Recommendation:"):
+            if current and current.get("title"):
+                recommendations.append(current)
+            current = {"title": line[16:].strip(), "based_on": "", "detail": ""}
+        elif line.startswith("Based on:") and current is not None:
+            current["based_on"] = line[9:].strip()
+        elif line.startswith("Detail:") and current is not None:
+            current["detail"] = line[7:].strip()
+    if current and current.get("title"):
+        recommendations.append(current)
+
+    return {"summary": summary or content[:400], "recommendations": recommendations[:5]}
+
+
 def transcribe_audio(file_path):
     """Speech-to-text for a candidate's recorded interview answer."""
     with open(file_path, "rb") as f:

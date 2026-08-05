@@ -6,8 +6,9 @@ import stripe
 from flask import Blueprint, render_template, redirect, url_for, request, flash, abort, Response, current_app
 from flask_login import login_required, current_user
 from . import db
-from .models import EarnTask, TaskSubmission, User, EARN_DOMAINS, ContractorProfile, Company, Job, CompanyMember, Application
+from .models import EarnTask, TaskSubmission, User, EARN_DOMAINS, ContractorProfile, Company, Job, CompanyMember, Application, Feedback, FeedbackInsight
 from .dataset_export import shape_submission
+from ai_services import analyze_platform_feedback
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,50 @@ def company_detail(company_id):
     ) if jobs else {}
     return render_template('admin_company_detail.html',
         company=company, owner=owner, members=members, jobs=jobs, application_counts=application_counts)
+
+
+# ------------------------------------------------ #
+# -------------------- FEEDBACK ------------------ #
+# ------------------------------------------------ #
+
+@admin_bp.route('/admin/feedback')
+@login_required
+def feedback():
+    _require_admin()
+    entries = Feedback.query.order_by(Feedback.created_at.desc()).all()
+    avg_rating = round(sum(f.rating for f in entries) / len(entries), 1) if entries else None
+    latest_insight = FeedbackInsight.query.order_by(FeedbackInsight.generated_at.desc()).first()
+    recommendations = json.loads(latest_insight.recommendations) if latest_insight and latest_insight.recommendations else []
+    return render_template('admin_feedback.html',
+        entries=entries, avg_rating=avg_rating, insight=latest_insight, recommendations=recommendations)
+
+
+@admin_bp.route('/admin/feedback/analyze', methods=['POST'])
+@login_required
+def analyze_feedback():
+    _require_admin()
+    entries = Feedback.query.order_by(Feedback.created_at.desc()).limit(200).all()
+    if not entries:
+        flash("No feedback to analyze yet.", "error")
+        return redirect(url_for('admin_bp.feedback'))
+
+    rows = [{"role": f.role, "context": f.context, "rating": f.rating, "comment": f.comment} for f in entries]
+    try:
+        result = analyze_platform_feedback(rows)
+    except Exception as e:
+        logger.exception("Feedback analysis failed")
+        flash(f"AI analysis failed: {e}", "error")
+        return redirect(url_for('admin_bp.feedback'))
+
+    insight = FeedbackInsight(
+        summary=result["summary"],
+        recommendations=json.dumps(result["recommendations"]),
+        feedback_count=len(entries),
+    )
+    db.session.add(insight)
+    db.session.commit()
+    flash("Feedback analyzed.", "success")
+    return redirect(url_for('admin_bp.feedback'))
 
 
 # ------------------------------------------------ #

@@ -296,6 +296,13 @@
                     </a>
                     {% endif %}
 
+                    {% if feedback_prompts.get(app.id) %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            onclick="openFeedbackModal({{ app.id }}, '{{ feedback_prompts[app.id] }}')">
+                        <i class="fas fa-star me-1"></i> Rate your experience
+                    </button>
+                    {% endif %}
+
                     {% if app.status != 'hired' %}
                     <form method="POST" action="{{ url_for('candidate.withdraw_application', application_id=app.id) }}"
                           data-confirm-title="Withdraw application?"
@@ -354,6 +361,33 @@
     </div>
 
 </div>
+
+<!-- Shared feedback modal - reused for whichever application/context triggered it -->
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" id="feedbackForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Rate your experience</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="context" id="feedbackContext">
+                    <input type="hidden" name="rating" id="feedbackRatingInput" required>
+                    <div class="d-flex gap-2 justify-content-center mb-3" id="feedbackStars" style="font-size:1.8rem;">
+                        {% for i in range(1, 6) %}
+                        <i class="far fa-star" data-star="{{ i }}" style="cursor:pointer;color:var(--text-muted);" onclick="setFeedbackRating({{ i }})"></i>
+                        {% endfor %}
+                    </div>
+                    <textarea name="comment" class="form-control" rows="3" placeholder="Anything you'd like to share? (optional)"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary btn-sm">Submit feedback</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -362,6 +396,34 @@ function toggleHireDispute(appId) {
     const el = document.getElementById(`disputeForm-${appId}`);
     if (el) el.style.display = el.style.display === 'none' ? 'flex' : 'none';
 }
+
+function setFeedbackRating(n) {
+    document.getElementById('feedbackRatingInput').value = n;
+    document.querySelectorAll('#feedbackStars i').forEach((star) => {
+        const filled = parseInt(star.dataset.star, 10) <= n;
+        star.className = filled ? 'fas fa-star' : 'far fa-star';
+        star.style.color = filled ? '#f59e0b' : 'var(--text-muted)';
+    });
+}
+
+function openFeedbackModal(applicationId, context) {
+    const form = document.getElementById('feedbackForm');
+    form.action = `/applications/${applicationId}/platform-feedback`;
+    document.getElementById('feedbackContext').value = context;
+    document.getElementById('feedbackRatingInput').value = '';
+    document.querySelectorAll('#feedbackStars i').forEach((star) => {
+        star.className = 'far fa-star';
+        star.style.color = 'var(--text-muted)';
+    });
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('feedbackModal')).show();
+}
+
+document.getElementById('feedbackForm').addEventListener('submit', (e) => {
+    if (!document.getElementById('feedbackRatingInput').value) {
+        e.preventDefault();
+        alert('Please select a rating.');
+    }
+});
 </script>
 {% if has_profile %}
 <script>

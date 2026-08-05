@@ -419,3 +419,33 @@ class DataBuyer(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     members = db.relationship("User", backref="data_buyer", foreign_keys="User.data_buyer_id")
+
+
+class Feedback(db.Model):
+    """A rating + comment left by a candidate or employer about their
+    experience, collected at key moments (interview completion, hire
+    resolution) rather than through a generic always-on form."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    application_id = db.Column(db.Integer, db.ForeignKey("application.id"), nullable=False)
+    role = db.Column(db.String(20), nullable=False)  # candidate | employer
+    context = db.Column(db.String(30), nullable=False)  # interview_completed | application_resolved | hire_closed
+    rating = db.Column(db.Integer, nullable=False)  # 1-5
+    comment = db.Column(db.Text)
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    user = db.relationship("User")
+    application = db.relationship("Application", backref="feedback_entries")
+
+    __table_args__ = (db.UniqueConstraint("user_id", "application_id", "context"),)
+
+
+class FeedbackInsight(db.Model):
+    """Cached AI-generated summary + actionable recommendations from analyzing
+    Feedback rows - regenerated on demand by an admin, not on every page view,
+    since it's a real OpenAI call and feedback doesn't change that fast."""
+    id = db.Column(db.Integer, primary_key=True)
+    summary = db.Column(db.Text, nullable=False)
+    recommendations = db.Column(db.Text)  # JSON list of {title, detail}
+    feedback_count = db.Column(db.Integer, nullable=False, default=0)
+    generated_at = db.Column(db.DateTime(timezone=True), default=func.now())

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Admin - Feedback{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h4 fw-bold mb-0"><i class="fas fa-star me-2 text-primary"></i>Platform Feedback</h1>
+    <a href="{{ url_for('admin_bp.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-robot me-1"></i> Training Task Admin
+    </a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card text-center p-3">
+            <div style="font-size:1.8rem;font-weight:800;">{{ entries|length }}</div>
+            <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Total Feedback</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center p-3">
+            <div style="font-size:1.8rem;font-weight:800;">{{ avg_rating if avg_rating else '—' }}<span style="font-size:1rem;color:var(--text-muted);"> / 5</span></div>
+            <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Average Rating</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center p-3 d-flex flex-column justify-content-center">
+            <form method="POST" action="{{ url_for('admin_bp.analyze_feedback') }}">
+                <button type="submit" class="btn btn-primary btn-sm" {{ 'disabled' if not entries }}>
+                    <i class="fas fa-wand-magic-sparkles me-1"></i> Analyze with AI
+                </button>
+            </form>
+            {% if insight %}
+            <div class="text-muted mt-1" style="font-size:0.7rem;">Last run {{ insight.generated_at.strftime('%b %d, %Y %I:%M %p') if insight.generated_at }} &middot; {{ insight.feedback_count }} entries</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if insight %}
+<div class="card mb-4" style="background:var(--primary-soft);border-color:transparent;">
+    <div class="card-body p-4">
+        <div class="fw-bold mb-2"><i class="fas fa-wand-magic-sparkles me-1" style="color:var(--primary);"></i>AI Summary</div>
+        <p class="mb-3" style="font-size:0.9rem;">{{ insight.summary }}</p>
+        {% if recommendations %}
+        <div class="fw-bold mb-2" style="font-size:0.85rem;">Recommendations</div>
+        <div class="d-flex flex-column gap-2">
+            {% for rec in recommendations %}
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;">
+                <div class="fw-semibold" style="font-size:0.85rem;">{{ rec.title }}
+                    {% if rec.based_on %}<span class="badge bg-secondary ms-1" style="font-size:0.6rem;">{{ rec.based_on }}</span>{% endif %}
+                </div>
+                <div class="text-muted" style="font-size:0.8rem;">{{ rec.detail }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <div class="text-muted mt-3" style="font-size:0.72rem;">These are AI-generated suggestions to review, not changes that have been applied automatically.</div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header fw-semibold">All Feedback</div>
+    {% if not entries %}
+    <div class="card-body text-center p-5 text-muted">No feedback submitted yet.</div>
+    {% else %}
+    <div class="card-body p-0">
+        {% for f in entries %}
+        <div class="d-flex align-items-start gap-3 px-4 py-3" style="border-bottom:1px solid var(--border);">
+            <div style="min-width:70px;">
+                <span class="badge {{ 'bg-success' if f.rating >= 4 else ('bg-warning text-dark' if f.rating == 3 else 'bg-danger') }}">
+                    {{ f.rating }}/5
+                </span>
+            </div>
+            <div class="flex-grow-1">
+                <div class="fw-semibold" style="font-size:0.87rem;">
+                    {{ f.user.email if f.user else 'Unknown' }}
+                    <span class="badge bg-secondary ms-1" style="font-size:0.6rem;">{{ f.role }}</span>
+                    <span class="text-muted" style="font-size:0.72rem; font-weight:400;">&middot; {{ f.context.replace('_', ' ') }}</span>
+                </div>
+                {% if f.comment %}
+                <div class="text-muted mt-1" style="font-size:0.83rem;">{{ f.comment }}</div>
+                {% endif %}
+                {% if f.application and f.application.job %}
+                <div class="text-muted mt-1" style="font-size:0.72rem;">{{ f.application.job.title }} at {{ f.application.job.company.name if f.application.job.company }}</div>
+                {% endif %}
+            </div>
+            <div class="text-muted" style="font-size:0.75rem; min-width:90px; text-align:right;">
+                {{ f.created_at.strftime('%b %d, %Y') if f.created_at }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

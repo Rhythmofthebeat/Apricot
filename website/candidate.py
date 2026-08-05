@@ -13,7 +13,7 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import getSampleStyleSheet
 
 from . import db, limiter
-from .models import Job, Application, CandidateProfile, Company, CompanyMember, Notification, SavedJob, Message, MeetingRoom, MeetingProposal, User, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
+from .models import Job, Application, CandidateProfile, Company, CompanyMember, Notification, SavedJob, Message, MeetingRoom, MeetingProposal, User, Feedback, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
 from email_utils import send_branded_email, external_url
 
 from ai_services import (
@@ -521,6 +521,20 @@ def dashboard():
         upcoming_interviews = []
         pending_proposals = 0
 
+    given_feedback = {
+        (f.application_id, f.context)
+        for f in Feedback.query.filter_by(user_id=current_user.id).filter(Feedback.application_id.in_(app_ids)).all()
+    } if app_ids else set()
+
+    # One feedback prompt per application - prefer the resolution prompt over
+    # the interview one if both would apply, since it's the more final moment.
+    feedback_prompts = {}
+    for app in applications:
+        if app.status in ('hired', 'rejected') and (app.id, 'application_resolved') not in given_feedback:
+            feedback_prompts[app.id] = 'application_resolved'
+        elif app.interview_verdict and app.interview_verdict != 'Pending' and (app.id, 'interview_completed') not in given_feedback:
+            feedback_prompts[app.id] = 'interview_completed'
+
     return render_template(
         "candidate_dashboard.html",
         applications=applications,
@@ -529,6 +543,7 @@ def dashboard():
         roadmaps=roadmaps,
         upcoming_interviews=upcoming_interviews,
         pending_proposals=pending_proposals,
+        feedback_prompts=feedback_prompts,
     )
 
 
@@ -654,6 +669,43 @@ def interviews():
         app_map=app_map,
         pending_proposals=pending_proposals,
     )
+
+
+@candidate.route('/applications/<int:application_id>/platform-feedback', methods=['POST'])
+@login_required
+def submit_platform_feedback(application_id):
+    application = Application.query.get_or_404(application_id)
+    if application.candidate_user_id != current_user.id:
+        abort(403)
+
+    context = request.form.get('context', '')
+    if context not in ('interview_completed', 'application_resolved'):
+        flash("Something went wrong - please try again.", "error")
+        return redirect(request.referrer or url_for('candidate.dashboard'))
+
+    rating = request.form.get('rating', type=int)
+    if not rating or rating < 1 or rating > 5:
+        flash("Please select a rating from 1 to 5.", "error")
+        return redirect(request.referrer or url_for('candidate.dashboard'))
+
+    comment = (request.form.get('comment') or '').strip()
+
+    existing = Feedback.query.filter_by(
+        user_id=current_user.id, application_id=application_id, context=context
+    ).first()
+    if not existing:
+        db.session.add(Feedback(
+            user_id=current_user.id,
+            application_id=application_id,
+            role='candidate',
+            context=context,
+            rating=rating,
+            comment=comment or None,
+        ))
+        db.session.commit()
+
+    flash("Thanks for the feedback!", "success")
+    return redirect(request.referrer or url_for('candidate.dashboard'))
 
 
 @candidate.route('/profile')
