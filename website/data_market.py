@@ -63,6 +63,7 @@ def dashboard():
         task_types=TASK_TYPES,
         counts=counts,
         billing_configured=bool(current_app.config.get('STRIPE_SECRET_KEY') and current_app.config.get('STRIPE_DATA_PRICE_ID')),
+        require_active_subscription=REQUIRE_ACTIVE_SUBSCRIPTION,
     )
 
 
@@ -130,6 +131,13 @@ def stripe_webhook():
     return '', 200
 
 
+# Downloads are free while the marketplace is in beta - billing (STRIPE_DATA_
+# PRICE_ID / STRIPE_DATA_WEBHOOK_SECRET, see data_dashboard.html) is fully
+# built and still fires normally, this just doesn't gate export() on it yet.
+# Flip back to True to re-enforce the active-subscription requirement.
+REQUIRE_ACTIVE_SUBSCRIPTION = False
+
+
 @data_market.route('/data/export/<task_type>')
 @login_required
 def export(task_type):
@@ -139,7 +147,7 @@ def export(task_type):
         abort(404)
 
     buyer = DataBuyer.query.get_or_404(current_user.data_buyer_id)
-    if buyer.subscription_status != 'active':
+    if REQUIRE_ACTIVE_SUBSCRIPTION and buyer.subscription_status != 'active':
         flash("An active data subscription is required to download datasets.", "error")
         return redirect(url_for('data_market.dashboard'))
 

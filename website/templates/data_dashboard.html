@@ -5,13 +5,24 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="h4 fw-bold mb-1">{{ buyer.name }}</h1>
+        {% if not require_active_subscription %}
+        <span class="badge bg-success">Free during beta</span>
+        {% else %}
         <span class="badge {{ 'bg-success' if buyer.subscription_status == 'active' else 'bg-secondary' }}">
             {{ buyer.subscription_status|capitalize }}
         </span>
+        {% endif %}
     </div>
 </div>
 
-{% if buyer.subscription_status != 'active' %}
+{% if not require_active_subscription %}
+<div class="card mb-4" style="background:var(--success-soft);border-color:transparent;">
+    <div class="card-body p-4">
+        <div class="fw-bold mb-1"><i class="fas fa-circle-check me-1" style="color:var(--success);"></i>Dataset downloads are free while we're in beta</div>
+        <div class="text-muted" style="font-size:0.85rem;">No subscription required right now - grab whatever you need below. We'll give notice before this changes.</div>
+    </div>
+</div>
+{% elif buyer.subscription_status != 'active' %}
 <div class="card mb-4" style="background:var(--primary-soft);border-color:transparent;">
     <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
@@ -38,7 +49,7 @@
                 <div class="fw-semibold text-capitalize" style="font-size:0.9rem;">{{ t }}</div>
                 <div class="text-muted" style="font-size:0.78rem;">{{ counts[t] }} task{{ 's' if counts[t] != 1 }} available</div>
             </div>
-            {% if buyer.subscription_status == 'active' %}
+            {% if not require_active_subscription or buyer.subscription_status == 'active' %}
             <a href="{{ url_for('data_market.export', task_type=t) }}" class="btn btn-sm btn-outline-primary">
                 <i class="fas fa-download me-1"></i> Download
             </a>
