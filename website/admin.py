@@ -6,7 +6,11 @@ import stripe
 from flask import Blueprint, render_template, redirect, url_for, request, flash, abort, Response, current_app
 from flask_login import login_required, current_user
 from . import db
-from .models import EarnTask, TaskSubmission, User, EARN_DOMAINS, ContractorProfile, Company, Job, CompanyMember, Application, Feedback, FeedbackInsight
+from .models import (
+    EarnTask, TaskSubmission, User, EARN_DOMAINS, ContractorProfile, Company, Job, CompanyMember,
+    Application, Feedback, FeedbackInsight, SavedJob, MeetingProposal, MeetingRoom, Message,
+    EmployerSubscription, CompanyInvite,
+)
 from .dataset_export import shape_submission
 from ai_services import analyze_platform_feedback
 
@@ -93,6 +97,93 @@ def company_detail(company_id):
     ) if jobs else {}
     return render_template('admin_company_detail.html',
         company=company, owner=owner, members=members, jobs=jobs, application_counts=application_counts)
+
+
+def _cascade_delete_applications(application_ids):
+    """Delete every row that hangs off a set of applications - meetings,
+    messages, and feedback - before the applications themselves."""
+    if not application_ids:
+        return
+    MeetingProposal.query.filter(MeetingProposal.application_id.in_(application_ids)).delete(synchronize_session=False)
+    Message.query.filter(Message.application_id.in_(application_ids)).delete(synchronize_session=False)
+    MeetingRoom.query.filter(MeetingRoom.application_id.in_(application_ids)).delete(synchronize_session=False)
+    Feedback.query.filter(Feedback.application_id.in_(application_ids)).delete(synchronize_session=False)
+    Application.query.filter(Application.id.in_(application_ids)).delete(synchronize_session=False)
+
+
+def _cascade_delete_jobs(job_ids):
+    """Delete every application under a set of jobs (and everything under
+    those, via _cascade_delete_applications), then the jobs themselves."""
+    if not job_ids:
+        return
+    application_ids = [a.id for a in Application.query.filter(Application.job_id.in_(job_ids)).all()]
+    _cascade_delete_applications(application_ids)
+    SavedJob.query.filter(SavedJob.job_id.in_(job_ids)).delete(synchronize_session=False)
+    Job.query.filter(Job.id.in_(job_ids)).delete(synchronize_session=False)
+
+
+@admin_bp.route('/admin/jobs/<int:job_id>/delete', methods=['POST'])
+@login_required
+def delete_job(job_id):
+    """Admin override of employer.delete_job() - that route refuses to delete
+    a job once it has applicants (pushing the employer to close it instead,
+    to preserve candidate history). This force-deletes it and everything
+    under it: applications, meeting rooms, messages, feedback."""
+    _require_admin()
+    job = Job.query.get_or_404(job_id)
+    company_id = job.company_id
+    title = job.title
+    applicant_count = Application.query.filter_by(job_id=job.id).count()
+
+    _cascade_delete_jobs([job.id])
+    db.session.commit()
+
+    suffix = f" and {applicant_count} application{'s' if applicant_count != 1 else ''}" if applicant_count else ""
+    flash(f'Deleted "{title}"{suffix}.', 'success')
+    return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+
+@admin_bp.route('/admin/companies/<int:company_id>/members/<int:user_id>/remove', methods=['POST'])
+@login_required
+def remove_member(company_id, user_id):
+    """Removes a CompanyMember (team member) from a company. Can't touch the
+    owner this way - ownership isn't a CompanyMember row, it's Company.owner_user_id."""
+    _require_admin()
+    Company.query.get_or_404(company_id)
+    member = CompanyMember.query.filter_by(company_id=company_id, user_id=user_id).first_or_404()
+    db.session.delete(member)
+    db.session.commit()
+    flash("Member removed.", "success")
+    return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+
+@admin_bp.route('/admin/companies/<int:company_id>/delete', methods=['POST'])
+@login_required
+def delete_company(company_id):
+    """Full cascade delete - every job, application, meeting, message,
+    feedback entry, team membership, subscription, and pending invite under
+    this company. The owner's User account itself is untouched (Company.
+    owner_user_id points at User, not the reverse). Requires typing the
+    exact company name to confirm, given the blast radius."""
+    _require_admin()
+    company = Company.query.get_or_404(company_id)
+
+    confirm_name = (request.form.get('confirm_name') or '').strip()
+    if confirm_name != company.name:
+        flash("Company name didn't match what you typed - nothing was deleted.", "error")
+        return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+    job_ids = [j.id for j in Job.query.filter_by(company_id=company.id).all()]
+    _cascade_delete_jobs(job_ids)
+    CompanyMember.query.filter_by(company_id=company.id).delete(synchronize_session=False)
+    EmployerSubscription.query.filter_by(company_id=company.id).delete(synchronize_session=False)
+    CompanyInvite.query.filter_by(company_id=company.id).delete(synchronize_session=False)
+
+    name = company.name
+    db.session.delete(company)
+    db.session.commit()
+    flash(f'Deleted company "{name}" and everything under it.', 'success')
+    return redirect(url_for('admin_bp.companies'))
 
 
 # ------------------------------------------------ #
