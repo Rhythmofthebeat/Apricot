@@ -18,25 +18,33 @@ from website import mail
 VERIFICATION_SALT = "employer-email-verification"
 VERIFICATION_MAX_AGE = 60 * 60 * 24  # 24 hours
 
-_LOGO_DATA_URI_CACHE = None
+_LOGO_PNG_BYTES_CACHE = None
+LOGO_CONTENT_ID = "avants-logo"
 
 
-def _logo_data_uri():
-    """Base64-embedded logo for emails, generated once and cached.
+def _logo_png_bytes():
+    """Resized logo PNG bytes for emails, generated once and cached.
 
-    A remote <img src="https://.../Avants.png"> was silently not rendering
-    for some recipients — most likely their mail client blocking remote
-    images by default (standard Gmail/Outlook behavior until the sender is
-    trusted), possibly compounded by Cloudflare (fronting this Render app)
-    treating the mail client's image-fetching proxy as a bot. Embedding the
-    logo directly as a data URI removes the network fetch entirely, so it
-    always renders regardless of either issue. Resized small (2x the
-    display size, for retina) since the full-resolution source PNG is
-    ~350KB — far too large to inline into every email.
+    A remote <img src="https://.../Avants.png"> silently didn't render for
+    some recipients — most likely their mail client blocking remote images
+    by default, possibly compounded by Cloudflare (fronting this Render
+    app) treating the mail client's image-fetching proxy as a bot. Switching
+    to a base64 data URI fixed that, but broke a different, larger set of
+    recipients: Outlook's desktop client (the Word-based rendering engine
+    used by Outlook 2007–2019 and still common in Microsoft 365 "classic"
+    Outlook) does not support data: URIs for images at all - a well-known
+    HTML-email compatibility gap. A CID (Content-ID) inline attachment is
+    part of the actual MIME email standard (RFC 2392), not an HTML src
+    trick, so it's supported everywhere: Outlook, Gmail, Apple Mail, Yahoo,
+    Exchange, all of it. See send_branded_email() for the attach() call and
+    render_branded_email() for the matching cid: src.
+
+    Resized small (2x the display size, for retina) since the full-
+    resolution source PNG is ~350KB — far too large to attach to every email.
     """
-    global _LOGO_DATA_URI_CACHE
-    if _LOGO_DATA_URI_CACHE is not None:
-        return _LOGO_DATA_URI_CACHE
+    global _LOGO_PNG_BYTES_CACHE
+    if _LOGO_PNG_BYTES_CACHE is not None:
+        return _LOGO_PNG_BYTES_CACHE
 
     logo_path = os.path.join(os.path.dirname(__file__), "website", "static", "Avants.png")
     img = Image.open(logo_path)
@@ -47,9 +55,8 @@ def _logo_data_uri():
 
     buf = io.BytesIO()
     resized.save(buf, format="PNG", optimize=True)
-    encoded = base64.b64encode(buf.getvalue()).decode("ascii")
-    _LOGO_DATA_URI_CACHE = f"data:image/png;base64,{encoded}"
-    return _LOGO_DATA_URI_CACHE
+    _LOGO_PNG_BYTES_CACHE = buf.getvalue()
+    return _LOGO_PNG_BYTES_CACHE
 
 
 def external_url(endpoint, **values):
@@ -90,11 +97,11 @@ def render_branded_email(heading, body_html, cta_label=None, cta_url=None, accen
             </td>
         </tr>
         """
-    # Embedded as a data URI, not a remote URL - see _logo_data_uri().
+    # Embedded via CID attachment, not a data URI - see _logo_png_bytes().
     # Outlook (and other legacy clients) ignore CSS height/width on <img> and
     # need the HTML attributes set explicitly, or the logo renders broken/huge.
     logo_html = (
-        f'<img src="{_logo_data_uri()}" alt="Avants AI" width="106" height="32" '
+        f'<img src="cid:{LOGO_CONTENT_ID}" alt="Avants AI" width="106" height="32" '
         f'style="height:32px; width:106px; display:block; border:0;" />'
     )
 
@@ -136,6 +143,13 @@ def send_branded_email(to_email, subject, heading, body_html, plain_text, cta_la
         recipients=[to_email],
         body=plain_text,
         html=render_branded_email(heading, body_html, cta_label, cta_url),
+    )
+    msg.attach(
+        filename="avants-logo.png",
+        content_type="image/png",
+        data=_logo_png_bytes(),
+        disposition="inline",
+        headers={"Content-ID": f"<{LOGO_CONTENT_ID}>"},
     )
     mail.send(msg)
 
