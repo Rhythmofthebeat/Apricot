@@ -689,7 +689,12 @@
                 <div class="mb-3">
                     <p class="small mb-1 fw-semibold">{{ 'AI Interviewer' if turn.role == 'assistant' else (app.candidate.first_name or 'Candidate') }}:</p>
                     <p class="small text-muted mb-1">{{ turn.text }}</p>
-                    {% if turn.audio_filename %}
+                    {% if turn.video_path and turn.has_video %}
+                        <video controls preload="none" style="width:100%; max-width:360px; border-radius:8px; background:#000;"
+                               src="{{ url_for('candidate.application_video', application_id=app.id, log_index=loop.index0) }}"></video>
+                    {% elif turn.video_path %}
+                        <audio controls style="width:100%; height:32px;" src="{{ url_for('candidate.application_video', application_id=app.id, log_index=loop.index0) }}"></audio>
+                    {% elif turn.audio_filename %}
                         <audio controls style="width:100%; height:32px;" src="{{ url_for('candidate.application_audio', application_id=app.id, filename=turn.audio_filename) }}"></audio>
                     {% endif %}
                 </div>

@@ -13,6 +13,7 @@ from .models import (
 )
 from .dataset_export import shape_submission
 from ai_services import analyze_platform_feedback
+from video_storage import delete_interview_videos
 
 logger = logging.getLogger(__name__)
 
@@ -101,9 +102,12 @@ def company_detail(company_id):
 
 def _cascade_delete_applications(application_ids):
     """Delete every row that hangs off a set of applications - meetings,
-    messages, and feedback - before the applications themselves."""
+    messages, feedback, and stored interview videos - before the
+    applications themselves."""
     if not application_ids:
         return
+    for app_id in application_ids:
+        delete_interview_videos(app_id)
     MeetingProposal.query.filter(MeetingProposal.application_id.in_(application_ids)).delete(synchronize_session=False)
     Message.query.filter(Message.application_id.in_(application_ids)).delete(synchronize_session=False)
     MeetingRoom.query.filter(MeetingRoom.application_id.in_(application_ids)).delete(synchronize_session=False)

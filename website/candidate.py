@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import os
 import re
 import uuid
@@ -15,6 +16,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from . import db, limiter
 from .models import Job, Application, CandidateProfile, Company, CompanyMember, Notification, SavedJob, Message, MeetingRoom, MeetingProposal, User, Feedback, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
 from email_utils import send_branded_email, external_url
+from video_storage import upload_interview_video, get_signed_video_url, delete_interview_videos
 
 from ai_services import (
     extract_text_from_file,
@@ -32,6 +34,8 @@ from ai_services import (
 )
 
 candidate = Blueprint('candidate', __name__)
+
+logger = logging.getLogger(__name__)
 
 SUGGESTION_JOB_POOL = 40
 
@@ -370,20 +374,35 @@ def interview_chat(job_id, application_id):
 
     history = json.loads(request.form.get("history", "[]"))
     wrap_up = request.form.get("wrap_up", "false").lower() == "true"
-    answer_audio = request.files.get("answer_audio")
+    answer_media = request.files.get("answer_media")
+    has_video = request.form.get("has_video", "false").lower() == "true"
 
     audio_log = json.loads(application.interview_audio_log) if application.interview_audio_log else []
     audio_dir = _audio_dir_for_application(application_id)
 
     user_message = ""
-    if answer_audio and answer_audio.filename:
-        answer_filename = f"a_{len(audio_log) + 1}.webm"
-        answer_audio.save(os.path.join(audio_dir, answer_filename))
+    if answer_media and answer_media.filename:
+        media_bytes = answer_media.read()
+        tmp_path = os.path.join(audio_dir, f"_tmp_{uuid.uuid4().hex}.webm")
+        with open(tmp_path, "wb") as f:
+            f.write(media_bytes)
         try:
-            user_message = transcribe_audio(os.path.join(audio_dir, answer_filename))
+            user_message = transcribe_audio(tmp_path)
         except Exception:
+            os.remove(tmp_path)
             return jsonify({"error": "Couldn't transcribe your answer. Please try again."}), 500
-        audio_log.append({"role": "user", "text": user_message, "audio_filename": answer_filename})
+        os.remove(tmp_path)
+
+        turn_number = len(audio_log) + 1
+        try:
+            video_path = upload_interview_video(application_id, turn_number, media_bytes)
+        except Exception:
+            logger.exception(f"Failed to upload interview recording for application {application_id}")
+            video_path = None
+        audio_log.append({
+            "role": "user", "text": user_message,
+            "video_path": video_path, "has_video": has_video,
+        })
 
     try:
         interview_questions = json.loads(job.interview_questions) if job.interview_questions else None
@@ -453,6 +472,26 @@ def application_audio(application_id, filename):
     if not _can_access_application_audio(application):
         abort(403)
     return send_from_directory(_audio_dir_for_application(application_id), filename)
+
+
+@candidate.route('/applications/<int:application_id>/interview-video/<int:log_index>')
+@login_required
+def application_video(application_id, log_index):
+    """Redirects to a freshly-generated signed URL for a recorded answer,
+    rather than storing/exposing the signed URL itself - those expire, and
+    regenerating one per request means it's never stale."""
+    application = Application.query.get_or_404(application_id)
+    if not _can_access_application_audio(application):
+        abort(403)
+    log = json.loads(application.interview_audio_log) if application.interview_audio_log else []
+    if log_index < 0 or log_index >= len(log) or not log[log_index].get('video_path'):
+        abort(404)
+    try:
+        signed_url = get_signed_video_url(log[log_index]['video_path'])
+    except Exception:
+        logger.exception(f"Failed to generate signed video URL for application {application_id}")
+        abort(502)
+    return redirect(signed_url)
 
 
 @candidate.route('/candidate/dashboard')
@@ -1305,6 +1344,7 @@ def delete_account():
         # Wipe personal data from all applications
         apps = Application.query.filter_by(candidate_user_id=user.id).all()
         for app in apps:
+            delete_interview_videos(app.id)
             app.resume_text = '[deleted]'
             app.interview_transcript = None
             app.interview_audio_log = None

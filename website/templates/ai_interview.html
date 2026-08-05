@@ -252,6 +252,7 @@ let isRecording     = false;
 let questionNum     = 0;
 let cameraStream    = null;
 let interviewStarted = false;
+let recordingHasVideo = false;
 
 // Estimated total questions by interview length
 const ESTIMATED_TOTAL = { short: 4, standard: 7, thorough: 10 }["{{ job.interview_length }}"] || 7;
@@ -394,11 +395,12 @@ function showVerdict(replyText) {
     });
 }
 
-async function sendTurn(audioBlob) {
+async function sendTurn(mediaBlob, hasVideo) {
     const formData = new FormData();
     formData.append("history", JSON.stringify(history));
     formData.append("wrap_up", "false");
-    if (audioBlob) formData.append("answer_audio", audioBlob, "answer.webm");
+    formData.append("has_video", hasVideo ? "true" : "false");
+    if (mediaBlob) formData.append("answer_media", mediaBlob, "answer.webm");
 
     const response = await fetch(chatUrl, { method: "POST", body: formData });
     const result = await response.json();
@@ -451,8 +453,27 @@ document.getElementById("saveExitBtn").addEventListener("click", async () => {
 
 async function setupRecorder() {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
+        let stream;
+        // Camera is optional (candidates can skip it) - when it's on, record
+        // the candidate's actual answer as video+audio by combining the live
+        // camera feed's video track with a fresh mic audio track, instead of
+        // recording audio-only while a camera preview plays alongside it.
+        if (cameraStream && cameraStream.getVideoTracks().some(t => t.readyState === "live")) {
+            const audioOnlyStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream = new MediaStream([
+                ...cameraStream.getVideoTracks(),
+                ...audioOnlyStream.getAudioTracks(),
+            ]);
+            recordingHasVideo = true;
+        } else {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            recordingHasVideo = false;
+        }
+
+        const candidates = recordingHasVideo
+            ? ["video/webm;codecs=vp8,opus", "video/webm"]
+            : ["audio/webm"];
+        const mimeType = candidates.find(t => MediaRecorder.isTypeSupported(t)) || "";
         mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
 
         mediaRecorder.addEventListener("dataavailable", (e) => audioChunks.push(e.data));
@@ -471,13 +492,13 @@ async function onRecordingStop() {
         return;
     }
 
-    const blob = new Blob(audioChunks, { type: "audio/webm" });
+    const blob = new Blob(audioChunks, { type: recordingHasVideo ? "video/webm" : "audio/webm" });
     audioChunks = [];
     recordBtn.disabled = true;
     recordStatus.textContent = "Transcribing your answer...";
 
     try {
-        const result = await sendTurn(blob);
+        const result = await sendTurn(blob, recordingHasVideo);
         history.push({ role: "user", content: result.transcribed_answer });
         history.push({ role: "assistant", content: result.reply });
 
