@@ -594,14 +594,22 @@ INTERVIEW_LENGTH_GUIDANCE = {
 
 
 def run_interview_turn(role, job_description, user_message, history, force_conclude=False,
-                        interview_length="standard", interview_focus=None, interview_questions=None):
+                        interview_length="standard", interview_focus=None, interview_questions=None,
+                        practice_mode=False):
     """One turn of the AI recruiter-screen interview. The model alone decides
     when it has enough signal to stop asking questions and issue a verdict —
     no fixed question cap, just a length steer (short/standard/thorough) the
     employer chose for this job. force_conclude is only set by an explicit
     candidate "wrap up" action. Returns the assistant's reply text; the caller
     detects conclusion by checking whether the reply contains a "Verdict:"
-    line, not by a precomputed flag."""
+    line, not by a precomputed flag.
+
+    practice_mode=True is used for the candidate-facing practice interview
+    (no real employer questions passed in, nothing saved or scored for real).
+    It steers toward more concrete, role-specific questions grounded in the
+    actual job description instead of generic templates like "tell me about
+    a time..." with no connection to the role, since the whole point of
+    practice is rehearsing for what this specific interview will look like."""
     context_block = f"\n=== ROLE ===\n{role}\n"
     if job_description:
         context_block += f"\n=== JOB DESCRIPTION ===\n{job_description[:2000]}\n"
@@ -634,11 +642,20 @@ def run_interview_turn(role, job_description, user_message, history, force_concl
             "- Otherwise, continue with exactly one focused follow-up question, following the structure above."
         )
 
+    practice_note = (
+        "\nThis is a PRACTICE run - the candidate is rehearsing before their real interview, nothing here is "
+        "saved or scored for a real hiring decision. Still run it like a real screen, but make every question "
+        "concrete and specific to THIS job description (name the actual tools, responsibilities, or requirements "
+        "it mentions) rather than a generic template question that could apply to any role. A candidate "
+        "practicing should walk away knowing what this specific interview will actually probe.\n"
+    ) if practice_mode else ""
+
     system_prompt = (
         "You are an experienced recruiter/hiring manager conducting a real screening interview for this "
         "specific role — not an interrogation, but a focused professional conversation. You ask ONE question "
         "at a time, push for concrete specifics and numbers instead of vague claims, and redirect rambling "
         "with a direct follow-up.\n"
+        f"{practice_note}"
         f"{context_block}\n"
         "Structure the interview the way a real recruiter screen actually runs:\n"
         "1. Open with a quick question on background/motivation for this specific role.\n"

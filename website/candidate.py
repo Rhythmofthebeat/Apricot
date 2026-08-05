@@ -28,6 +28,7 @@ from ai_services import (
     generate_interview_coaching,
     generate_skills_roadmap,
     analyze_ai_likelihood,
+    generate_interview_question_preview,
 )
 
 candidate = Blueprint('candidate', __name__)
@@ -1009,7 +1010,7 @@ def practice_interview_chat(job_id):
         reply = run_interview_turn(
             job.title, job.description_text, user_message, history, force_conclude=wrap_up,
             interview_length=job.interview_length, interview_focus=job.interview_focus,
-            interview_questions=None,
+            interview_questions=None, practice_mode=True,
         )
     except Exception:
         return jsonify({"error": "Failed to get a response. Please try again."}), 500
@@ -1042,6 +1043,27 @@ def practice_interview_chat(job_id):
         "concluded": should_conclude,
         "coaching": coaching,
     })
+
+
+@candidate.route('/jobs/<int:job_id>/practice-questions', methods=['POST'])
+@login_required
+@limiter.limit("15 per hour")
+def practice_questions(job_id):
+    """On-demand sample question list for a role, generated fresh each time -
+    an alternative to the live back-and-forth practice chat for a candidate
+    who'd rather just see what kinds of questions to expect and prepare
+    answers on their own time."""
+    if current_user.role != 'candidate':
+        abort(403)
+    job = Job.query.get_or_404(job_id)
+    try:
+        questions = generate_interview_question_preview(
+            job.title, job.description_text,
+            interview_length=job.interview_length, interview_focus=job.interview_focus,
+        )
+    except Exception:
+        return jsonify({"error": "Couldn't generate questions right now. Please try again."}), 500
+    return jsonify({"questions": questions})
 
 
 @candidate.route('/applications/<int:application_id>/withdraw', methods=['POST'])

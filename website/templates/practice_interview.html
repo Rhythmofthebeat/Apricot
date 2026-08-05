@@ -243,6 +243,11 @@
                     <i class="fas fa-play me-2"></i> Start Practice
                 </button>
                 <div class="mt-3">
+                    <button type="button" class="btn btn-link text-decoration-none p-0" style="font-size:0.85rem;" onclick="showSampleQuestions()">
+                        <i class="fas fa-list-ul me-1"></i> Just show me sample questions instead
+                    </button>
+                </div>
+                <div class="mt-2">
                     <a href="{{ url_for('candidate.job_detail', job_id=job.id) }}" class="text-muted small text-decoration-none">
                         <i class="fas fa-arrow-left me-1"></i> Back to job
                     </a>
@@ -269,6 +274,9 @@
                         <span id="progressPct"></span>
                     </div>
                 </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showSampleQuestions()" title="See a list of sample questions for this role">
+                    <i class="fas fa-list-ul"></i>
+                </button>
             </div>
 
             <div class="interview-main" id="interviewMain">
@@ -394,12 +402,77 @@
     </div>
 </div>
 
+<!-- Sample questions modal -->
+<div class="modal fade" id="sampleQuestionsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-list-ul me-2" style="color:var(--primary);"></i>Sample questions for {{ job.title }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" style="font-size:0.82rem;">
+                    A fresh set generated for this role - useful to prepare with, but the real interview (live or
+                    practice) is a live conversation, not a fixed script, so don't expect it to ask exactly these.
+                </p>
+                <div id="sampleQuestionsLoading" class="text-center py-4">
+                    <i class="fas fa-spinner fa-spin text-muted"></i>
+                </div>
+                <ol id="sampleQuestionsList" class="d-none" style="font-size:0.9rem; line-height:1.9;"></ol>
+                <p id="sampleQuestionsError" class="text-danger d-none" style="font-size:0.85rem;"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="showSampleQuestions()">
+                    <i class="fas fa-rotate me-1"></i> Generate a different set
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 </div><!-- /practice-wrap -->
 {% endblock %}
 
 {% block scripts %}
 <script>
 const CHAT_URL = "{{ url_for('candidate.practice_interview_chat', job_id=job.id) }}";
+const PRACTICE_QUESTIONS_URL = "{{ url_for('candidate.practice_questions', job_id=job.id) }}";
+
+async function showSampleQuestions() {
+    const modalEl = document.getElementById('sampleQuestionsModal');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const loading = document.getElementById('sampleQuestionsLoading');
+    const list = document.getElementById('sampleQuestionsList');
+    const errorEl = document.getElementById('sampleQuestionsError');
+
+    loading.classList.remove('d-none');
+    list.classList.add('d-none');
+    errorEl.classList.add('d-none');
+    list.innerHTML = '';
+    modal.show();
+
+    try {
+        const res = await fetch(PRACTICE_QUESTIONS_URL, { method: 'POST' });
+        const data = await res.json();
+        loading.classList.add('d-none');
+        if (!res.ok || data.error) {
+            errorEl.textContent = data.error || "Couldn't generate questions right now. Please try again.";
+            errorEl.classList.remove('d-none');
+            return;
+        }
+        (data.questions || []).forEach((q) => {
+            const li = document.createElement('li');
+            li.className = 'mb-2';
+            li.textContent = q;
+            list.appendChild(li);
+        });
+        list.classList.remove('d-none');
+    } catch (e) {
+        loading.classList.add('d-none');
+        errorEl.textContent = 'Connection error - please try again.';
+        errorEl.classList.remove('d-none');
+    }
+}
 const ESTIMATED_Q = 5;
 
 // ── State ──────────────────────────────────────────────────────────────────
