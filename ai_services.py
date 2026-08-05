@@ -545,12 +545,33 @@ Timeline: ..."""
     return steps[:5]
 
 
+VERDICT_CRITERIA = (
+    "Grade strictly - most candidates should NOT get 'Strong Yes,' and plenty should not get 'Yes' either. "
+    "A real recruiter screen filters out the majority of applicants; treat this the same way, not as a "
+    "formality on the way to a job offer.\n"
+    "- Strong Yes: exceptional, specific, quantified answers across every area probed, with no real "
+    "weaknesses surfaced. Rare - reserved for candidates a hiring manager would want to fast-track.\n"
+    "- Yes: solid, mostly specific answers backed by real relevant experience, with only minor gaps. Would "
+    "genuinely move forward to the next round.\n"
+    "- No: vague, generic, unconvincing, or off-target answers; real gaps relative to the role; rambling "
+    "instead of concrete specifics. This is where most candidates who don't clearly stand out belong.\n"
+    "- Strong No: evasive, contradictory, clearly unqualified, or repeatedly unable to give a concrete answer "
+    "when pushed.\n"
+    "Confidence and articulateness alone are NOT enough for a Yes - the content must be specific and "
+    "substantiated. When genuinely torn between two verdicts, choose the stricter one."
+)
+
 VERDICT_FORMAT = (
     "Verdict: <Strong Yes / Yes / No / Strong No>\n\n"
     "Why:\n"
     "+ <specific strength from the conversation>\n"
-    "+ <specific strength from the conversation>\n"
+    "+ <another specific strength, if there genuinely is one>\n"
     "- <specific concern or gap from the conversation>\n"
+    "- <another specific concern or gap, if there genuinely is one>\n"
+    "(List every substantive strength and every substantive concern you actually observed - don't omit a "
+    "real one just to fit a fixed count, and don't pad with trivial or repetitive points to hit one either. "
+    "Typically 2-5 of each is honest for a normal-length interview. Be complete about both sides, not just "
+    "enough to justify the verdict.)"
 )
 
 
@@ -602,12 +623,14 @@ def run_interview_turn(role, job_description, user_message, history, force_concl
     if force_conclude:
         decision_rule = (
             "- The candidate has asked to wrap up. Do NOT ask another question. "
-            f"Output a final verdict in EXACTLY this format:\n\n{VERDICT_FORMAT}"
+            f"Output a final verdict in EXACTLY this format:\n\n{VERDICT_FORMAT}\n\n"
+            f"How to decide the verdict itself:\n{VERDICT_CRITERIA}"
         )
     else:
         decision_rule = (
             f"- YOU alone decide when you have enough signal to evaluate the candidate. {length_guidance}\n"
-            f"- Once you have enough signal, end the interview by outputting a final verdict in EXACTLY this format instead of another question:\n\n{VERDICT_FORMAT}\n"
+            f"- Once you have enough signal, end the interview by outputting a final verdict in EXACTLY this format instead of another question:\n\n{VERDICT_FORMAT}\n\n"
+            f"How to decide the verdict itself:\n{VERDICT_CRITERIA}\n\n"
             "- Otherwise, continue with exactly one focused follow-up question, following the structure above."
         )
 
