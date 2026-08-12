@@ -141,9 +141,13 @@
         <div class="coaching-card" style="border-color:{{ 'var(--success)' if 'Yes' in application.interview_verdict else 'var(--border)' }};">
             <div class="coaching-card-title">AI Verdict for this role</div>
             <div class="d-flex align-items-center gap-3">
+                {% if application.interview_verdict == 'Pending' %}
+                <span class="badge-status interviewing" style="font-size:0.85rem;padding:6px 14px;">Under review</span>
+                {% else %}
                 <span class="badge-status {{ 'hired' if 'Yes' in application.interview_verdict else 'rejected' }}" style="font-size:0.85rem;padding:6px 14px;">
                     {{ application.interview_verdict }}
                 </span>
+                {% endif %}
                 <p class="text-muted small mb-0">
                     This was the AI's assessment for <strong>this specific role</strong>. Your communication score reflects general skill that transfers to any interview.
                 </p>

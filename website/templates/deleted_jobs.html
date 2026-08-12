@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Deleted Jobs{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h1 class="h4 fw-bold mb-0">Deleted Jobs</h1>
+        <p class="text-muted mb-0" style="font-size:0.85rem;">Jobs you deleted in the last 30 days. Restoring recreates the listing as a new draft-like posting.</p>
+    </div>
+    <a href="{{ url_for('employer.dashboard') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i> Back to dashboard
+    </a>
+</div>
+
+{% if not history %}
+<div class="empty-state">
+    <div class="empty-icon"><i class="fas fa-clock-rotate-left"></i></div>
+    <h4 class="fw-bold mb-2">Nothing here</h4>
+    <p class="text-muted mb-0">Jobs you delete show up here for 30 days in case it was a mistake.</p>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Deleted</th>
+                    <th>By</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in history %}
+                <tr>
+                    <td class="fw-bold">{{ entry.title }}</td>
+                    <td class="text-muted" style="font-size:0.85rem;">{{ entry.created_at.strftime('%b %d, %Y %I:%M %p') if entry.created_at else '' }}</td>
+                    <td class="text-muted" style="font-size:0.85rem;">{{ entry.deleted_by.email if entry.deleted_by else '-' }}</td>
+                    <td class="text-end">
+                        <form method="POST" action="{{ url_for('employer.restore_job', history_id=entry.id) }}">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-rotate-left me-1"></i> Restore
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

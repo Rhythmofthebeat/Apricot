@@ -259,6 +259,68 @@ Reason: <1-2 sentences, specific to this candidate's actual background and this 
     return results
 
 
+def suggest_candidates_for_jobs(jobs, candidates):
+    """Reverse of suggest_jobs_for_profile: rank a company's open-to-work talent
+    pool against its own open job postings and return the best-fitting
+    candidates. `jobs` is a list of dicts with id/title/category/description.
+    `candidates` is a list of dicts with id/headline/skills/target_roles/
+    years_experience. Returns a list of dicts (candidate_id, score, reason),
+    best match first, capped to candidates the model considers a real fit."""
+    if not jobs or not candidates:
+        return []
+
+    jobs_block = "\n\n".join(
+        f"- {job['title']} ({job['category']}): {job['description'][:400]}"
+        for job in jobs
+    )
+    candidates_block = "\n\n".join(
+        f"[Candidate ID: {c['id']}] {c.get('headline') or 'No headline given'}\n"
+        f"Skills: {c.get('skills') or 'none listed'}\n"
+        f"Target roles: {c.get('target_roles') or 'none listed'}\n"
+        f"Experience: {c.get('years_experience') or 'unspecified'}"
+        for c in candidates
+    )
+
+    prompt = f"""
+A company has these open job postings:
+{jobs_block}
+
+Here is a pool of candidates who are currently open to work:
+{candidates_block}
+
+Identify which candidates are a genuinely good fit for at least one of these open roles. Only include
+candidates who are a reasonable match - do not pad the list with poor fits just to fill space.
+
+Respond with one block per recommended candidate, ranked best fit first, EXACTLY in this format (no
+asterisks, no markdown bold, no extra commentary):
+
+Candidate ID: <id>
+Score: <number 0-100>
+Reason: <1-2 sentences, specific to this candidate's actual background and which role they fit>
+"""
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=900,
+        temperature=0.3,
+    )
+    content = response.choices[0].message.content.strip()
+
+    results = []
+    for block in re.split(r"\n(?=Candidate ID:)", content):
+        id_match = re.search(r"Candidate ID:\s*(\d+)", block)
+        score_match = re.search(r"Score:\s*(\d{1,3})", block)
+        reason_match = re.search(r"Reason:\s*(.+)", block, re.DOTALL)
+        if not id_match:
+            continue
+        results.append({
+            "candidate_id": int(id_match.group(1)),
+            "score": int(score_match.group(1)) if score_match else 0,
+            "reason": reason_match.group(1).strip() if reason_match else "",
+        })
+    return results
+
+
 def find_similar_jobs(current_job, other_jobs):
     """Given a job dict (id, title, description) and a list of other open jobs,
     return the 3 most semantically similar ones. Similarity is based on role

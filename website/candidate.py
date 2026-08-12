@@ -15,6 +15,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 
 from . import db, limiter
 from .models import Job, Application, CandidateProfile, Company, CompanyMember, Notification, SavedJob, Message, MeetingRoom, MeetingProposal, User, Feedback, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
+from .matching import keyword_set, overlap_score, NOTIFY_SCORE_THRESHOLD, NOTIFY_MAX_RECIPIENTS
 from email_utils import send_branded_email, external_url
 from video_storage import upload_interview_video, get_signed_video_url, delete_interview_videos
 
@@ -46,6 +47,50 @@ def _audio_dir_for_application(application_id):
     path = os.path.join(AUDIO_BASE_DIR, str(application_id))
     os.makedirs(path, exist_ok=True)
     return path
+
+
+def _notify_employers_of_open_to_work(profile):
+    """Cheap keyword-match nudge to employers whose open jobs overlap a
+    candidate who just opted into the talent pool - mirrors
+    employer.notify_candidates_of_new_job, same reasoning: no real AI call
+    per profile save."""
+    candidate_words = keyword_set(profile.skills, profile.target_roles, profile.headline)
+    if not candidate_words:
+        return
+
+    from sqlalchemy.orm import joinedload
+    jobs = (
+        Job.query.filter_by(status='open')
+        .options(joinedload(Job.company))
+        .limit(300)
+        .all()
+    )
+
+    # Keep only the best-matching job per company, so a company with many
+    # open roles doesn't get notified once per role.
+    scored_by_company = {}
+    for job in jobs:
+        owner = job.company.owner_user_id if job.company else None
+        if not owner:
+            continue
+        job_words = keyword_set(job.title, job.category, (job.description_text or '')[:500])
+        score = overlap_score(candidate_words, job_words)
+        if score < NOTIFY_SCORE_THRESHOLD:
+            continue
+        best = scored_by_company.get(job.company_id)
+        if not best or score > best[0]:
+            scored_by_company[job.company_id] = (score, job, owner)
+
+    ranked = sorted(scored_by_company.values(), key=lambda x: x[0], reverse=True)
+    for _, job, owner_id in ranked[:NOTIFY_MAX_RECIPIENTS]:
+        owner = User.query.get(owner_id)
+        if not owner or not owner.notifications_enabled:
+            continue
+        db.session.add(Notification(
+            user_id=owner_id,
+            message=f"A candidate who fits {job.title} just joined the talent pool.",
+            link=url_for('employer.talent_pool'),
+        ))
 
 
 def _can_access_application_audio(application):
@@ -417,6 +462,27 @@ def interview_chat(job_id, application_id):
     verdict_match = re.search(r"Verdict:\s*(Strong Yes|Yes|No|Strong No)", reply, re.IGNORECASE)
     should_conclude = bool(verdict_match) or wrap_up
 
+    if wrap_up and not verdict_match:
+        # The model was told to conclude but didn't return a parseable verdict
+        # line - retry once with the same context before falling back to
+        # "Pending", so a single off-format reply doesn't permanently strand
+        # this application with no usable grade (see job_applicants.html's
+        # "interviewing"-styled Pending badge for how that's surfaced).
+        logger.warning(f"Interview conclude for application {application_id} returned no parseable verdict on first try - retrying")
+        try:
+            retry_reply = run_interview_turn(
+                job.title, job.description_text, user_message, history, force_conclude=True,
+                interview_length=job.interview_length, interview_focus=job.interview_focus,
+                interview_questions=interview_questions,
+            )
+            retry_match = re.search(r"Verdict:\s*(Strong Yes|Yes|No|Strong No)", retry_reply, re.IGNORECASE)
+            if retry_match:
+                reply, verdict_match = retry_reply, retry_match
+        except Exception:
+            logger.exception(f"Verdict retry failed for application {application_id}")
+        if not verdict_match:
+            logger.error(f"Application {application_id} concluded with no parseable verdict after retry - grading falls back to resume-only")
+
     question_filename = f"q_{len(audio_log) + 1}.mp3"
     try:
         synthesize_speech(reply, os.path.join(audio_dir, question_filename))
@@ -765,6 +831,8 @@ def save_profile():
         candidate_profile = CandidateProfile(user_id=current_user.id)
         db.session.add(candidate_profile)
 
+    was_open_to_work = candidate_profile.open_to_work
+
     candidate_profile.headline       = (data.get('headline') or '').strip() or None
     candidate_profile.linkedin_url   = (data.get('linkedin_url') or '').strip() or None
     candidate_profile.target_roles   = (data.get('target_roles') or '').strip() or None
@@ -780,6 +848,11 @@ def save_profile():
         candidate_profile.resume_text = resume_text
 
     db.session.commit()
+
+    if candidate_profile.open_to_work and not was_open_to_work:
+        _notify_employers_of_open_to_work(candidate_profile)
+        db.session.commit()
+
     return jsonify({"status": "success"})
 
 

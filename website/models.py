@@ -185,6 +185,46 @@ class Job(db.Model):
             return '\n\n'.join(parts) if parts else self.description
         return self.description
 
+    def to_snapshot_dict(self):
+        """Every re-creatable field, for stashing in DeletedJob.snapshot."""
+        return {
+            "title": self.title,
+            "description": self.description,
+            "location": self.location,
+            "employment_type": self.employment_type,
+            "category": self.category,
+            "status": self.status,
+            "interview_length": self.interview_length,
+            "interview_focus": self.interview_focus,
+            "interview_questions": self.interview_questions,
+            "salary_usd": self.salary_usd,
+            "salary_max_usd": self.salary_max_usd,
+            "pay_type": self.pay_type,
+        }
+
+
+class DeletedJob(db.Model):
+    """Snapshot of a Job taken right before it's deleted, so an accidental
+    delete can be undone. company_id is deliberately not a ForeignKey - when
+    a whole Company is deleted (admin.delete_company), its jobs are snapshotted
+    here first but the Company row itself is gone by the time this survives it,
+    so a hard FK would leave a dangling reference. Restoring only recreates the
+    job listing itself; applications/messages/videos already cascade-deleted
+    alongside it are not recoverable."""
+    id = db.Column(db.Integer, primary_key=True)
+    original_job_id = db.Column(db.Integer, nullable=False)
+    company_id = db.Column(db.Integer, nullable=False)
+    company_name = db.Column(db.String(200), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    snapshot = db.Column(db.Text, nullable=False)  # JSON of Job.to_snapshot_dict()
+    applicant_count = db.Column(db.Integer, nullable=False, default=0)
+    deleted_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    deleted_source = db.Column(db.String(20), nullable=False)  # "employer" | "admin"
+    restored_job_id = db.Column(db.Integer)  # set once restored, so it can't be restored twice
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    deleted_by = db.relationship("User")
+
 
 class CandidateProfile(db.Model):
     id = db.Column(db.Integer, primary_key=True)

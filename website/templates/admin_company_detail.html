@@ -107,7 +107,7 @@
             <span class="text-muted" style="font-size:0.78rem;">{{ job.created_at.strftime('%b %d, %Y') if job.created_at }}</span>
             <form method="POST" action="{{ url_for('admin_bp.delete_job', job_id=job.id) }}"
                   data-confirm-title="Delete this job?"
-                  data-confirm-message="{{ 'This deletes the job AND all ' ~ application_counts.get(job.id, 0) ~ ' applicant(s) under it - resumes, interview transcripts, everything. This cannot be undone.' if application_counts.get(job.id, 0) else 'This job has no applicants. This cannot be undone.' }}"
+                  data-confirm-message="{{ 'This permanently deletes all ' ~ application_counts.get(job.id, 0) ~ ' applicant(s) under it - resumes, interview transcripts, everything. That part cannot be undone, but the job listing itself can be restored from Deleted Jobs below for 30 days.' if application_counts.get(job.id, 0) else 'This job has no applicants. It can be restored from Deleted Jobs below for 30 days.' }}"
                   data-confirm-btn="Yes, delete">
                 <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
             </form>
@@ -116,6 +116,30 @@
     </div>
     {% endif %}
 </div>
+
+{% if deleted_jobs %}
+<div class="card mt-4">
+    <div class="card-header fw-semibold">Deleted Jobs ({{ deleted_jobs|length }})</div>
+    <div class="card-body p-0">
+        {% for entry in deleted_jobs %}
+        <div class="d-flex align-items-center gap-3 px-4 py-3" style="border-bottom:1px solid var(--border);">
+            <div class="flex-grow-1">
+                <div class="fw-semibold" style="font-size:0.9rem;">{{ entry.title }}</div>
+                <div class="text-muted" style="font-size:0.78rem;">
+                    Deleted {{ entry.created_at.strftime('%b %d, %Y %I:%M %p') if entry.created_at else '' }}
+                    by {{ entry.deleted_by.email if entry.deleted_by else 'unknown' }}
+                    &middot; had {{ entry.applicant_count }} applicant{{ 's' if entry.applicant_count != 1 }}
+                    &middot; {{ entry.deleted_source }} delete
+                </div>
+            </div>
+            <form method="POST" action="{{ url_for('admin_bp.restore_job', history_id=entry.id) }}">
+                <button type="submit" class="btn btn-sm btn-outline-primary"><i class="fas fa-rotate-left me-1"></i> Restore</button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 
 <!-- Delete company - typed confirmation given the blast radius -->
 <div class="modal fade" id="deleteCompanyModal" tabindex="-1" aria-hidden="true">

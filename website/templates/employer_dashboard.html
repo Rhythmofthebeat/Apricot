@@ -192,9 +192,14 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="h5 fw-bold mb-0">Job Postings</h2>
-    <a href="{{ url_for('employer.post_job') }}" class="btn btn-sm btn-primary">
-        <i class="fas fa-plus me-1"></i> New Job
-    </a>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('employer.deleted_jobs') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-clock-rotate-left me-1"></i> Deleted Jobs
+        </a>
+        <a href="{{ url_for('employer.post_job') }}" class="btn btn-sm btn-primary">
+            <i class="fas fa-plus me-1"></i> New Job
+        </a>
+    </div>
 </div>
 
 {% if not jobs %}

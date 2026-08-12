@@ -9,7 +9,7 @@ from . import db
 from .models import (
     EarnTask, TaskSubmission, User, EARN_DOMAINS, ContractorProfile, Company, Job, CompanyMember,
     Application, Feedback, FeedbackInsight, SavedJob, MeetingProposal, MeetingRoom, Message,
-    EmployerSubscription, CompanyInvite,
+    EmployerSubscription, CompanyInvite, DeletedJob,
 )
 from .dataset_export import shape_submission
 from ai_services import analyze_platform_feedback
@@ -96,8 +96,15 @@ def company_detail(company_id):
         .filter(Application.job_id.in_([j.id for j in jobs]))
         .group_by(Application.job_id).all()
     ) if jobs else {}
+    deleted_jobs = (
+        DeletedJob.query
+        .filter_by(company_id=company_id, restored_job_id=None)
+        .order_by(DeletedJob.created_at.desc())
+        .all()
+    )
     return render_template('admin_company_detail.html',
-        company=company, owner=owner, members=members, jobs=jobs, application_counts=application_counts)
+        company=company, owner=owner, members=members, jobs=jobs, application_counts=application_counts,
+        deleted_jobs=deleted_jobs)
 
 
 def _cascade_delete_applications(application_ids):
@@ -115,11 +122,31 @@ def _cascade_delete_applications(application_ids):
     Application.query.filter(Application.id.in_(application_ids)).delete(synchronize_session=False)
 
 
-def _cascade_delete_jobs(job_ids):
-    """Delete every application under a set of jobs (and everything under
-    those, via _cascade_delete_applications), then the jobs themselves."""
+def _cascade_delete_jobs(job_ids, source='admin'):
+    """Snapshot each job into DeletedJob, then delete every application under
+    it (and everything under those, via _cascade_delete_applications), then
+    the job itself. Restoring a DeletedJob only recreates the job listing -
+    the applications/messages/videos wiped out here are gone for good."""
     if not job_ids:
         return
+    jobs = Job.query.filter(Job.id.in_(job_ids)).all()
+    application_counts = dict(
+        db.session.query(Application.job_id, db.func.count(Application.id))
+        .filter(Application.job_id.in_(job_ids))
+        .group_by(Application.job_id).all()
+    )
+    for job in jobs:
+        db.session.add(DeletedJob(
+            original_job_id=job.id,
+            company_id=job.company_id,
+            company_name=job.company.name,
+            title=job.title,
+            snapshot=json.dumps(job.to_snapshot_dict()),
+            applicant_count=application_counts.get(job.id, 0),
+            deleted_by_user_id=current_user.id,
+            deleted_source=source,
+        ))
+
     application_ids = [a.id for a in Application.query.filter(Application.job_id.in_(job_ids)).all()]
     _cascade_delete_applications(application_ids)
     SavedJob.query.filter(SavedJob.job_id.in_(job_ids)).delete(synchronize_session=False)
@@ -145,6 +172,31 @@ def delete_job(job_id):
     suffix = f" and {applicant_count} application{'s' if applicant_count != 1 else ''}" if applicant_count else ""
     flash(f'Deleted "{title}"{suffix}.', 'success')
     return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+
+@admin_bp.route('/admin/deleted-jobs/<int:history_id>/restore', methods=['POST'])
+@login_required
+def restore_job(history_id):
+    """Recreates the job listing from its DeletedJob snapshot. Note this only
+    brings back the listing itself - applications/messages/videos that were
+    cascade-deleted alongside it are gone for good."""
+    _require_admin()
+    entry = DeletedJob.query.get_or_404(history_id)
+    if entry.restored_job_id:
+        flash("That job was already restored.", "error")
+        return redirect(url_for('admin_bp.company_detail', company_id=entry.company_id))
+    if not Company.query.get(entry.company_id):
+        flash("Can't restore - the company this job belonged to was also deleted.", "error")
+        return redirect(url_for('admin_bp.companies'))
+
+    data = json.loads(entry.snapshot)
+    job = Job(company_id=entry.company_id, **data)
+    db.session.add(job)
+    db.session.flush()
+    entry.restored_job_id = job.id
+    db.session.commit()
+    flash(f'"{job.title}" restored.', 'success')
+    return redirect(url_for('admin_bp.company_detail', company_id=entry.company_id))
 
 
 @admin_bp.route('/admin/companies/<int:company_id>/members/<int:user_id>/remove', methods=['POST'])

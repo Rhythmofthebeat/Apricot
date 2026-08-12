@@ -44,6 +44,11 @@
     }
     .empty-state { text-align:center; padding:60px 20px; color:var(--text-muted); }
     .empty-state i { font-size:2.5rem; margin-bottom:12px; opacity:.3; }
+    .generate-error {
+        background: var(--danger-soft); color: var(--danger);
+        border-radius: var(--radius); padding: 10px 14px; font-size: 0.85rem;
+    }
+    .suggest-reason { font-size: 0.8rem; color: var(--text-muted); margin: 4px 0 0; }
 </style>
 {% endblock %}
 
@@ -61,9 +66,7 @@
 <div class="pool-tabs">
     <button class="pool-tab active" onclick="switchTab('suggested', this)">
         <i class="fas fa-star me-1"></i> Suggested
-        <span class="badge rounded-pill ms-1" style="background:var(--primary);color:#fff;font-size:0.7rem;">
-            {{ suggested | length }}
-        </span>
+        <span class="badge rounded-pill ms-1" id="suggestedCount" style="background:var(--primary);color:#fff;font-size:0.7rem;display:none;"></span>
     </button>
     <button class="pool-tab" onclick="switchTab('all', this)">
         <i class="fas fa-users me-1"></i> All Candidates
@@ -120,7 +123,7 @@
 </a>
 {% endmacro %}
 
-<!-- Suggested tab -->
+<!-- Suggested tab (AI-ranked, loaded async since it's a real OpenAI call) -->
 <div id="pane-suggested">
     {% if not open_jobs %}
         <div class="empty-state">
@@ -135,14 +138,17 @@
             <p class="fw-semibold mb-1">No candidates are open to work yet</p>
             <p class="small">Check back as more candidates join and opt in.</p>
         </div>
-    {% elif suggested %}
-        {% for item in suggested %}{{ candidate_card(item) }}{% endfor %}
     {% else %}
-        <div class="empty-state">
+        <div id="suggestedLoading" class="text-muted p-4 d-flex align-items-center gap-2" style="font-size:0.88rem;">
+            <i class="fas fa-spinner fa-spin"></i> Finding candidates that fit your open roles…
+        </div>
+        <div id="suggestedEmpty" class="empty-state" style="display:none;">
             <i class="fas fa-search d-block"></i>
-            <p class="fw-semibold mb-1">No strong keyword matches yet</p>
+            <p class="fw-semibold mb-1">No strong matches yet</p>
             <p class="small">Try the All Candidates tab to browse everyone who's open to work.</p>
         </div>
+        <div id="suggestedError" class="generate-error" style="display:none;"></div>
+        <div id="suggestedList"></div>
     {% endif %}
 </div>
 
@@ -170,5 +176,58 @@ function switchTab(name, btn) {
         document.getElementById('pane-' + n).style.display = n === name ? '' : 'none';
     });
 }
+
+async function loadSuggestedCandidates() {
+    const loading = document.getElementById("suggestedLoading");
+    const empty   = document.getElementById("suggestedEmpty");
+    const errorEl = document.getElementById("suggestedError");
+    const list    = document.getElementById("suggestedList");
+    const count   = document.getElementById("suggestedCount");
+    if (!loading) return;  // no jobs / no candidates - static empty state already shown
+
+    try {
+        const r = await fetch("{{ url_for('employer.suggested_candidates') }}");
+        const result = await r.json();
+        if (!r.ok) throw new Error(result.error || "Failed.");
+
+        const suggestions = result.suggestions || [];
+        if (count) {
+            count.textContent = suggestions.length;
+            count.style.display = suggestions.length ? '' : 'none';
+        }
+        if (!suggestions.length) {
+            empty.style.display = "block";
+            return;
+        }
+        list.innerHTML = suggestions.map(s => `
+            <a href="${s.url}" class="candidate-card mb-3 d-flex">
+                <div class="cand-avatar">${s.name ? escapeHtml(s.name[0].toUpperCase()) : '?'}</div>
+                <div class="flex-grow-1 min-width-0">
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                        <span class="fw-bold" style="font-size:0.95rem;">${escapeHtml(s.name)}</span>
+                        ${s.availability ? `<span class="avail-badge"><i class="fas fa-circle" style="font-size:0.4rem;"></i>${escapeHtml(s.availability)}</span>` : ''}
+                        ${s.work_preference ? `<span class="text-muted small">· ${escapeHtml(s.work_preference)}</span>` : ''}
+                        ${s.location ? `<span class="text-muted small">· ${escapeHtml(s.location)}</span>` : ''}
+                    </div>
+                    ${s.headline ? `<p class="text-muted mb-1" style="font-size:0.85rem;">${escapeHtml(s.headline)}</p>` : ''}
+                    ${s.years_experience ? `<p class="text-muted mb-1" style="font-size:0.8rem;"><i class="fas fa-briefcase me-1"></i>${escapeHtml(s.years_experience)} yrs exp</p>` : ''}
+                    ${s.skills && s.skills.length ? `<div class="mt-1">${s.skills.map(sk => `<span class="skill-tag">${escapeHtml(sk)}</span>`).join('')}</div>` : ''}
+                    <p class="suggest-reason">${escapeHtml(s.reason)}</p>
+                </div>
+                <div class="match-pill">
+                    <div class="score-circle ${s.score >= 60 ? 'bg-success text-white' : (s.score >= 30 ? 'bg-warning text-dark' : 'bg-light text-muted')}">${s.score}</div>
+                    <div style="font-size:0.65rem;color:var(--text-muted);font-weight:600;">MATCH</div>
+                </div>
+            </a>
+        `).join('');
+    } catch (e) {
+        errorEl.textContent = e.message || "Couldn't load suggestions.";
+        errorEl.style.display = "block";
+    } finally {
+        loading.style.display = "none";
+    }
+}
+
+loadSuggestedCandidates();
 </script>
 {% endblock %}

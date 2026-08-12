@@ -149,7 +149,7 @@
                             </select>
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label fw-bold">Compensation <span class="text-muted fw-normal" style="font-size:0.8rem;">optional</span></label>
+                            <label class="form-label fw-bold">Compensation</label>
                             <select class="form-select mb-2" name="pay_type" id="payType" onchange="updateSalaryHints()">
                                 {% set pt = job.pay_type if job and job.pay_type else 'yearly' %}
                                 <option value="yearly"   {{ 'selected' if pt == 'yearly' }}>Per year (salary)</option>
@@ -161,7 +161,7 @@
                             <div class="d-flex gap-2">
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="salary_usd" id="salaryMin" min="0"
+                                    <input type="number" class="form-control" name="salary_usd" id="salaryMin" min="0" required
                                            value="{{ job.salary_usd if job and job.salary_usd else '' }}"
                                            placeholder="Min">
                                 </div>
@@ -274,7 +274,7 @@
                         <button type="submit" class="btn btn-primary flex-grow-1">
                             {% if job and job.status == 'draft' %}Publish Job{% elif job %}Save Changes{% else %}Post Job{% endif %}
                         </button>
-                        <button type="submit" name="save_as_draft" value="1" class="btn btn-outline-secondary">
+                        <button type="submit" name="save_as_draft" value="1" formnovalidate class="btn btn-outline-secondary">
                             <i class="fas fa-floppy-disk me-1"></i> Save Draft
                         </button>
                     </div>
@@ -468,7 +468,7 @@ async function analyzeJD() {
 
         const score = data.score;
         const color = score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--danger)';
-        const levelIcon = { error: '🔴', warning: '🟡', tip: '🔵' };
+        const levelColor = { error: 'var(--danger)', warning: 'var(--warning)', tip: 'var(--primary)' };
 
         resultEl.innerHTML = `
             <div style="text-align:center;margin-bottom:12px;">
@@ -478,7 +478,7 @@ async function analyzeJD() {
             <div style="font-size:0.8rem;">
                 ${data.issues.map(i => `
                     <div style="display:flex;gap:6px;margin-bottom:8px;align-items:flex-start;">
-                        <span style="flex-shrink:0;">${levelIcon[i.level] || '🔵'}</span>
+                        <i class="fas fa-circle" style="flex-shrink:0;font-size:0.5rem;margin-top:5px;color:${levelColor[i.level] || levelColor.tip};"></i>
                         <span style="color:var(--text);">${i.text}</span>
                     </div>
                 `).join('')}

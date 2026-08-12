@@ -199,7 +199,11 @@
                     {% else %}{{ app.candidate.first_name or app.candidate.email.split('@')[0] }}{% endif %}
                 </span>
                 <span class="badge-status {{ app.status }}">{{ app.status }}</span>
-                {% if app.interview_verdict %}
+                {% if app.interview_verdict == 'Pending' %}
+                    <span class="badge-status interviewing" title="Our AI couldn't produce a clean verdict for this interview - review the transcript manually">
+                        <i class="fas fa-robot me-1" style="font-size:0.65rem;"></i>Needs manual review
+                    </span>
+                {% elif app.interview_verdict %}
                     <span class="badge-status {{ 'hired' if 'Yes' in app.interview_verdict else 'rejected' }}" title="AI interview verdict">
                         <i class="fas fa-robot me-1" style="font-size:0.65rem;"></i>{{ app.interview_verdict }}
                     </span>
@@ -331,7 +335,7 @@
                     <select name="status" class="form-select form-select-sm" style="min-width:130px;" onchange="toggleHireSalaryFields({{ app.id }}, this.value)">
                         <option value="applied"      {{ 'selected' if app.status == 'applied' }}>Applied</option>
                         <option value="interviewing" {{ 'selected' if app.status == 'interviewing' }}>Interviewing</option>
-                        <option value="hired"        {{ 'selected' if app.status == 'hired' }}>Hired ✓</option>
+                        <option value="hired"        {{ 'selected' if app.status == 'hired' }}>Hired</option>
                         <option value="rejected"     {{ 'selected' if app.status == 'rejected' }}>Rejected</option>
                     </select>
                     {% endif %}
@@ -544,8 +548,7 @@
                         <div style="font-size:0.65rem;color:var(--text-muted);">45%</div>
                     </div>
                     <!-- Interview -->
-                    {% set vmap = {"Strong Yes": 100, "Yes": 75, "No": 25, "Strong No": 0} %}
-                    {% set vs = vmap.get(app.interview_verdict) %}
+                    {% set vs = verdict_score_map.get(app.interview_verdict) %}
                     {% if vs is not none %}
                         {% set vs_color = '#10b981' if vs >= 70 else ('#f59e0b' if vs >= 40 else '#ef4444') %}
                         <div class="score-breakdown-item">

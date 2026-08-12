@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import secrets
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.sql import func
 
@@ -22,16 +23,18 @@ from . import db, limiter
 from .models import (
     Company, Job, Application, Notification,
     CompanyMember, CompanyInvite, CandidateProfile, User,
-    MeetingRoom, Message, MeetingProposal, SavedJob, Feedback,
+    MeetingRoom, Message, MeetingProposal, SavedJob, Feedback, DeletedJob,
     JOB_CATEGORIES, JOB_LOCATIONS, COMPANY_SIZES, INDUSTRIES,
 )
-from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description, transcribe_audio, compare_resume_to_job
+from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description, transcribe_audio, compare_resume_to_job, suggest_candidates_for_jobs
 from .candidate import _extract_score
+from .matching import keyword_set, overlap_score, NOTIFY_SCORE_THRESHOLD, NOTIFY_MAX_RECIPIENTS
 from email_utils import send_branded_email, external_url
 
 employer = Blueprint('employer', __name__)
 
 MAX_INTERVIEW_QUESTIONS = 15
+TALENT_POOL_AI_LIMIT = 60  # cap on how many open-to-work profiles get sent to the AI ranker per call
 
 _VERDICT_SCORE = {"Strong Yes": 100, "Yes": 75, "No": 25, "Strong No": 0}
 
@@ -171,6 +174,43 @@ def is_company_owner():
 # ------------------------------------------------------------------ #
 #  Private helpers
 # ------------------------------------------------------------------ #
+
+def notify_candidates_of_new_job(job, company):
+    """Cheap keyword-match nudge to candidates whose profile overlaps a job
+    that just went live - not a replacement for the AI-ranked Suggested Jobs
+    feature, just a lightweight "hey, this might interest you" at the moment
+    a job is first posted/published, so it doesn't run a real AI call per
+    candidate on every job post."""
+    job_words = keyword_set(job.title, job.category, (job.description_text or '')[:500])
+    if not job_words:
+        return
+
+    from sqlalchemy.orm import joinedload
+    profiles = (
+        CandidateProfile.query
+        .filter(db.or_(CandidateProfile.skills.isnot(None), CandidateProfile.target_roles.isnot(None)))
+        .options(joinedload(CandidateProfile.user))
+        .limit(300)
+        .all()
+    )
+
+    scored = []
+    for prof in profiles:
+        if not prof.user or not prof.user.notifications_enabled:
+            continue
+        words = keyword_set(prof.skills, prof.target_roles, prof.headline)
+        score = overlap_score(words, job_words)
+        if score >= NOTIFY_SCORE_THRESHOLD:
+            scored.append((score, prof))
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    for _, prof in scored[:NOTIFY_MAX_RECIPIENTS]:
+        db.session.add(Notification(
+            user_id=prof.user_id,
+            message=f"New job that fits your profile: {job.title} at {company.name}",
+            link=url_for('candidate.job_detail', job_id=job.id),
+        ))
+
 
 def send_hire_fee_invoice(application, job, company, candidate, employer_user):
     """Create the Stripe placement-fee payment link and invoice the employer.
@@ -467,6 +507,14 @@ def post_job():
             pay_type = 'yearly'
         save_as_draft = request.form.get('save_as_draft') == '1'
 
+        if not save_as_draft and not salary_usd:
+            flash("An estimated salary is required to post a job - candidates need to see it before applying.", "error")
+            return render_template(
+                "post_job.html", categories=JOB_CATEGORIES, locations=JOB_LOCATIONS,
+                interview_lengths=INTERVIEW_LENGTH_OPTIONS,
+                interview_questions=json.loads(interview_questions) if interview_questions else [],
+            )
+
         job = Job(
             company_id=company.id,
             title=title,
@@ -487,6 +535,8 @@ def post_job():
         if save_as_draft:
             flash("Job saved as draft.", "success")
         else:
+            notify_candidates_of_new_job(job, company)
+            db.session.commit()
             flash("Job posted successfully!", "success")
         return redirect(url_for('employer.dashboard'))
 
@@ -532,6 +582,16 @@ def edit_job(job_id):
         pay_type = request.form.get('pay_type', 'yearly')
         if pay_type not in ('yearly', 'hourly', 'monthly', 'stipend', 'contract'):
             pay_type = 'yearly'
+
+        if not save_as_draft and not salary_raw.isdigit():
+            flash("An estimated salary is required to post a job - candidates need to see it before applying.", "error")
+            return render_template(
+                "post_job.html", job=job, categories=JOB_CATEGORIES, locations=JOB_LOCATIONS,
+                interview_lengths=INTERVIEW_LENGTH_OPTIONS,
+                interview_questions=_existing_interview_questions(job),
+            )
+
+        was_open = job.status == 'open'
         _edit_work_type = request.form.get('work_type', 'Remote (Worldwide)').strip()
         _edit_city = request.form.get('location_city', '').strip()
         job.title = title
@@ -551,6 +611,9 @@ def edit_job(job_id):
         job.salary_max_usd = int(salary_max_raw) if salary_max_raw.isdigit() else None
         job.pay_type = pay_type
         db.session.commit()
+        if not was_open and job.status == 'open':
+            notify_candidates_of_new_job(job, company)
+            db.session.commit()
         flash("Draft saved." if save_as_draft else "Job updated!", "success")
         return redirect(url_for('employer.dashboard'))
 
@@ -569,7 +632,12 @@ def publish_job(job_id):
     job = Job.query.get_or_404(job_id)
     if job.company_id != company.id:
         abort(403)
+    if not job.salary_usd:
+        flash("Add an estimated salary before publishing - candidates need to see it before applying.", "error")
+        return redirect(url_for('employer.edit_job', job_id=job.id))
     job.status = 'open'
+    db.session.commit()
+    notify_candidates_of_new_job(job, company)
     db.session.commit()
     flash("Job published successfully.", "success")
     return redirect(url_for('employer.dashboard'))
@@ -606,10 +674,56 @@ def delete_job(job_id):
         flash("This job has applicants, so it can't be deleted - close it instead to stop new applications while keeping candidate history.", "error")
         return redirect(url_for('employer.dashboard'))
 
+    db.session.add(DeletedJob(
+        original_job_id=job.id,
+        company_id=company.id,
+        company_name=company.name,
+        title=job.title,
+        snapshot=json.dumps(job.to_snapshot_dict()),
+        applicant_count=0,
+        deleted_by_user_id=current_user.id,
+        deleted_source='employer',
+    ))
     SavedJob.query.filter_by(job_id=job.id).delete()
     db.session.delete(job)
     db.session.commit()
-    flash("Job deleted.", "success")
+    flash("Job deleted. You can restore it from Deleted Jobs within 30 days.", "success")
+    return redirect(url_for('employer.dashboard'))
+
+
+@employer.route('/employer/deleted-jobs')
+@login_required
+@employer_required
+def deleted_jobs():
+    company = get_owned_company()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    history = DeletedJob.query.filter(
+        DeletedJob.company_id == company.id,
+        DeletedJob.restored_job_id.is_(None),
+        DeletedJob.created_at >= cutoff,
+    ).order_by(DeletedJob.created_at.desc()).all()
+    return render_template('deleted_jobs.html', history=history)
+
+
+@employer.route('/employer/deleted-jobs/<int:history_id>/restore', methods=['POST'])
+@login_required
+@employer_required
+def restore_job(history_id):
+    company = get_owned_company()
+    entry = DeletedJob.query.get_or_404(history_id)
+    if entry.company_id != company.id:
+        abort(403)
+    if entry.restored_job_id:
+        flash("That job was already restored.", "error")
+        return redirect(url_for('employer.deleted_jobs'))
+
+    data = json.loads(entry.snapshot)
+    job = Job(company_id=company.id, **data)
+    db.session.add(job)
+    db.session.flush()
+    entry.restored_job_id = job.id
+    db.session.commit()
+    flash(f'"{job.title}" restored.', "success")
     return redirect(url_for('employer.dashboard'))
 
 
@@ -771,6 +885,7 @@ def applicants(job_id):
         ai_likelihoods=ai_likelihoods,
         composite_scores=composite_scores,
         feedback_prompt_ids=feedback_prompt_ids,
+        verdict_score_map=_VERDICT_SCORE,
     )
 
 
@@ -1138,7 +1253,8 @@ def talent_pool():
     company = get_owned_company()
     open_jobs = Job.query.filter_by(company_id=company.id, status='open').all()
 
-    # Build keyword set from employer's open jobs
+    # Build keyword set from employer's open jobs - used for the "All Candidates"
+    # browse tab, which stays a cheap heuristic rather than an AI call per view.
     job_corpus = ' '.join(
         f"{j.title} {j.category} {(j.description_text or '')[:300]}"
         for j in open_jobs
@@ -1168,15 +1284,83 @@ def talent_pool():
         key=lambda x: x["score"],
         reverse=True,
     )
-    suggested = [x for x in all_scored if x["score"] > 0]
 
     return render_template(
         "talent_pool.html",
         all_scored=all_scored,
-        suggested=suggested,
         company=company,
         open_jobs=open_jobs,
     )
+
+
+@employer.route('/employer/talent/suggested')
+@login_required
+@employer_required
+@limiter.limit("30 per hour")
+def suggested_candidates():
+    """AI-ranked candidates from the open-to-work pool that fit this employer's
+    open roles - the mirror of candidate.suggested_jobs. Loaded async from
+    talent_pool.html rather than computed on every page render, since it's a
+    real OpenAI call."""
+    company = get_owned_company()
+    open_jobs = Job.query.filter_by(company_id=company.id, status='open').all()
+    if not open_jobs:
+        return jsonify({"suggestions": []})
+
+    from sqlalchemy.orm import joinedload
+    profiles = (
+        CandidateProfile.query
+        .filter_by(open_to_work=True)
+        .options(joinedload(CandidateProfile.user))
+        .limit(TALENT_POOL_AI_LIMIT)
+        .all()
+    )
+    profiles = [p for p in profiles if p.user]
+    if not profiles:
+        return jsonify({"suggestions": []})
+
+    jobs_payload = [
+        {"id": j.id, "title": j.title, "category": j.category, "description": j.description_text}
+        for j in open_jobs
+    ]
+    candidates_payload = [
+        {
+            "id": p.id,
+            "headline": p.headline,
+            "skills": p.skills,
+            "target_roles": p.target_roles,
+            "years_experience": p.years_experience,
+        }
+        for p in profiles
+    ]
+
+    try:
+        ranked = suggest_candidates_for_jobs(jobs_payload, candidates_payload)
+    except Exception:
+        return jsonify({"error": "Failed to generate suggestions. Please try again."}), 500
+
+    profiles_by_id = {p.id: p for p in profiles}
+    suggestions = []
+    for item in ranked[:12]:
+        prof = profiles_by_id.get(item["candidate_id"])
+        if not prof:
+            continue
+        user = prof.user
+        suggestions.append({
+            "user_id": user.id,
+            "name": user.first_name or "Candidate",
+            "headline": prof.headline or "",
+            "availability": prof.availability or "",
+            "work_preference": prof.work_preference or "",
+            "location": prof.location or "",
+            "years_experience": prof.years_experience or "",
+            "skills": [s.strip() for s in (prof.skills or "").split(",") if s.strip()][:6],
+            "score": item["score"],
+            "reason": item["reason"],
+            "url": url_for('candidate.public_profile', user_id=user.id),
+        })
+
+    return jsonify({"suggestions": suggestions})
 
 
 @employer.route('/employer/analytics')
@@ -1747,15 +1931,15 @@ def create_meeting_room(application_id):
     try:
         send_branded_email(
             to_email=candidate.email,
-            subject=f"🎉 {company.name} wants to interview you - {job.title}",
+            subject=f"{company.name} wants to interview you - {job.title}",
             heading=f"{company.name} wants to meet you!",
             body_html=(
                 f"Hi {candidate.first_name or 'there'},<br><br>"
                 f"Great news - <strong>{company.name}</strong> has scheduled a live video interview "
                 f"with you for <strong>{job.title}</strong>.<br><br>"
-                f"<strong>📅 Date:</strong> {date}<br>"
-                f"<strong>🕐 Time:</strong> {time_}<br>"
-                + (f"<strong>📝 Notes:</strong> {notes}<br>" if notes else "")
+                f"<strong>Date:</strong> {date}<br>"
+                f"<strong>Time:</strong> {time_}<br>"
+                + (f"<strong>Notes:</strong> {notes}<br>" if notes else "")
                 + "<br>The interview takes place directly on Avants - no Zoom needed. "
                 "Click the button below when it's time."
             ),

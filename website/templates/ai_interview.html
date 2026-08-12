@@ -226,7 +226,18 @@
                 <p class="interview-progress">Interview Complete</p>
                 <div id="verdictBadge"></div>
                 <div class="verdict-reasons" id="verdictReasons"></div>
-                <a href="{{ url_for('candidate.dashboard') }}" class="btn btn-primary">Back to My Applications</a>
+
+                <div id="interviewFeedbackBox" class="mt-4 mx-auto" style="max-width:360px; border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px;">
+                    <p class="mb-2" style="font-size:0.85rem; font-weight:600;">How was this interview experience?</p>
+                    <div class="d-flex gap-2 justify-content-center mb-2" id="interviewFeedbackStars" style="font-size:1.6rem;">
+                        {% for i in range(1, 6) %}<i class="far fa-star" data-star="{{ i }}" style="cursor:pointer;color:var(--text-muted);" onclick="setInterviewFeedbackRating({{ i }})"></i>{% endfor %}
+                    </div>
+                    <textarea id="interviewFeedbackComment" class="form-control mb-2" rows="2" style="font-size:0.82rem;" placeholder="Anything you'd like to share? (optional)"></textarea>
+                    <button type="button" id="interviewFeedbackSubmit" class="btn btn-outline-primary btn-sm w-100" onclick="submitInterviewFeedback()" disabled>Submit feedback</button>
+                    <p id="interviewFeedbackThanks" class="text-success mb-0 mt-1" style="display:none; font-size:0.82rem;"><i class="fas fa-check me-1"></i>Thanks for the feedback!</p>
+                </div>
+
+                <a href="{{ url_for('candidate.dashboard') }}" class="btn btn-primary mt-3">Back to My Applications</a>
             </div>
         </div>
         </div><!-- /mainInterviewCard -->
@@ -242,6 +253,7 @@
 const chatUrl = "{{ url_for('candidate.interview_chat', job_id=job.id, application_id=application.id) }}";
 const dashboardUrl = "{{ url_for('candidate.dashboard') }}";
 const saveSessionUrl = "{{ url_for('candidate.save_interview_session', job_id=job.id, application_id=application.id) }}";
+const feedbackUrl = "{{ url_for('candidate.submit_platform_feedback', application_id=application.id) }}";
 const savedSession = {{ saved_session|tojson if saved_session else 'null' }};
 let history         = [];
 let currentQuestion = null;
@@ -393,6 +405,37 @@ function showVerdict(replyText) {
         }
         reasonsEl.appendChild(div);
     });
+}
+
+let interviewFeedbackRating = 0;
+function setInterviewFeedbackRating(n) {
+    interviewFeedbackRating = n;
+    document.querySelectorAll('#interviewFeedbackStars i').forEach(el => {
+        const filled = parseInt(el.dataset.star, 10) <= n;
+        el.className = filled ? 'fas fa-star' : 'far fa-star';
+        el.style.color = filled ? 'var(--warning)' : 'var(--text-muted)';
+    });
+    document.getElementById('interviewFeedbackSubmit').disabled = false;
+}
+
+async function submitInterviewFeedback() {
+    if (!interviewFeedbackRating) return;
+    const btn = document.getElementById('interviewFeedbackSubmit');
+    btn.disabled = true;
+    const formData = new FormData();
+    formData.append('context', 'interview_completed');
+    formData.append('rating', interviewFeedbackRating);
+    formData.append('comment', document.getElementById('interviewFeedbackComment').value);
+    try {
+        await fetch(feedbackUrl, { method: 'POST', body: formData });
+    } catch (_) {
+        // Best-effort - the same "Rate your experience" prompt still shows on
+        // the dashboard later if this silently fails.
+    }
+    document.getElementById('interviewFeedbackStars').style.display = 'none';
+    document.getElementById('interviewFeedbackComment').style.display = 'none';
+    btn.style.display = 'none';
+    document.getElementById('interviewFeedbackThanks').style.display = 'block';
 }
 
 async function sendTurn(mediaBlob, hasVideo) {
