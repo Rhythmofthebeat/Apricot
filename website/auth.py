@@ -45,7 +45,14 @@ def _provision_employer(user, email_domain, company_name, signature_name=None):
             db.session.commit()
         return existing
 
-    if not company_name:
+    signature_name = (signature_name or '').strip()
+    if not company_name or not signature_name:
+        # No real e-signature collected yet (e.g. a Supabase session syncing
+        # in via login()/auth_confirm() without ever hitting the sign-up
+        # form's checkbox) - don't stamp acceptance on a Company that was
+        # never actually signed for. employer_required's existing redirect to
+        # complete_employer_profile is the only path that creates the Company
+        # from here, and that route already collects the checkbox + signature.
         return None
 
     company = Company(
@@ -55,7 +62,7 @@ def _provision_employer(user, email_domain, company_name, signature_name=None):
         terms_accepted_at=datetime.now(timezone.utc),
         terms_accepted_ip=request.remote_addr,
         terms_version='1.0',
-        terms_signature_name=(signature_name or '').strip() or None,
+        terms_signature_name=signature_name,
     )
     db.session.add(company)
     db.session.commit()
