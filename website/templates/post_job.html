@@ -326,11 +326,108 @@ function addQuestionRow(text) {
     removeBtn.className = "remove-question-btn";
     removeBtn.title = "Remove";
     removeBtn.innerHTML = '<i class="fas fa-times"></i>';
-    removeBtn.addEventListener("click", () => row.remove());
+    removeBtn.addEventListener("click", () => { row.remove(); scheduleDraftSave(); });
 
     row.appendChild(input);
     row.appendChild(removeBtn);
     questionsList.appendChild(row);
+    scheduleDraftSave();
+}
+
+// ── Auto-save/restore so a reload doesn't lose unsaved work ─────────────
+const draftKey = "avants_job_draft_{{ job.id if job else 'new' }}";
+let restoringDraft = false;
+let formSubmitted = false;
+let draftSaveTimer = null;
+
+function scheduleDraftSave() {
+    if (restoringDraft || formSubmitted) return;
+    clearTimeout(draftSaveTimer);
+    draftSaveTimer = setTimeout(saveDraft, 400);
+}
+
+function collectDraft() {
+    return {
+        title: document.getElementById('jobTitle')?.value ?? '',
+        work_type: document.getElementById('workType')?.value ?? '',
+        location_city: document.getElementById('locationCity')?.value ?? '',
+        employment_type: document.querySelector('[name=employment_type]')?.value ?? '',
+        category: document.querySelector('[name=category]')?.value ?? '',
+        pay_type: document.getElementById('payType')?.value ?? '',
+        salary_usd: document.getElementById('salaryMin')?.value ?? '',
+        salary_max_usd: document.getElementById('salaryMax')?.value ?? '',
+        status: document.querySelector('[name=status]')?.value ?? '',
+        sections: {
+            about: document.getElementById('sec_about')?.value ?? '',
+            requirements: document.getElementById('sec_requirements')?.value ?? '',
+            preferred: document.getElementById('sec_preferred')?.value ?? '',
+            what_you_do: document.getElementById('sec_what_you_do')?.value ?? '',
+            contract_terms: document.getElementById('sec_contract_terms')?.value ?? '',
+        },
+        interview_length: document.getElementById('interviewLength')?.value ?? '',
+        interview_focus: document.getElementById('interviewFocus')?.value ?? '',
+        questions: Array.from(document.querySelectorAll('.question-input')).map(i => i.value),
+        savedAt: Date.now(),
+    };
+}
+
+function saveDraft() {
+    try { localStorage.setItem(draftKey, JSON.stringify(collectDraft())); } catch (_) { /* storage unavailable - not critical */ }
+}
+
+function applyDraft(draft) {
+    restoringDraft = true;
+    if (draft.title !== undefined) document.getElementById('jobTitle').value = draft.title;
+    if (draft.work_type) { document.getElementById('workType').value = draft.work_type; toggleCityInput(); }
+    if (draft.location_city !== undefined) document.getElementById('locationCity').value = draft.location_city;
+    const empEl = document.querySelector('[name=employment_type]');
+    if (empEl && draft.employment_type) empEl.value = draft.employment_type;
+    const catEl = document.querySelector('[name=category]');
+    if (catEl && draft.category) catEl.value = draft.category;
+    if (draft.pay_type) document.getElementById('payType').value = draft.pay_type;
+    if (draft.salary_usd !== undefined) document.getElementById('salaryMin').value = draft.salary_usd;
+    if (draft.salary_max_usd !== undefined) document.getElementById('salaryMax').value = draft.salary_max_usd;
+    const statusEl = document.querySelector('[name=status]');
+    if (statusEl && draft.status) statusEl.value = draft.status;
+    if (draft.sections) {
+        document.getElementById('sec_about').value = draft.sections.about ?? '';
+        document.getElementById('sec_requirements').value = draft.sections.requirements ?? '';
+        document.getElementById('sec_preferred').value = draft.sections.preferred ?? '';
+        document.getElementById('sec_what_you_do').value = draft.sections.what_you_do ?? '';
+        document.getElementById('sec_contract_terms').value = draft.sections.contract_terms ?? '';
+    }
+    if (draft.interview_length) document.getElementById('interviewLength').value = draft.interview_length;
+    if (draft.interview_focus !== undefined) document.getElementById('interviewFocus').value = draft.interview_focus;
+    if (Array.isArray(draft.questions)) {
+        questionsList.innerHTML = '';
+        draft.questions.forEach(addQuestionRow);
+        document.getElementById('previewQuestionsBox').style.display = draft.questions.length ? 'block' : 'none';
+    }
+    updateSalaryHints();
+    updateChecklist();
+    restoringDraft = false;
+}
+
+function restoreDraftIfAny() {
+    let raw;
+    try { raw = localStorage.getItem(draftKey); } catch (_) { return; }
+    if (!raw) return;
+    let draft;
+    try { draft = JSON.parse(raw); } catch (_) { localStorage.removeItem(draftKey); return; }
+
+    applyDraft(draft);
+
+    const banner = document.createElement('div');
+    banner.className = 'alert alert-info d-flex justify-content-between align-items-center py-2 mb-3';
+    banner.style.fontSize = '0.82rem';
+    banner.innerHTML = '<span><i class="fas fa-clock-rotate-left me-1"></i> Restored your unsaved changes from before the reload.</span>';
+    const discardBtn = document.createElement('button');
+    discardBtn.type = 'button';
+    discardBtn.className = 'btn btn-sm btn-outline-secondary';
+    discardBtn.textContent = 'Discard & start fresh';
+    discardBtn.onclick = () => { localStorage.removeItem(draftKey); location.reload(); };
+    banner.appendChild(discardBtn);
+    document.getElementById('postJobForm').prepend(banner);
 }
 
 existingQuestions.forEach(addQuestionRow);
@@ -499,6 +596,14 @@ document.getElementById("postJobForm").addEventListener("submit", () => {
         .map(input => input.value.trim())
         .filter(text => text);
     document.getElementById("interviewQuestionsField").value = JSON.stringify(questions);
+
+    // Submitting the button blurs whatever field was focused, which can fire
+    // one last 'change' -> scheduleDraftSave() *after* this handler starts
+    // running. Without formSubmitted, that pending timer would fire during
+    // the navigation and resurrect the draft we're about to clear.
+    formSubmitted = true;
+    clearTimeout(draftSaveTimer);
+    try { localStorage.removeItem(draftKey); } catch (_) { /* not critical */ }
 });
 
 const PAY_CONFIG = {
@@ -591,5 +696,13 @@ if (focusEl) focusEl.addEventListener('input', updateChecklist);
 document.getElementById('addQuestionBtn').addEventListener('click', () => setTimeout(updateChecklist, 0));
 
 updateChecklist();
+
+// Any edit anywhere in the form schedules an auto-save (debounced), so a
+// reload never loses what was typed. select/checkbox changes fire 'change'
+// rather than 'input' in some browsers, so listen for both.
+document.getElementById('postJobForm').addEventListener('input', scheduleDraftSave);
+document.getElementById('postJobForm').addEventListener('change', scheduleDraftSave);
+
+restoreDraftIfAny();
 </script>
 {% endblock %}
