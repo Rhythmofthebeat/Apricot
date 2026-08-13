@@ -65,10 +65,48 @@
         text-align: center;
     }
     .empty-icon { font-size: 2.5rem; color: var(--border); margin-bottom: 12px; }
+    .overdue-fee-banner {
+        background: var(--danger-soft);
+        border: 1px solid var(--danger);
+        border-radius: var(--radius);
+        padding: 16px 20px;
+        margin-bottom: 20px;
+    }
+    .overdue-fee-row {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+        padding: 8px 0; border-top: 1px solid rgba(0,0,0,0.08);
+    }
+    .overdue-fee-row:first-of-type { border-top: none; }
 </style>
 {% endblock %}
 
 {% block content %}
+
+<!-- Overdue placement fees -->
+{% if overdue_fees %}
+<div class="overdue-fee-banner">
+    <div class="d-flex align-items-start gap-2">
+        <i class="fas fa-triangle-exclamation mt-1" style="color:var(--danger);"></i>
+        <div class="flex-grow-1">
+            <div class="fw-bold" style="color:var(--danger);">
+                {{ overdue_fees|length }} overdue placement fee{{ 's' if overdue_fees|length != 1 }}
+            </div>
+            <p class="mb-2" style="font-size:0.85rem;color:var(--text);">
+                Unpaid invoices accrue interest at 1.5% per month after 30 days. Continued non-payment may result in your account being suspended or your company profile being removed from Avants AI.
+            </p>
+            {% for item in overdue_fees %}
+            <div class="overdue-fee-row">
+                <span style="font-size:0.85rem;">
+                    <strong>{{ item.candidate.first_name if item.candidate else 'Candidate' }}</strong> - {{ item.job.title }}
+                    <span class="text-muted">&middot; {{ item.days_overdue }} days overdue{% if item.fee_amount %} &middot; ${{ '{:,}'.format(item.fee_amount) }}{% endif %}</span>
+                </span>
+                <a href="{{ url_for('employer.applicants', job_id=item.job.id) }}" class="btn btn-sm btn-danger">Pay Now</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Company header -->
 <div class="company-header">

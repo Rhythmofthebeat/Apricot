@@ -212,6 +212,97 @@ def notify_candidates_of_new_job(job, company):
         ))
 
 
+OVERDUE_FEE_DAYS = 30       # matches the ToS: fee is due within 30 days of the candidate's start date
+FEE_REMINDER_THROTTLE_DAYS = 4  # don't re-send a reminder more than once every N days
+
+
+def overdue_fee_applications(company):
+    """Hired applications whose placement fee invoice went out (candidate
+    confirmed) but was never paid, past the 30-day ToS deadline. Excludes
+    engagements already marked ended - once billing has legitimately stopped
+    there's nothing to chase. Note: for hourly roles this only catches a
+    first payment that was never made - fee_paid flips True on the first
+    successful Stripe charge and nothing here currently detects a later
+    monthly subscription payment failing (no invoice.payment_failed webhook
+    handler exists yet), so a lapsed recurring subscription won't show up."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=OVERDUE_FEE_DAYS)
+    return (
+        Application.query.join(Job)
+        .filter(
+            Job.company_id == company.id,
+            Application.status == 'hired',
+            Application.candidate_confirmed_hire.is_(True),
+            Application.fee_paid.is_(False),
+            Application.hire_engagement_ended_at.is_(None),
+            Application.hire_confirmed_at.isnot(None),
+            Application.hire_confirmed_at <= cutoff,
+        )
+        .order_by(Application.hire_confirmed_at.asc())
+        .all()
+    )
+
+
+def send_overdue_fee_reminder(application, job, company, employer_user):
+    """Email + in-app warning for an overdue placement fee, throttled so it
+    fires at most once every FEE_REMINDER_THROTTLE_DAYS regardless of how
+    often the employer loads their dashboard."""
+    now = datetime.now(timezone.utc)
+    if application.fee_reminder_sent_at:
+        last = application.fee_reminder_sent_at
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        if now - last < timedelta(days=FEE_REMINDER_THROTTLE_DAYS):
+            return
+
+    days_overdue = (now - application.hire_confirmed_at.replace(tzinfo=timezone.utc)).days
+    basis_amount, fee_percent = _placement_fee_basis(application, job)
+    fee_amount = int(basis_amount * fee_percent / 100) if basis_amount else None
+    candidate = User.query.get(application.candidate_user_id)
+    pay_link = application.stripe_payment_link or external_url('employer.applicants', job_id=job.id)
+
+    db.session.add(Notification(
+        user_id=employer_user.id,
+        message=(
+            f"Overdue: the placement fee for {candidate.first_name if candidate else 'your hire'} "
+            f"({job.title}) is {days_overdue} days past due. Your account may be suspended or your "
+            f"company removed from Avants AI if this isn't resolved."
+        ),
+        link=url_for('employer.applicants', job_id=job.id),
+    ))
+
+    try:
+        send_branded_email(
+            to_email=employer_user.email,
+            subject=f"Overdue placement fee - {job.title} - action required",
+            heading="Placement fee overdue",
+            body_html=(
+                f"The placement fee for <strong>{candidate.first_name if candidate else 'your hire'}</strong> "
+                f"(<strong>{job.title}</strong>) is <strong>{days_overdue} days overdue</strong> - "
+                f"{f'${fee_amount:,} ' if fee_amount else ''}was due within 30 days of the candidate's start date "
+                f"per the Employer Platform Agreement.<br><br>"
+                f"Unpaid invoices accrue interest at 1.5% per month after 30 days. "
+                f"<strong>Continued non-payment may result in your account being suspended or your "
+                f"company profile being removed from Avants AI.</strong><br><br>"
+                f"Please pay now to avoid any disruption, or reply to this email if you believe this is in error."
+            ),
+            plain_text=(
+                f"The placement fee for {candidate.first_name if candidate else 'your hire'} ({job.title}) is "
+                f"{days_overdue} days overdue"
+                f"{f' (${fee_amount:,})' if fee_amount else ''} - due within 30 days of the candidate's start date "
+                f"per the Employer Platform Agreement.\n\n"
+                f"Unpaid invoices accrue interest at 1.5%/month after 30 days. Continued non-payment may result "
+                f"in your account being suspended or your company profile being removed from Avants AI.\n\n"
+                f"Pay here: {pay_link}"
+            ),
+            cta_label="Pay Now",
+            cta_url=pay_link,
+        )
+    except Exception as e:
+        print(f"Overdue fee reminder email failed: {e}")
+
+    application.fee_reminder_sent_at = now
+
+
 def send_hire_fee_invoice(application, job, company, candidate, employer_user):
     """Create the Stripe placement-fee payment link and invoice the employer.
     Only called once the candidate has confirmed the hire - see candidate.confirm_hire."""
@@ -447,6 +538,22 @@ def dashboard():
     members = CompanyMember.query.filter_by(company_id=company.id).all()
     owner_is_current = company.owner_user_id == current_user.id
 
+    overdue_apps = overdue_fee_applications(company)
+    now = datetime.now(timezone.utc)
+    overdue_fees = []
+    for app in overdue_apps:
+        send_overdue_fee_reminder(app, app.job, company, current_user)
+        basis_amount, fee_percent = _placement_fee_basis(app, app.job)
+        overdue_fees.append({
+            "application": app,
+            "job": app.job,
+            "candidate": app.candidate,
+            "days_overdue": (now - app.hire_confirmed_at.replace(tzinfo=timezone.utc)).days,
+            "fee_amount": int(basis_amount * fee_percent / 100) if basis_amount else None,
+        })
+    if overdue_apps:
+        db.session.commit()
+
     return render_template(
         "employer_dashboard.html",
         company=company,
@@ -458,6 +565,7 @@ def dashboard():
         open_jobs=open_jobs,
         members=members,
         is_owner=owner_is_current,
+        overdue_fees=overdue_fees,
     )
 
 

@@ -116,6 +116,7 @@ def _run_migrations(db):
         # application - recurring monthly billing for hourly hires, instead of one lump sum
         "ALTER TABLE application ADD COLUMN hire_billing_subscription_id VARCHAR(100)",
         "ALTER TABLE application ADD COLUMN hire_engagement_ended_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE application ADD COLUMN fee_reminder_sent_at TIMESTAMP WITH TIME ZONE",
     ]
     for stmt in new_columns:
         try:

@@ -274,6 +274,7 @@ class Application(db.Model):
     # stripe_payment_link above is a subscription-mode link in this case.
     hire_billing_subscription_id = db.Column(db.String(100))
     hire_engagement_ended_at = db.Column(db.DateTime(timezone=True))  # set when the employer stops billing
+    fee_reminder_sent_at = db.Column(db.DateTime(timezone=True))  # last overdue-fee reminder email, throttles re-sends
     employer_notes = db.Column(db.Text)  # private notes visible only to employer
     withdrawn = db.Column(db.Boolean, nullable=False, default=False)
     candidate_feedback = db.Column(db.Text)  # employer-approved AI feedback sent to candidate on rejection
