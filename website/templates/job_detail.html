@@ -121,7 +121,7 @@
                     {% if job.company.logo_filename %}
                         <img src="{{ url_for('static', filename='logos/' + job.company.logo_filename) }}?v={{ job.company.logo_version or 0 }}"
                              alt="{{ job.company.name }}"
-                             style="width:40px;height:40px;border-radius:8px;object-fit:contain;flex-shrink:0;"
+                             style="width:40px;height:40px;border-radius:8px;object-fit:contain;flex-shrink:0;background:#fff;padding:5px;box-sizing:border-box;"
                              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                         <div class="company-icon" style="display:none;">{{ job.company.name[0]|upper }}</div>
                     {% else %}

@@ -54,7 +54,7 @@
         <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
             {% if app.job.company.logo_filename %}
             <img src="{{ url_for('static', filename='logos/' + app.job.company.logo_filename) }}?v={{ app.job.company.logo_version or 0 }}"
-                 alt="{{ app.job.company.name }}" style="width:40px;height:40px;border-radius:8px;object-fit:contain;">
+                 alt="{{ app.job.company.name }}" style="width:40px;height:40px;border-radius:8px;object-fit:contain;background:#fff;padding:5px;box-sizing:border-box;">
             {% else %}
             <div class="co-avatar" style="background:#fde68a;color:#92400e;">{{ app.job.company.name[0]|upper }}</div>
             {% endif %}
@@ -111,7 +111,7 @@
 <div class="interview-card upcoming">
     {% if company.logo_filename %}
     <img src="{{ url_for('static', filename='logos/' + company.logo_filename) }}?v={{ company.logo_version or 0 }}"
-         alt="{{ company.name }}" style="width:44px;height:44px;border-radius:10px;object-fit:contain;flex-shrink:0;">
+         alt="{{ company.name }}" style="width:44px;height:44px;border-radius:10px;object-fit:contain;flex-shrink:0;background:#fff;padding:6px;box-sizing:border-box;">
     {% else %}
     <div class="co-avatar">{{ initial }}</div>
     {% endif %}
@@ -146,7 +146,7 @@
 <div class="interview-card past">
     {% if company.logo_filename %}
     <img src="{{ url_for('static', filename='logos/' + company.logo_filename) }}?v={{ company.logo_version or 0 }}"
-         alt="{{ company.name }}" style="width:44px;height:44px;border-radius:10px;object-fit:contain;flex-shrink:0;">
+         alt="{{ company.name }}" style="width:44px;height:44px;border-radius:10px;object-fit:contain;flex-shrink:0;background:#fff;padding:6px;box-sizing:border-box;">
     {% else %}
     <div class="co-avatar">{{ initial }}</div>
     {% endif %}

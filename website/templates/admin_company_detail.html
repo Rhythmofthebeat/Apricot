@@ -11,7 +11,7 @@
         {% if company.logo_filename %}
             <img src="{{ url_for('static', filename='logos/' + company.logo_filename) }}?v={{ company.logo_version or 0 }}"
                  alt="{{ company.name }}"
-                 style="width:64px;height:64px;border-radius:10px;object-fit:contain;flex-shrink:0;border:1px solid var(--border);background:#fff;">
+                 style="width:64px;height:64px;border-radius:10px;object-fit:contain;flex-shrink:0;border:1px solid var(--border);background:#fff;padding:8px;box-sizing:border-box;">
         {% else %}
             <div style="width:64px;height:64px;border-radius:10px;background:var(--primary-soft);color:var(--primary);
                         display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:800;font-size:1.4rem;">
