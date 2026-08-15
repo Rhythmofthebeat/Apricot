@@ -32,6 +32,21 @@ INDUSTRIES = [
     "Other",
 ]
 
+SUPPORTED_CURRENCIES = {
+    "USD": {"symbol": "$", "label": "USD ($)"},
+    "EUR": {"symbol": "€", "label": "EUR (€)"},
+    "GBP": {"symbol": "£", "label": "GBP (£)"},
+    "INR": {"symbol": "₹", "label": "INR (₹)"},
+    "CAD": {"symbol": "C$", "label": "CAD (C$)"},
+    "AUD": {"symbol": "A$", "label": "AUD (A$)"},
+    "SGD": {"symbol": "S$", "label": "SGD (S$)"},
+    "AED": {"symbol": "AED", "label": "AED"},
+    "JPY": {"symbol": "¥", "label": "JPY (¥)"},
+    "CNY": {"symbol": "¥", "label": "CNY (¥)"},
+    "CHF": {"symbol": "CHF", "label": "CHF"},
+}
+DEFAULT_CURRENCY = "USD"
+
 JOB_CATEGORIES = [
     "Software",
     "Healthcare",
@@ -146,9 +161,12 @@ class Job(db.Model):
     interview_length = db.Column(db.String(20), nullable=False, default="standard")  # short | standard | thorough
     interview_focus = db.Column(db.Text)  # optional employer instructions on what the AI should cover
     interview_questions = db.Column(db.Text)  # JSON list of employer-curated questions the AI should make sure to ask
+    # Column names predate multi-currency support - the amount is in
+    # salary_currency's units, not necessarily actual USD. See SUPPORTED_CURRENCIES.
     salary_usd = db.Column(db.Integer)
     salary_max_usd = db.Column(db.Integer)
     pay_type = db.Column(db.String(20), default='yearly')
+    salary_currency = db.Column(db.String(3), nullable=False, default=DEFAULT_CURRENCY)
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     company = db.relationship("Company", backref="jobs")
@@ -200,6 +218,7 @@ class Job(db.Model):
             "salary_usd": self.salary_usd,
             "salary_max_usd": self.salary_max_usd,
             "pay_type": self.pay_type,
+            "salary_currency": self.salary_currency,
         }
 
 

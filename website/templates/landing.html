@@ -547,8 +547,9 @@
                     <span class="role-tag">{{ job.category }}</span>
                     {% endif %}
                 </div>
-                {% if job.salary_usd %}
-                <div class="role-salary">${{ "{:,}".format(job.salary_usd) }}/yr</div>
+                {% set salary_str = job|salary_range %}
+                {% if salary_str %}
+                <div class="role-salary">{{ salary_str }}</div>
                 {% endif %}
                 <div class="role-footer">
                     <div class="d-flex align-items-center gap-2">

@@ -32,7 +32,9 @@ from ai_services import (
 )
 
 #  Load env & config
-load_dotenv(override=True)
+# override=False (the dotenv default) - see website/__init__.py for why this
+# matters: it must not silently overwrite an env var a caller set on purpose.
+load_dotenv(override=False)
 if Config.GOOGLE_APPLICATION_CREDENTIALS:
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = Config.GOOGLE_APPLICATION_CREDENTIALS
 

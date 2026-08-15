@@ -158,15 +158,21 @@
                                 <option value="stipend"  {{ 'selected' if pt == 'stipend' }}>Stipend (fixed)</option>
                                 <option value="contract" {{ 'selected' if pt == 'contract' }}>Project / contract</option>
                             </select>
+                            <select class="form-select mb-2" name="salary_currency" id="salaryCurrency" onchange="updateSalaryHints()">
+                                {% set cur = job.salary_currency if job and job.salary_currency else 'USD' %}
+                                {% for code, info in currencies.items() %}
+                                    <option value="{{ code }}" data-symbol="{{ info.symbol }}" {{ 'selected' if cur == code }}>{{ info.label }}</option>
+                                {% endfor %}
+                            </select>
                             <div class="d-flex gap-2">
                                 <div class="input-group">
-                                    <span class="input-group-text">$</span>
+                                    <span class="input-group-text" id="currencySymbolMin">{{ currencies.get(cur, currencies['USD']).symbol }}</span>
                                     <input type="number" class="form-control" name="salary_usd" id="salaryMin" min="0" required
                                            value="{{ job.salary_usd if job and job.salary_usd else '' }}"
                                            placeholder="Min">
                                 </div>
                                 <div class="input-group" id="salaryMaxGroup">
-                                    <span class="input-group-text">$</span>
+                                    <span class="input-group-text" id="currencySymbolMax">{{ currencies.get(cur, currencies['USD']).symbol }}</span>
                                     <input type="number" class="form-control" name="salary_max_usd" id="salaryMax" min="0"
                                            value="{{ job.salary_max_usd if job and job.salary_max_usd else '' }}"
                                            placeholder="Max">
@@ -354,6 +360,7 @@ function collectDraft() {
         employment_type: document.querySelector('[name=employment_type]')?.value ?? '',
         category: document.querySelector('[name=category]')?.value ?? '',
         pay_type: document.getElementById('payType')?.value ?? '',
+        salary_currency: document.getElementById('salaryCurrency')?.value ?? '',
         salary_usd: document.getElementById('salaryMin')?.value ?? '',
         salary_max_usd: document.getElementById('salaryMax')?.value ?? '',
         status: document.querySelector('[name=status]')?.value ?? '',
@@ -385,6 +392,7 @@ function applyDraft(draft) {
     const catEl = document.querySelector('[name=category]');
     if (catEl && draft.category) catEl.value = draft.category;
     if (draft.pay_type) document.getElementById('payType').value = draft.pay_type;
+    if (draft.salary_currency) document.getElementById('salaryCurrency').value = draft.salary_currency;
     if (draft.salary_usd !== undefined) document.getElementById('salaryMin').value = draft.salary_usd;
     if (draft.salary_max_usd !== undefined) document.getElementById('salaryMax').value = draft.salary_max_usd;
     const statusEl = document.querySelector('[name=status]');
@@ -607,16 +615,23 @@ document.getElementById("postJobForm").addEventListener("submit", () => {
 });
 
 const PAY_CONFIG = {
-    yearly:   { step: 1000, minPh: 'e.g. 80000', maxPh: 'e.g. 120000', hint: 'Displayed as $80K–$120K/yr', showMax: true },
-    hourly:   { step: 1,    minPh: 'e.g. 25',    maxPh: 'e.g. 40',     hint: 'Displayed as $25–$40/hr',    showMax: true },
-    monthly:  { step: 100,  minPh: 'e.g. 5000',  maxPh: 'e.g. 8000',   hint: 'Displayed as $5K–$8K/mo',   showMax: true },
-    stipend:  { step: 100,  minPh: 'e.g. 2000',  maxPh: '',            hint: 'Displayed as $2K stipend',   showMax: false },
-    contract: { step: 1000, minPh: 'e.g. 10000', maxPh: 'e.g. 20000',  hint: 'Displayed as $10K–$20K (project)', showMax: true },
+    yearly:   { step: 1000, minPh: 'e.g. 80000', maxPh: 'e.g. 120000', hint: 'Displayed as {sym}80K–{sym}120K/yr', showMax: true },
+    hourly:   { step: 1,    minPh: 'e.g. 25',    maxPh: 'e.g. 40',     hint: 'Displayed as {sym}25–{sym}40/hr',    showMax: true },
+    monthly:  { step: 100,  minPh: 'e.g. 5000',  maxPh: 'e.g. 8000',   hint: 'Displayed as {sym}5K–{sym}8K/mo',   showMax: true },
+    stipend:  { step: 100,  minPh: 'e.g. 2000',  maxPh: '',            hint: 'Displayed as {sym}2K stipend',   showMax: false },
+    contract: { step: 1000, minPh: 'e.g. 10000', maxPh: 'e.g. 20000',  hint: 'Displayed as {sym}10K–{sym}20K (project)', showMax: true },
 };
+
+function currentCurrencySymbol() {
+    const sel = document.getElementById('salaryCurrency');
+    const opt = sel && sel.selectedOptions[0];
+    return (opt && opt.dataset.symbol) || '$';
+}
 
 function updateSalaryHints() {
     const pt = document.getElementById('payType').value;
     const cfg = PAY_CONFIG[pt] || PAY_CONFIG.yearly;
+    const sym = currentCurrencySymbol();
     const minInput = document.getElementById('salaryMin');
     const maxInput = document.getElementById('salaryMax');
     const maxGroup = document.getElementById('salaryMaxGroup');
@@ -624,19 +639,21 @@ function updateSalaryHints() {
     minInput.placeholder = cfg.minPh;
     maxInput.placeholder = cfg.maxPh;
     maxGroup.style.display = cfg.showMax ? '' : 'none';
+    document.getElementById('currencySymbolMin').textContent = sym;
+    document.getElementById('currencySymbolMax').textContent = sym;
 
     const minVal = parseFloat(minInput.value);
     const maxVal = parseFloat(maxInput.value);
     const hintEl = document.getElementById('salaryHint');
     if (minVal) {
-        const fmt = n => (n >= 1000 && pt !== 'hourly') ? `$${Math.round(n / 1000)}K` : `$${Number(n).toLocaleString()}`;
+        const fmt = n => (n >= 1000 && pt !== 'hourly') ? `${sym}${Math.round(n / 1000)}K` : `${sym}${Number(n).toLocaleString()}`;
         const sfx = { yearly: '/yr', hourly: '/hr', monthly: '/mo', stipend: ' stipend', contract: ' (project)' }[pt] || '/yr';
         let preview = fmt(minVal);
         if (maxVal && maxVal > minVal && cfg.showMax) preview += `–${fmt(maxVal)}`;
         hintEl.textContent = `Will display as: ${preview}${sfx}`;
         hintEl.style.color = 'var(--primary)';
     } else {
-        hintEl.textContent = cfg.hint;
+        hintEl.textContent = cfg.hint.replaceAll('{sym}', sym);
         hintEl.style.color = '';
     }
     updateChecklist();

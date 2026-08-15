@@ -25,6 +25,7 @@ from .models import (
     CompanyMember, CompanyInvite, CandidateProfile, User,
     MeetingRoom, Message, MeetingProposal, SavedJob, Feedback, DeletedJob,
     JOB_CATEGORIES, JOB_LOCATIONS, COMPANY_SIZES, INDUSTRIES,
+    SUPPORTED_CURRENCIES, DEFAULT_CURRENCY,
 )
 from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description, transcribe_audio, compare_resume_to_job, suggest_candidates_for_jobs
 from .candidate import _extract_score
@@ -602,7 +603,7 @@ def post_job():
             flash("Title and description are required.", "error")
             return render_template(
                 "post_job.html", categories=JOB_CATEGORIES, locations=JOB_LOCATIONS,
-                interview_lengths=INTERVIEW_LENGTH_OPTIONS,
+                interview_lengths=INTERVIEW_LENGTH_OPTIONS, currencies=SUPPORTED_CURRENCIES,
                 interview_questions=json.loads(interview_questions) if interview_questions else [],
             )
 
@@ -613,13 +614,16 @@ def post_job():
         pay_type = request.form.get('pay_type', 'yearly')
         if pay_type not in ('yearly', 'hourly', 'monthly', 'stipend', 'contract'):
             pay_type = 'yearly'
+        salary_currency = request.form.get('salary_currency', DEFAULT_CURRENCY)
+        if salary_currency not in SUPPORTED_CURRENCIES:
+            salary_currency = DEFAULT_CURRENCY
         save_as_draft = request.form.get('save_as_draft') == '1'
 
         if not save_as_draft and not salary_usd:
             flash("An estimated salary is required to post a job - candidates need to see it before applying.", "error")
             return render_template(
                 "post_job.html", categories=JOB_CATEGORIES, locations=JOB_LOCATIONS,
-                interview_lengths=INTERVIEW_LENGTH_OPTIONS,
+                interview_lengths=INTERVIEW_LENGTH_OPTIONS, currencies=SUPPORTED_CURRENCIES,
                 interview_questions=json.loads(interview_questions) if interview_questions else [],
             )
 
@@ -636,6 +640,7 @@ def post_job():
             salary_usd=salary_usd,
             salary_max_usd=salary_max_usd,
             pay_type=pay_type,
+            salary_currency=salary_currency,
             status='draft' if save_as_draft else 'open',
         )
         db.session.add(job)
@@ -653,6 +658,7 @@ def post_job():
         categories=JOB_CATEGORIES,
         locations=JOB_LOCATIONS,
         interview_lengths=INTERVIEW_LENGTH_OPTIONS,
+        currencies=SUPPORTED_CURRENCIES,
         interview_questions=[],
     )
 
@@ -680,7 +686,7 @@ def edit_job(job_id):
             flash("Title and description are required.", "error")
             return render_template(
                 "post_job.html", job=job, categories=JOB_CATEGORIES, locations=JOB_LOCATIONS,
-                interview_lengths=INTERVIEW_LENGTH_OPTIONS,
+                interview_lengths=INTERVIEW_LENGTH_OPTIONS, currencies=SUPPORTED_CURRENCIES,
                 interview_questions=_existing_interview_questions(job),
             )
 
@@ -690,12 +696,15 @@ def edit_job(job_id):
         pay_type = request.form.get('pay_type', 'yearly')
         if pay_type not in ('yearly', 'hourly', 'monthly', 'stipend', 'contract'):
             pay_type = 'yearly'
+        salary_currency = request.form.get('salary_currency', DEFAULT_CURRENCY)
+        if salary_currency not in SUPPORTED_CURRENCIES:
+            salary_currency = DEFAULT_CURRENCY
 
         if not save_as_draft and not salary_raw.isdigit():
             flash("An estimated salary is required to post a job - candidates need to see it before applying.", "error")
             return render_template(
                 "post_job.html", job=job, categories=JOB_CATEGORIES, locations=JOB_LOCATIONS,
-                interview_lengths=INTERVIEW_LENGTH_OPTIONS,
+                interview_lengths=INTERVIEW_LENGTH_OPTIONS, currencies=SUPPORTED_CURRENCIES,
                 interview_questions=_existing_interview_questions(job),
             )
 
@@ -718,6 +727,7 @@ def edit_job(job_id):
         job.salary_usd = int(salary_raw) if salary_raw.isdigit() else None
         job.salary_max_usd = int(salary_max_raw) if salary_max_raw.isdigit() else None
         job.pay_type = pay_type
+        job.salary_currency = salary_currency
         db.session.commit()
         if not was_open and job.status == 'open':
             notify_candidates_of_new_job(job, company)
@@ -727,7 +737,7 @@ def edit_job(job_id):
 
     return render_template(
         "post_job.html", job=job, categories=JOB_CATEGORIES, locations=JOB_LOCATIONS,
-        interview_lengths=INTERVIEW_LENGTH_OPTIONS,
+        interview_lengths=INTERVIEW_LENGTH_OPTIONS, currencies=SUPPORTED_CURRENCIES,
         interview_questions=_existing_interview_questions(job),
     )
 

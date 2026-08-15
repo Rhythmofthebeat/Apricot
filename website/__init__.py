@@ -10,7 +10,12 @@ from sqlalchemy import text
 from dotenv import load_dotenv
 from config import Config
 
-load_dotenv(override=True)
+# override=False (the dotenv default) so an env var already set in the process
+# - e.g. a test/admin script deliberately pointing DATABASE_URL at a throwaway
+# database before importing this package - always wins over .env. With
+# override=True this silently clobbered that kind of safety override and once
+# sent a script's db.drop_all()/create_all() at the real production database.
+load_dotenv(override=False)
 
 db = SQLAlchemy()
 mail = Mail()
@@ -117,6 +122,8 @@ def _run_migrations(db):
         "ALTER TABLE application ADD COLUMN hire_billing_subscription_id VARCHAR(100)",
         "ALTER TABLE application ADD COLUMN hire_engagement_ended_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE application ADD COLUMN fee_reminder_sent_at TIMESTAMP WITH TIME ZONE",
+        # job - currency the advertised salary is denominated in
+        "ALTER TABLE job ADD COLUMN salary_currency VARCHAR(3) NOT NULL DEFAULT 'USD'",
     ]
     for stmt in new_columns:
         try:
@@ -275,13 +282,16 @@ def create_app():
     def salary_range_filter(job):
         if not job.salary_usd:
             return None
+        from .models import SUPPORTED_CURRENCIES, DEFAULT_CURRENCY
         pay_type = getattr(job, 'pay_type', None) or 'yearly'
+        currency = getattr(job, 'salary_currency', None) or DEFAULT_CURRENCY
+        symbol = SUPPORTED_CURRENCIES.get(currency, SUPPORTED_CURRENCIES[DEFAULT_CURRENCY])['symbol']
 
         # Formatting: hourly stays as raw number; everything else uses K if >= 1000
         def fmt(n, force_raw=False):
             if force_raw or n < 1000:
-                return f"${n:,}"
-            return f"${round(n / 1000)}K"
+                return f"{symbol}{n:,}"
+            return f"{symbol}{round(n / 1000)}K"
 
         hourly = pay_type == 'hourly'
         lo = fmt(job.salary_usd, force_raw=hourly)

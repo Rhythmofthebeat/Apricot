@@ -52,3 +52,13 @@ Blueprints (`website/`):
 **Rate limiting** (`Flask-Limiter`, the `limiter` instance from `website/__init__.py`) is applied per-route on OpenAI-cost-sensitive endpoints — resume matching, resume chat, profile-resume generation, uploads, TTS.
 
 **Local file storage** — `uploads/` and `audio/` are created at startup and gitignored; treat them as ephemeral scratch space, not durable storage.
+
+## Testing safety — read before running any script against this app
+
+`DATABASE_URL` in `.env` points at the real production Supabase database. There is no separate dev/staging database and no automatic backups/PITR configured.
+
+Before running any script that imports `app`/`website` and calls anything destructive (`db.drop_all()`, `db.create_all()`, bulk deletes, resetting tables) — **verify which database it's actually about to hit first**: after import, print/check `app.config['SQLALCHEMY_DATABASE_URI']` (or the connection host) and confirm it's local/throwaway before proceeding. Do not assume setting `os.environ['DATABASE_URL']` before importing is enough on its own — verify it after import too.
+
+`load_dotenv()` in `app.py` and `website/__init__.py` uses `override=False` specifically so an env var a script sets on purpose (e.g. pointing `DATABASE_URL` at a throwaway sqlite file before importing) won't be silently clobbered by `.env`. Do not change this back to `override=True` — an earlier version of this app did, and a sanity-check script that assumed its `DATABASE_URL` override would stick ended up running `db.drop_all()`/`db.create_all()` against the live production database instead, wiping all real data with no backup to recover from.
+
+When you need an isolated database for a script, prefer an explicit local path (e.g. `sqlite:///` + a scratch-dir path, or `sqlite:///:memory:`) over trying to blank out `DATABASE_URL`.

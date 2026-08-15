@@ -211,7 +211,7 @@
                     </p>
                     {% set salary_str = job|salary_range %}
                     {% if salary_str %}
-                        <span class="salary-badge"><i class="fas fa-dollar-sign"></i> {{ salary_str }}</span>
+                        <span class="salary-badge"><i class="fas fa-money-bill-wave"></i> {{ salary_str }}</span>
                     {% endif %}
                     {% set preview = job.description_text %}
                     <p class="job-card-desc mb-0 mt-2">{{ preview[:110] }}{{ '...' if preview|length > 110 else '' }}</p>
