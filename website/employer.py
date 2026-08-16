@@ -1561,6 +1561,9 @@ def company_settings():
 
         if action == 'save_profile':
             name = request.form.get('name', '').strip()
+            your_name = request.form.get('your_name', '').strip()
+            if your_name:
+                current_user.first_name = your_name
             if not name:
                 flash("Company name is required.", "error")
             else:

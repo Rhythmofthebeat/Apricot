@@ -468,7 +468,8 @@
     </p>
 </div>
 
-<!-- ── STATS BAR ── -->
+{% if current_user.is_authenticated and current_user.is_admin %}
+<!-- ── STATS BAR (admin-only for now) ── -->
 <div class="stats-bar reveal">
     <div class="stats-bar-inner">
         <div class="stat-item">
@@ -489,6 +490,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- ── WHAT MAKES US DIFFERENT ── -->
 <div class="diff-section reveal">

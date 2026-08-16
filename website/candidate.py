@@ -826,6 +826,10 @@ def profile():
 def save_profile():
     data = request.get_json() or {}
 
+    first_name = (data.get('first_name') or '').strip()
+    if first_name:
+        current_user.first_name = first_name
+
     candidate_profile = CandidateProfile.query.filter_by(user_id=current_user.id).first()
     if not candidate_profile:
         candidate_profile = CandidateProfile(user_id=current_user.id)

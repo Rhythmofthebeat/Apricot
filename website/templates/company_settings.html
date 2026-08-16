@@ -209,6 +209,15 @@
                     <form method="POST">
                         <input type="hidden" name="action" value="save_profile">
 
+                        <div class="section-label">Your Account</div>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-8">
+                                <label class="form-label fw-semibold">Your Name</label>
+                                <input type="text" name="your_name" class="form-control" value="{{ current_user.first_name or '' }}" placeholder="e.g. Jordan Lee">
+                            </div>
+                        </div>
+
                         <div class="section-label">Basic Info</div>
 
                         <div class="row g-3 mb-4">

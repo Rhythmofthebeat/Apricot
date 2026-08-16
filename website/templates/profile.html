@@ -86,6 +86,12 @@
                 <div class="card-header"><i class="fas fa-user me-2"></i>Basics</div>
                 <div class="card-body p-4">
                     <div class="mb-3">
+                        <label class="form-label">Full name</label>
+                        <input type="text" class="form-control" id="fullName"
+                               placeholder="e.g. Jordan Lee"
+                               value="{{ current_user.first_name or '' }}">
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">Headline</label>
                         <input type="text" class="form-control" id="headline"
                                placeholder="e.g. Senior Backend Engineer"
@@ -323,6 +329,7 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+                first_name:       document.getElementById("fullName").value,
                 headline:         document.getElementById("headline").value,
                 linkedin_url:     document.getElementById("linkedinUrl").value,
                 target_roles:     document.getElementById("targetRoles").value,
