@@ -20,6 +20,19 @@ supabase = create_client(
 auth = Blueprint('auth', __name__)
 
 
+def _apply_referral(new_user):
+    """If this signup arrived via a referral link (?ref=CODE, stashed as a
+    cookie by website/__init__.py's stash_referral_code), credit the
+    referrer. Call right after a brand-new User is committed (needs new_user.id)."""
+    code = request.cookies.get('ref_code')
+    if not code:
+        return
+    referrer = User.query.filter_by(referral_code=code).first()
+    if referrer and referrer.id != new_user.id:
+        new_user.referred_by_user_id = referrer.id
+        db.session.commit()
+
+
 def _safe_next(next_url):
     """Only allow same-site relative redirects for ?next= - rejects absolute/
     protocol-relative URLs so this can't be used as an open redirect."""
@@ -239,6 +252,7 @@ def login():
             )
             db.session.add(local_user)
             db.session.commit()
+            _apply_referral(local_user)
 
             if role == 'employer':
                 _provision_employer(local_user, email_domain, company_name)
@@ -321,6 +335,7 @@ def sign_up():
                 )
                 db.session.add(local_user)
                 db.session.commit()
+                _apply_referral(local_user)
 
                 if role == 'employer':
                     _provision_employer(local_user, email_domain, company_name, signature_name)
@@ -414,6 +429,7 @@ def auth_confirm():
             )
             db.session.add(local_user)
             db.session.commit()
+            _apply_referral(local_user)
 
             if role == 'employer':
                 _provision_employer(local_user, email_domain, company_name)
@@ -566,6 +582,7 @@ def login_google_finish():
             )
             db.session.add(local_user)
             db.session.commit()
+            _apply_referral(local_user)
 
         login_user(local_user, remember=True)
         next_url = _safe_next(session.pop("oauth_next", None))
@@ -602,6 +619,7 @@ def employer_email_conflict():
                 local_user = User(email=email, first_name=name, password=None, role='candidate', email_verified=True)
                 db.session.add(local_user)
                 db.session.commit()
+                _apply_referral(local_user)
             login_user(local_user, remember=True)
             flash("Signed up as a candidate account.", "success")
             return redirect(next_url or url_for('views.home'))

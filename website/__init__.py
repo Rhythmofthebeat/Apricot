@@ -1,6 +1,6 @@
 import os
 from os import path
-from flask import Flask
+from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_mail import Mail
@@ -124,6 +124,9 @@ def _run_migrations(db):
         "ALTER TABLE application ADD COLUMN fee_reminder_sent_at TIMESTAMP WITH TIME ZONE",
         # job - currency the advertised salary is denominated in
         "ALTER TABLE job ADD COLUMN salary_currency VARCHAR(3) NOT NULL DEFAULT 'USD'",
+        # user - referral program: own shareable code + who referred them
+        "ALTER TABLE \"user\" ADD COLUMN referral_code VARCHAR(12)",
+        "ALTER TABLE \"user\" ADD COLUMN referred_by_user_id INTEGER REFERENCES \"user\"(id)",
     ]
     for stmt in new_columns:
         try:
@@ -134,6 +137,24 @@ def _run_migrations(db):
             pass
 
     _backfill_company_email_domains(db)
+    _backfill_referral_codes(db)
+
+
+def _backfill_referral_codes(db):
+    """One-time backfill for users created before referral_code existed -
+    ALTER TABLE ADD COLUMN leaves existing rows NULL since the model's
+    default= only applies to new ORM inserts, not raw SQL. No-ops once every
+    user already has a code."""
+    import secrets
+    from .models import User
+
+    try:
+        users = User.query.filter(User.referral_code.is_(None)).all()
+        for user in users:
+            user.referral_code = secrets.token_urlsafe(6)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def _backfill_company_email_domains(db):
@@ -214,6 +235,18 @@ def create_app():
 
     from datetime import datetime, timezone
     from flask_login import current_user as _cu
+
+    @app.after_request
+    def stash_referral_code(response):
+        """?ref=CODE on any page load gets stashed in a cookie so it survives
+        the multi-step signup flow (including the Google/Supabase OAuth
+        redirect chain) - read back in auth.py when the User row is actually
+        created. Doesn't overwrite an existing cookie, so the first referrer
+        wins if someone clicks multiple referral links before signing up."""
+        ref = request.args.get('ref')
+        if ref and not request.cookies.get('ref_code'):
+            response.set_cookie('ref_code', ref, max_age=60 * 60 * 24 * 30, httponly=True, samesite='Lax')
+        return response
 
     @app.context_processor
     def inject_globals():

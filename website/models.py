@@ -3,6 +3,7 @@ from . import db
 from flask_login import UserMixin
 from sqlalchemy.sql import func
 import json as _json
+import secrets
 
 COMPANY_SIZES = [
     "1–10",
@@ -120,6 +121,9 @@ class User(db.Model, UserMixin):
     supabase_uid = db.Column(db.String(200), unique=True)
     data_buyer_id = db.Column(db.Integer, db.ForeignKey("data_buyer.id"))
     is_data_buyer_admin = db.Column(db.Boolean, nullable=False, default=False)
+    # Referral program: this user's own shareable code, and who referred them (if anyone)
+    referral_code = db.Column(db.String(12), unique=True, default=lambda: secrets.token_urlsafe(6))
+    referred_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
 
 
 class Company(db.Model):
@@ -334,6 +338,26 @@ class CompanyMember(db.Model):
     user = db.relationship("User", backref="company_memberships")
 
     __table_args__ = (db.UniqueConstraint("company_id", "user_id"),)
+
+
+class Referral(db.Model):
+    """A commission owed to whoever referred a candidate, once that
+    candidate is hired and the employer's placement fee is actually paid.
+    Created once per Application (see views.stripe_webhook) - commission is
+    10% of the platform's 15% placement fee, tracked here and paid out
+    manually by an admin (see admin.referrals / admin.mark_referral_paid)."""
+    id = db.Column(db.Integer, primary_key=True)
+    referrer_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    referred_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    application_id = db.Column(db.Integer, db.ForeignKey("application.id"), nullable=False, unique=True)
+    commission_usd = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="owed")  # owed | paid
+    paid_at = db.Column(db.DateTime(timezone=True))
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    referrer = db.relationship("User", foreign_keys=[referrer_user_id])
+    referred = db.relationship("User", foreign_keys=[referred_user_id])
+    application = db.relationship("Application", backref=db.backref("referral", uselist=False))
 
 
 class EarnTask(db.Model):

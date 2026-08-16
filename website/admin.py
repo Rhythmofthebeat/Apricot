@@ -9,7 +9,7 @@ from . import db
 from .models import (
     EarnTask, TaskSubmission, User, EARN_DOMAINS, ContractorProfile, Company, Job, CompanyMember,
     Application, Feedback, FeedbackInsight, SavedJob, MeetingProposal, MeetingRoom, Message,
-    EmployerSubscription, CompanyInvite, DeletedJob,
+    EmployerSubscription, CompanyInvite, DeletedJob, Referral,
 )
 from .dataset_export import shape_submission
 from ai_services import analyze_platform_feedback
@@ -440,3 +440,40 @@ def pay_user(user_id):
         flash(f"Transfer failed: {e.user_message}", "error")
 
     return redirect(url_for('admin_bp.payouts'))
+
+
+# ------------------------------------------------ #
+# -------------------- REFERRALS ------------------ #
+# ------------------------------------------------ #
+
+@admin_bp.route('/admin/referrals')
+@login_required
+def referrals():
+    _require_admin()
+    rows = (
+        Referral.query
+        .filter_by(status='owed')
+        .order_by(Referral.created_at.desc())
+        .all()
+    )
+    paid_rows = (
+        Referral.query
+        .filter_by(status='paid')
+        .order_by(Referral.paid_at.desc())
+        .limit(50)
+        .all()
+    )
+    total_owed = sum(r.commission_usd for r in rows)
+    return render_template('admin_referrals.html', rows=rows, paid_rows=paid_rows, total_owed=total_owed)
+
+
+@admin_bp.route('/admin/referrals/<int:referral_id>/mark-paid', methods=['POST'])
+@login_required
+def mark_referral_paid(referral_id):
+    _require_admin()
+    referral = Referral.query.get_or_404(referral_id)
+    referral.status = 'paid'
+    referral.paid_at = db.func.now()
+    db.session.commit()
+    flash(f"Marked ${referral.commission_usd:,} referral payout to {referral.referrer.first_name or referral.referrer.email} as paid.", "success")
+    return redirect(url_for('admin_bp.referrals'))

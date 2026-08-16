@@ -82,6 +82,19 @@
 
         <!-- Left: basics + LinkedIn -->
         <div class="col-lg-5">
+            <div class="card mb-4">
+                <div class="card-header"><i class="fas fa-share-nodes me-2"></i>Your Referral Link</div>
+                <div class="card-body p-4">
+                    <p class="text-muted small mb-2">Refer someone - if they're hired through Avants, you earn a cut of the placement fee.</p>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="referralLink" readonly
+                               value="{{ request.url_root }}?ref={{ current_user.referral_code }}">
+                        <button class="btn btn-outline-secondary" type="button" onclick="copyReferralLink()">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
             <div class="card">
                 <div class="card-header"><i class="fas fa-user me-2"></i>Basics</div>
                 <div class="card-body p-4">
@@ -267,6 +280,12 @@
 
 {% block scripts %}
 <script>
+function copyReferralLink() {
+    const input = document.getElementById('referralLink');
+    input.select();
+    navigator.clipboard?.writeText(input.value);
+}
+
 function switchTab(name) {
     ['profile', 'suggested'].forEach(t => {
         document.getElementById(`pane-${t}`).style.display = t === name ? 'block' : 'none';

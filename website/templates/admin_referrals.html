@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Admin - Referrals{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="{{ url_for('admin_bp.dashboard') }}" class="btn btn-sm btn-outline-secondary mb-2">
+            <i class="fas fa-arrow-left me-1"></i> Back
+        </a>
+        <h1 class="h4 fw-bold mb-0"><i class="fas fa-share-nodes me-2 text-primary"></i>Referrals</h1>
+    </div>
+</div>
+
+<!-- Summary stats -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card text-center p-3">
+            <div style="font-size:1.8rem;font-weight:800;color:#dc2626;">${{ "{:,}".format(total_owed) }}</div>
+            <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Total Owed</div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card text-center p-3">
+            <div style="font-size:1.8rem;font-weight:800;">{{ rows|length }}</div>
+            <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Referrals Awaiting Payment</div>
+        </div>
+    </div>
+</div>
+
+{% if not rows %}
+<div class="card">
+    <div class="card-body text-center p-5 text-muted">
+        <i class="fas fa-check-circle mb-3" style="font-size:2rem;color:#059669;opacity:0.5;display:block;"></i>
+        No referral commissions owed right now.
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-header fw-semibold">Owed to referrers</div>
+    <div class="card-body p-0">
+        {% for r in rows %}
+        <div class="d-flex align-items-center gap-3 px-4 py-3 flex-wrap" style="border-bottom:1px solid var(--border);">
+            <div class="flex-grow-1">
+                <div class="fw-semibold" style="font-size:0.9rem;">
+                    {{ r.referrer.first_name or '-' }}
+                    <span class="text-muted fw-normal">{{ r.referrer.email }}</span>
+                </div>
+                <div class="text-muted" style="font-size:0.78rem;">
+                    Referred {{ r.referred.first_name or r.referred.email }}
+                    {% if r.application and r.application.job %} &middot; hired for {{ r.application.job.title }} at {{ r.application.job.company.name }}{% endif %}
+                </div>
+            </div>
+
+            <div class="fw-bold" style="color:#059669;font-size:1rem;">
+                ${{ "{:,}".format(r.commission_usd) }}
+            </div>
+
+            <form method="POST" action="{{ url_for('admin_bp.mark_referral_paid', referral_id=r.id) }}"
+                  data-confirm-title="Mark ${{ '{:,}'.format(r.commission_usd) }} to {{ r.referrer.first_name or r.referrer.email }} as paid?"
+                  data-confirm-message="This just records that you paid them outside the app (e.g. Venmo/PayPal) - it doesn't move any money itself."
+                  data-confirm-btn="Mark as paid">
+                <button class="btn btn-sm btn-success fw-bold">
+                    <i class="fas fa-check me-1"></i>Mark paid
+                </button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if paid_rows %}
+<div class="card mt-4">
+    <div class="card-header fw-semibold">Recently paid</div>
+    <div class="card-body p-0">
+        {% for r in paid_rows %}
+        <div class="d-flex align-items-center gap-3 px-4 py-3 flex-wrap" style="border-bottom:1px solid var(--border);">
+            <div class="flex-grow-1">
+                <div class="fw-semibold" style="font-size:0.9rem;">
+                    {{ r.referrer.first_name or '-' }}
+                    <span class="text-muted fw-normal">{{ r.referrer.email }}</span>
+                </div>
+                <div class="text-muted" style="font-size:0.78rem;">
+                    Referred {{ r.referred.first_name or r.referred.email }} &middot; paid {{ r.paid_at | time_ago }}
+                </div>
+            </div>
+            <div class="fw-bold text-muted" style="font-size:1rem;">
+                ${{ "{:,}".format(r.commission_usd) }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="card mt-3" style="background:var(--bg);">
+    <div class="card-body p-3" style="font-size:0.82rem;color:var(--text-muted);">
+        <i class="fas fa-circle-info me-1"></i>
+        Referral commission is 10% of Avants' 15% placement fee (i.e. 1.5% of the hire's compensation basis), owed once the employer's placement fee is actually paid. Payouts are tracked here and sent manually outside the app - "Mark paid" only updates this record.
+    </div>
+</div>
+{% endblock %}

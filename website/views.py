@@ -5,7 +5,10 @@ from datetime import timezone
 from sqlalchemy.sql import func
 
 from . import db
-from .models import Application, Job, User, Company, MeetingRoom
+from .models import Application, Job, User, Company, MeetingRoom, Referral
+from .employer import _placement_fee_basis
+
+REFERRAL_COMMISSION_PERCENT = 10  # referrer's cut of the platform's placement fee, not of the hire's salary
 
 views = Blueprint('views', __name__)
 
@@ -70,6 +73,34 @@ def public_site():
     return render_template("landing.html", **_landing_context())
 
 
+def _credit_referral(application):
+    """Owe the referrer 10% of the platform's 15% placement fee, once,
+    the first time an application's fee is actually paid. No-ops if the
+    hired candidate wasn't referred, or a Referral already exists for this
+    application (the unique constraint on application_id also guards this)."""
+    candidate = User.query.get(application.candidate_user_id)
+    if not candidate or not candidate.referred_by_user_id:
+        return
+    if Referral.query.filter_by(application_id=application.id).first():
+        return
+
+    basis_amount, fee_percent = _placement_fee_basis(application, application.job)
+    if not basis_amount or not fee_percent:
+        return
+
+    platform_fee = basis_amount * fee_percent / 100
+    commission = round(platform_fee * REFERRAL_COMMISSION_PERCENT / 100)
+    if commission <= 0:
+        return
+
+    db.session.add(Referral(
+        referrer_user_id=candidate.referred_by_user_id,
+        referred_user_id=candidate.id,
+        application_id=application.id,
+        commission_usd=commission,
+    ))
+
+
 @views.route('/stripe/webhook', methods=['POST'])
 def stripe_webhook():
     """Stripe sends checkout.session.completed when a payment link is paid.
@@ -100,6 +131,7 @@ def stripe_webhook():
             if application:
                 if not application.fee_paid:
                     application.fee_paid = True
+                    _credit_referral(application)
                 # Hourly hires check out in subscription mode - capture the
                 # subscription id so employer.end_hourly_engagement can
                 # cancel it later when the engagement actually ends.

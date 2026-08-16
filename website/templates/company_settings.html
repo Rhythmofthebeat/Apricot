@@ -218,6 +218,18 @@
                             </div>
                         </div>
 
+                        <div class="mb-4 p-3" style="background:var(--bg);border-radius:var(--radius);">
+                            <label class="form-label fw-semibold mb-1"><i class="fas fa-share-nodes me-1"></i>Your Referral Link</label>
+                            <p class="text-muted small mb-2">Refer someone - if they're hired through Avants, you earn a cut of the placement fee.</p>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="referralLink" readonly
+                                       value="{{ request.url_root }}?ref={{ current_user.referral_code }}">
+                                <button class="btn btn-outline-secondary" type="button" onclick="copyReferralLink()">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="section-label">Basic Info</div>
 
                         <div class="row g-3 mb-4">
@@ -394,6 +406,12 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
 <script>
+function copyReferralLink() {
+    const input = document.getElementById('referralLink');
+    input.select();
+    navigator.clipboard?.writeText(input.value);
+}
+
 function showSection(name, el) {
     document.querySelectorAll('[id^="section-"]').forEach(s => s.style.display = 'none');
     document.getElementById('section-' + name).style.display = 'block';
