@@ -62,3 +62,11 @@ Before running any script that imports `app`/`website` and calls anything destru
 `load_dotenv()` in `app.py` and `website/__init__.py` uses `override=False` specifically so an env var a script sets on purpose (e.g. pointing `DATABASE_URL` at a throwaway sqlite file before importing) won't be silently clobbered by `.env`. Do not change this back to `override=True` — an earlier version of this app did, and a sanity-check script that assumed its `DATABASE_URL` override would stick ended up running `db.drop_all()`/`db.create_all()` against the live production database instead, wiping all real data with no backup to recover from.
 
 When you need an isolated database for a script, prefer an explicit local path (e.g. `sqlite:///` + a scratch-dir path, or `sqlite:///:memory:`) over trying to blank out `DATABASE_URL`.
+
+## HARD STOP — do not manipulate the production database or user records outside the app's own code
+
+This is not a suggestion, it's a hard stop: **never write directly to the production database** (raw SQL, psycopg2, `db.session` scripts run outside a request, or any other ad hoc method) **to create, modify, or delete rows** — especially `User` rows (role, `is_admin`, email, password) — **outside of the application's own tested routes** (its real signup/login/settings/admin forms), regardless of how small or "obviously correct" the fix seems.
+
+This applies even when explicitly asked to fix something in the database directly. If a fix requires changing data, the answer is: use the app's real UI/routes (sign up for real, use the real settings form, use the real admin panel), or if no such path exists, build one as a proper reviewed code change - not a one-off script run against production. The one prior exception during the 2026-08 incident recovery (directly flipping a role/is_admin flag, deleting test rows) was a deliberate, explicit, one-at-a-time recovery decision under crisis conditions with the user's repeated direct sign-off, not a pattern to repeat casually.
+
+Never attempt to override, blank, or redirect `DATABASE_URL` from within a script at all, even relying on the `override=False` fix above - use a fully separate local sqlite path/`:memory:` DB instead of touching that env var. Treating an env-var trick as "safe now that override=False is fixed" is exactly the kind of reasoning that caused the original incident.
