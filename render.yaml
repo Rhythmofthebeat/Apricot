@@ -49,3 +49,26 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+
+  # Daily off-Supabase database backup, so employer/candidate data survives
+  # even if the Supabase project itself were ever lost - not just accidental
+  # row deletes. Dumps every table to gzipped JSON and uploads it to a Google
+  # Drive folder (see backup_database.py). Read-only against the database.
+  - type: cron
+    name: avants-db-backup
+    runtime: python
+    plan: starter
+    schedule: "0 9 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python backup_database.py
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_CREDENTIALS_JSON
+        sync: false
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /etc/secrets/google-credentials.json
+      - key: GOOGLE_DRIVE_BACKUP_FOLDER_ID
+        sync: false
+      - key: BACKUP_RETENTION_DAYS
+        value: "30"
