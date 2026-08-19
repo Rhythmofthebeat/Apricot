@@ -18,10 +18,7 @@
         inset: 0;
         z-index: 0;
         pointer-events: none;
-        background:
-            radial-gradient(560px 360px at 18% -10%, rgba(79,70,229,0.16), transparent 65%),
-            radial-gradient(520px 340px at 85% 8%, rgba(16,185,129,0.13), transparent 65%),
-            radial-gradient(480px 320px at 50% 105%, rgba(79,70,229,0.08), transparent 70%);
+        background: var(--primary-soft);
     }
     .hero-wrap > * { position: relative; z-index: 1; }
     .hero-badge {
@@ -44,10 +41,7 @@
         margin-bottom: 20px;
     }
     .hero-title span {
-        background: linear-gradient(100deg, var(--primary) 10%, #10b981 90%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
+        color: var(--primary);
     }
     .hero-sub {
         font-size: 1.1rem;
@@ -562,11 +556,12 @@
                             {% endfor %}
                         </div>
                         {% endif %}
+                        {% if item.app_count > 0 %}
                         <span class="applied-count">
-                            {% if item.app_count == 0 %}Be first to apply
-                            {% elif item.app_count == 1 %}1 applied
+                            {% if item.app_count == 1 %}1 applied
                             {% else %}{{ item.app_count }} applied{% endif %}
                         </span>
+                        {% endif %}
                     </div>
                     <span class="role-apply-btn">Apply <i class="fas fa-arrow-right"></i></span>
                 </div>
