@@ -1,19 +1,22 @@
-"""Nightly database backup: dumps every table to gzipped JSON and uploads it to
-Google Drive, so employer/candidate data survives even if the Supabase project
-itself were ever lost, not just individual rows.
+"""Nightly backup: dumps every database table to gzipped JSON, archives the
+locally-stored uploaded files (resumes, company logos, hire-evidence
+screenshots, interview audio), and uploads both to Google Drive - so
+employer/candidate data survives even if the Supabase project itself were
+ever lost, not just individual rows.
 
 Runs as its own scheduled process (see the `avants-db-backup` cron service in
 render.yaml) - separate from the web app, no Flask app context needed.
 
-Strictly read-only against the database: every table is read with a plain
-SELECT, nothing is ever written, updated, or deleted here. Restoring from a
-backup is a deliberate, separate, reviewed action - not something this script
-does automatically.
+Strictly read-only against the database and the local upload/audio folders:
+every table is read with a plain SELECT and files are only read, never
+written, moved, or deleted. Restoring from a backup is a deliberate, separate,
+reviewed action - not something this script does automatically.
 """
 import gzip
 import json
 import os
 import sys
+import tarfile
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -23,10 +26,17 @@ from sqlalchemy import MetaData, create_engine
 
 load_dotenv(override=False)
 
+REPO_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_DIRS = [
+    ("uploads", os.path.join(REPO_DIR, "uploads")),
+    ("audio", os.path.join(REPO_DIR, "audio")),
+]
+
 DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 BACKUP_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_BACKUP_FOLDER_ID")
 RETENTION_DAYS = int(os.environ.get("BACKUP_RETENTION_DAYS", "30"))
-BACKUP_PREFIX = "avants_backup_"
+DB_BACKUP_PREFIX = "avants_backup_"
+FILES_BACKUP_PREFIX = "avants_files_"
 
 
 def _json_default(value):
@@ -67,6 +77,24 @@ def dump_database():
     return dump
 
 
+def archive_uploaded_files(local_path):
+    """Tars up whatever's currently in uploads/ and audio/. Returns True if
+    anything was written, False if both folders were empty (nothing to back
+    up, skip the upload)."""
+    wrote_any = False
+    with tarfile.open(local_path, "w:gz") as tar:
+        for arcname, dir_path in UPLOAD_DIRS:
+            if not os.path.isdir(dir_path):
+                continue
+            entries = os.listdir(dir_path)
+            if not entries:
+                continue
+            tar.add(dir_path, arcname=arcname)
+            wrote_any = True
+            print(f"  {arcname}: {len(entries)} entries archived")
+    return wrote_any
+
+
 def _google_drive_credentials():
     """Mirrors app.py's _google_tts_credentials(): prefer raw service-account
     JSON pasted into an env var over a file path, since Render Secret Files
@@ -88,27 +116,28 @@ def _google_drive_credentials():
     )
 
 
-def upload_to_drive(local_path, filename):
+def _drive_service():
     from googleapiclient.discovery import build
-    from googleapiclient.http import MediaFileUpload
 
     if not BACKUP_FOLDER_ID:
         raise RuntimeError("GOOGLE_DRIVE_BACKUP_FOLDER_ID is not set")
+    return build("drive", "v3", credentials=_google_drive_credentials())
 
-    creds = _google_drive_credentials()
-    service = build("drive", "v3", credentials=creds)
+
+def upload_to_drive(service, local_path, filename):
+    from googleapiclient.http import MediaFileUpload
+
     media = MediaFileUpload(local_path, mimetype="application/gzip", resumable=False)
     file_metadata = {"name": filename, "parents": [BACKUP_FOLDER_ID]}
     uploaded = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
     print(f"  uploaded as Drive file id {uploaded['id']}")
-    return service
 
 
-def prune_old_backups(service):
+def prune_old_backups(service, prefix):
     if RETENTION_DAYS <= 0:
         return
     cutoff = datetime.now(timezone.utc).timestamp() - RETENTION_DAYS * 86400
-    query = f"'{BACKUP_FOLDER_ID}' in parents and name contains '{BACKUP_PREFIX}' and trashed = false"
+    query = f"'{BACKUP_FOLDER_ID}' in parents and name contains '{prefix}' and trashed = false"
     results = service.files().list(q=query, fields="files(id, name, createdTime)").execute()
     for f in results.get("files", []):
         created = datetime.fromisoformat(f["createdTime"].replace("Z", "+00:00")).timestamp()
@@ -118,21 +147,33 @@ def prune_old_backups(service):
 
 
 def main():
-    print(f"[{datetime.now(timezone.utc).isoformat()}] Starting database backup...")
-    dump = dump_database()
-
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    filename = f"{BACKUP_PREFIX}{timestamp}.json.gz"
-    local_path = f"/tmp/{filename}"
+    service = _drive_service()
 
+    print(f"[{datetime.now(timezone.utc).isoformat()}] Backing up database...")
+    dump = dump_database()
+    db_filename = f"{DB_BACKUP_PREFIX}{timestamp}.json.gz"
+    db_local_path = f"/tmp/{db_filename}"
     payload = json.dumps(dump, default=_json_default).encode("utf-8")
-    with gzip.open(local_path, "wb") as f:
+    with gzip.open(db_local_path, "wb") as f:
         f.write(payload)
-    print(f"  wrote {local_path} ({len(payload)} bytes uncompressed, {os.path.getsize(local_path)} gzipped)")
+    print(f"  wrote {db_local_path} ({len(payload)} bytes uncompressed, {os.path.getsize(db_local_path)} gzipped)")
+    upload_to_drive(service, db_local_path, db_filename)
+    prune_old_backups(service, DB_BACKUP_PREFIX)
+    os.remove(db_local_path)
 
-    service = upload_to_drive(local_path, filename)
-    prune_old_backups(service)
-    os.remove(local_path)
+    print("Backing up uploaded files...")
+    files_filename = f"{FILES_BACKUP_PREFIX}{timestamp}.tar.gz"
+    files_local_path = f"/tmp/{files_filename}"
+    if archive_uploaded_files(files_local_path):
+        print(f"  wrote {files_local_path} ({os.path.getsize(files_local_path)} bytes gzipped)")
+        upload_to_drive(service, files_local_path, files_filename)
+        prune_old_backups(service, FILES_BACKUP_PREFIX)
+    else:
+        print("  nothing to archive, skipped")
+    if os.path.exists(files_local_path):
+        os.remove(files_local_path)
+
     print("Backup complete.")
 
 
