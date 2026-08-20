@@ -57,6 +57,8 @@
         color: var(--primary);
         display: flex; align-items: center; justify-content: center;
         font-size: 2rem;
+        position: relative;
+        overflow: hidden;
         transition: box-shadow 0.2s;
     }
     .interview-avatar.speaking {
@@ -66,6 +68,34 @@
         0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); }
         70% { box-shadow: 0 0 0 18px rgba(79, 70, 229, 0); }
         100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+    }
+    .interview-avatar .avatar-photo {
+        width: 100%; height: 100%;
+        object-fit: cover;
+        display: block;
+        transform-origin: center 65%;
+        transition: transform 0.09s ease-out;
+        will-change: transform;
+    }
+    .avatar-waveform {
+        position: absolute;
+        left: 50%; bottom: 8px;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: flex-end;
+        gap: 2px;
+        height: 14px;
+        opacity: 0;
+        transition: opacity 0.15s;
+        pointer-events: none;
+    }
+    .interview-avatar.speaking .avatar-waveform { opacity: 1; }
+    .avatar-waveform span {
+        width: 3px;
+        height: 4px;
+        background: #fff;
+        border-radius: 2px;
+        transition: height 0.09s ease-out;
     }
 
     .interview-question {
@@ -206,7 +236,12 @@
             <!-- Live interview stage -->
             <div id="interviewStage">
                 <p class="interview-progress" id="progressLabel">Connecting...</p>
-                <div class="interview-avatar" id="avatar"><i class="fas fa-robot"></i></div>
+                <div class="interview-avatar" id="avatar">
+                    <img src="{{ url_for('static', filename='interviewer/interviewer-1.svg') }}" alt="AI interviewer" class="avatar-photo" id="avatarPhoto">
+                    <div class="avatar-waveform" id="avatarWaveform">
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                </div>
                 <h2 class="interview-question" id="questionText">One moment...</h2>
 
                 <div id="recordSection" style="display:none;">
@@ -270,6 +305,8 @@ let recordingHasVideo = false;
 const ESTIMATED_TOTAL = { short: 4, standard: 7, thorough: 10 }["{{ job.interview_length }}"] || 7;
 
 const avatar = document.getElementById("avatar");
+const avatarPhoto = document.getElementById("avatarPhoto");
+const waveformBars = document.querySelectorAll("#avatarWaveform span");
 const questionText = document.getElementById("questionText");
 const progressLabel = document.getElementById("progressLabel");
 const recordSection = document.getElementById("recordSection");
@@ -348,6 +385,66 @@ function unlockRecording() {
     recordStatus.textContent = "Tap to record your answer";
 }
 
+// --- Audio-reactive "talking" animation for the AI interviewer avatar ---
+// Drives a subtle scale pulse on the portrait + a waveform indicator off the
+// TTS audio's real-time amplitude, so the avatar appears to speak the
+// question rather than just glow while a static clip plays.
+let audioCtx = null;
+let talkingRAF = null;
+
+function getAudioContext() {
+    if (!audioCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+    }
+    return audioCtx;
+}
+
+function animateTalking(analyser, data) {
+    analyser.getByteFrequencyData(data);
+    const avg = data.reduce((sum, v) => sum + v, 0) / data.length;
+    const level = avg / 255; // 0..1
+
+    if (avatarPhoto) {
+        avatarPhoto.style.transform = `scale(${1 + level * 0.05})`;
+    }
+    waveformBars.forEach((bar, i) => {
+        const sample = data[(i * 5 + 2) % data.length] / 255;
+        bar.style.height = `${4 + sample * 12}px`;
+    });
+
+    talkingRAF = requestAnimationFrame(() => animateTalking(analyser, data));
+}
+
+function stopTalkingAnimation() {
+    if (talkingRAF) {
+        cancelAnimationFrame(talkingRAF);
+        talkingRAF = null;
+    }
+    if (avatarPhoto) avatarPhoto.style.transform = "scale(1)";
+    waveformBars.forEach(bar => { bar.style.height = "4px"; });
+}
+
+function startTalkingAnimation(audioEl) {
+    const ctx = getAudioContext();
+    if (!ctx) return; // Web Audio unsupported - the pulse ring alone still shows "speaking"
+    try {
+        const source = ctx.createMediaElementSource(audioEl);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 64;
+        source.connect(analyser);
+        analyser.connect(ctx.destination);
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        animateTalking(analyser, data);
+    } catch (e) {
+        // e.g. a browser refusing a second MediaElementSource - fail silently,
+        // the audio still plays normally and the pulse ring still shows.
+    }
+}
+
 function setQuestion(text, audioUrl) {
     questionNum++;
     currentQuestion = text;
@@ -359,13 +456,17 @@ function setQuestion(text, audioUrl) {
 
     if (audioUrl) {
         const audio = new Audio(audioUrl);
+        audio.crossOrigin = "anonymous";
         avatar.classList.add("speaking");
+        startTalkingAnimation(audio);
         audio.addEventListener("ended", () => {
             avatar.classList.remove("speaking");
+            stopTalkingAnimation();
             unlockRecording();
         });
         audio.play().catch(() => {
             avatar.classList.remove("speaking");
+            stopTalkingAnimation();
             unlockRecording();
         });
     } else {
