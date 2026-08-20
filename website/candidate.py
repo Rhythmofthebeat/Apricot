@@ -199,6 +199,44 @@ def browse_jobs():
     )
 
 
+CHAT_SEARCH_STOPWORDS = {
+    "a", "an", "the", "is", "are", "am", "be", "do", "does", "did", "you", "your",
+    "have", "has", "any", "for", "in", "on", "at", "with", "and", "or", "to", "of",
+    "i", "me", "my", "we", "us", "job", "jobs", "role", "roles", "position", "positions",
+    "looking", "look", "find", "search", "want", "need", "that", "this", "match",
+    "matches", "matching", "please", "hi", "hello", "hey", "can", "could", "would",
+    "there", "here", "what", "which", "some", "get", "give", "show", "see",
+}
+
+
+def search_jobs_by_text(text, limit=5):
+    """Cheap keyword search against open jobs, for surfacing relevant listings
+    from free-text chat input (no AI call - just the same ilike pattern
+    browse_jobs() above uses). Returns [] if nothing meaningful to search on."""
+    words = re.findall(r"[a-zA-Z0-9+#]+", (text or "").lower())
+    keywords = [w for w in words if len(w) > 2 and w not in CHAT_SEARCH_STOPWORDS]
+    if not keywords:
+        return []
+
+    conditions = []
+    for kw in keywords[:8]:
+        pattern = f"%{kw}%"
+        conditions.extend([
+            Job.title.ilike(pattern),
+            Job.description.ilike(pattern),
+            Job.location.ilike(pattern),
+            Job.category.ilike(pattern),
+        ])
+
+    return (
+        Job.query.filter_by(status="open")
+        .filter(or_(*conditions))
+        .order_by(Job.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
 @candidate.route('/jobs/<int:job_id>')
 def job_detail(job_id):
     job = Job.query.get_or_404(job_id)

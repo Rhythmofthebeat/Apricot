@@ -772,6 +772,14 @@
         }
         .she-msg.ai .she-bubble { color: var(--text); }
         .she-msg.user .she-bubble { color: var(--primary); }
+        .she-job-links { margin-left: 32px; display: flex; flex-direction: column; gap: 6px; }
+        .she-job-link {
+            display: block; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px;
+            text-decoration: none; color: inherit; transition: border-color 0.15s;
+        }
+        .she-job-link:hover { border-color: var(--primary); }
+        .she-job-link .sjl-title { font-size: 0.8rem; font-weight: 600; color: var(--primary); }
+        .she-job-link .sjl-meta { font-size: 0.72rem; color: var(--text-muted); }
         #siteHelpTyping { display: none; }
         #siteHelpTyping.show { display: flex; }
         .she-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); animation: sheBlink 1.2s infinite; }
@@ -858,6 +866,25 @@
             messages.scrollTop = messages.scrollHeight;
         }
 
+        function appendJobLinks(jobs) {
+            if (!jobs || !jobs.length) return;
+            const wrap = document.createElement('div');
+            wrap.className = 'she-job-links';
+            jobs.forEach(job => {
+                const a = document.createElement('a');
+                a.className = 'she-job-link';
+                a.href = job.url;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                a.innerHTML =
+                    '<div class="sjl-title">' + escapeHtml(job.title) + '</div>' +
+                    '<div class="sjl-meta">' + escapeHtml(job.company) + (job.location ? ' &middot; ' + escapeHtml(job.location) : '') + '</div>';
+                wrap.appendChild(a);
+            });
+            messages.insertBefore(wrap, typing);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
         function setTyping(visible) {
             typing.classList.toggle('show', visible);
             if (visible) messages.scrollTop = messages.scrollHeight;
@@ -884,6 +911,7 @@
                 setTyping(false);
                 const reply = data.reply || "Sorry, something went wrong. Please try again.";
                 appendMessage('ai', reply);
+                appendJobLinks(data.matching_jobs);
                 history.push({ role: 'assistant', content: reply });
             } catch (e) {
                 setTyping(false);

@@ -216,6 +216,40 @@
     color: var(--primary);
 }
 
+.chat-job-links {
+    max-width: 74%;
+    margin-left: 38px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.chat-job-link {
+    display: block;
+    padding: 8px 12px;
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.15s;
+}
+
+.chat-job-link:hover {
+    border-color: var(--primary);
+}
+
+.chat-job-link .cjl-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.chat-job-link .cjl-meta {
+    font-size: 0.76rem;
+    color: #6c757d;
+}
+
 /* Typing dots */
 .typing-bubble {
     display: flex;
@@ -992,6 +1026,25 @@ return newId;
         messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    function appendJobLinks(jobs) {
+        if (!jobs || !jobs.length) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'chat-job-links';
+        jobs.forEach(job => {
+            const a = document.createElement('a');
+            a.className = 'chat-job-link';
+            a.href = job.url;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            a.innerHTML =
+                '<div class="cjl-title">' + escapeHtml(job.title) + '</div>' +
+                '<div class="cjl-meta">' + escapeHtml(job.company) + (job.location ? ' &middot; ' + escapeHtml(job.location) : '') + '</div>';
+            wrap.appendChild(a);
+        });
+        messagesEl.insertBefore(wrap, typingEl);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
     function setTyping(visible) {
         typingEl.style.display = visible ? 'flex' : 'none';
         if (visible) messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1031,6 +1084,7 @@ return newId;
 
             const reply = data.reply || 'Sorry, something went wrong. Please try again.';
             appendMessage('ai', reply);
+            appendJobLinks(data.matching_jobs);
             conversationHistory.push({ role: 'assistant', content: reply });
             persistConversation();
 

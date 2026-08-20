@@ -1,4 +1,5 @@
 from website import create_app, mail, limiter
+from website.candidate import search_jobs_by_text
 from flask_mail import Message
 from flask import Flask, render_template, request, jsonify, current_app, Response, flash, redirect, url_for
 from flask_login import login_required, current_user
@@ -263,6 +264,22 @@ def upload_resume():
                 logger.error(f"Failed to delete temp file: {str(e)}")
 
 
+def _matching_jobs_payload(user_message):
+    """Cheap keyword-matched open jobs for a chat message, serialized for the
+    frontend to render as clickable links alongside the AI's reply."""
+    jobs = search_jobs_by_text(user_message)
+    return [
+        {
+            "id": job.id,
+            "title": job.title,
+            "company": job.company.name if job.company else "Company",
+            "location": job.location,
+            "url": url_for("candidate.job_detail", job_id=job.id),
+        }
+        for job in jobs
+    ]
+
+
 @app.route("/resume-chat", methods=["POST"])
 @login_required
 @limiter.limit("30 per hour")
@@ -315,7 +332,10 @@ def resume_chat():
             max_tokens=800,
             temperature=0.7,
         )
-        return jsonify({"reply": response.choices[0].message.content.strip()})
+        return jsonify({
+            "reply": response.choices[0].message.content.strip(),
+            "matching_jobs": _matching_jobs_payload(user_message),
+        })
     except Exception as e:
         logger.error(f"Resume chat API error: {str(e)}")
         return jsonify({"error": "Failed to get a response. Please try again."}), 500
@@ -411,7 +431,10 @@ def site_help_chat():
             max_tokens=500,
             temperature=0.4,
         )
-        return jsonify({"reply": response.choices[0].message.content.strip()})
+        return jsonify({
+            "reply": response.choices[0].message.content.strip(),
+            "matching_jobs": _matching_jobs_payload(user_message),
+        })
     except Exception as e:
         logger.error(f"Site help chat API error: {str(e)}")
         return jsonify({"error": "Failed to get a response. Please try again."}), 500
