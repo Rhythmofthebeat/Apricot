@@ -132,29 +132,6 @@
     }
     .btn-hero-outline:hover { border-color: var(--primary); color: var(--primary); }
 
-    /* ── Stats bar ── */
-    .stats-bar {
-        background: var(--surface);
-        border-top: 1px solid var(--border);
-        border-bottom: 1px solid var(--border);
-        padding: 20px 0;
-        margin: 0 -20px;
-    }
-    .stats-bar-inner {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 0;
-    }
-    .stat-item {
-        padding: 4px 36px;
-        border-right: 1px solid var(--border);
-        text-align: center;
-    }
-    .stat-item:last-child { border-right: none; }
-    .stat-val { font-size: 1.45rem; font-weight: 800; color: var(--text); line-height: 1; }
-    .stat-lbl { font-size: 0.75rem; color: var(--text-muted); font-weight: 500; margin-top: 3px; }
-
     /* ── Differentiators ── */
     .diff-section {
         padding: 72px 20px 48px;
@@ -398,8 +375,6 @@
         .hero-wrap { padding: 64px 20px 56px; }
         .roles-grid { grid-template-columns: 1fr; }
         .hiw-steps { grid-template-columns: 1fr; }
-        .stat-item { border-right: none; border-bottom: 1px solid var(--border); padding: 12px 24px; }
-        .stat-item:last-child { border-bottom: none; }
     }
 </style>
 {% endblock %}
@@ -445,29 +420,6 @@
     </p>
 </div>
 
-{% if current_user.is_authenticated and current_user.is_admin %}
-<!-- ── STATS BAR (admin-only for now) ── -->
-<div class="stats-bar reveal">
-    <div class="stats-bar-inner">
-        <div class="stat-item">
-            <div class="stat-val">{{ open_job_count if open_job_count else '-' }}</div>
-            <div class="stat-lbl">Open roles</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-val">{{ candidate_count if candidate_count else '-' }}</div>
-            <div class="stat-lbl">Candidates</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-val">{{ company_count if company_count else '-' }}</div>
-            <div class="stat-lbl">Companies hiring</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-val">{{ interviews_count if interviews_count else '-' }}</div>
-            <div class="stat-lbl">AI interviews completed</div>
-        </div>
-    </div>
-</div>
-{% endif %}
 
 <!-- ── WHAT MAKES US DIFFERENT ── -->
 <div class="diff-section reveal">

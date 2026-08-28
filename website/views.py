@@ -21,13 +21,7 @@ def _landing_context():
 
     job_data = [{"job": job} for job in latest_jobs]
 
-    return {
-        "job_data": job_data,
-        "open_job_count": Job.query.filter_by(status='open').count(),
-        "candidate_count": User.query.filter_by(role='candidate').count(),
-        "company_count": Company.query.count(),
-        "interviews_count": Application.query.filter(Application.interview_verdict.isnot(None)).count(),
-    }
+    return {"job_data": job_data}
 
 
 @views.route('/')
