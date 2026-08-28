@@ -12,15 +12,6 @@ REFERRAL_COMMISSION_PERCENT = 10  # referrer's cut of the platform's placement f
 
 views = Blueprint('views', __name__)
 
-_AVATAR_COLORS = [
-    "#4f46e5", "#0891b2", "#059669", "#d97706",
-    "#dc2626", "#7c3aed", "#db2777", "#0284c7",
-]
-
-def _avatar_color(letter):
-    return _AVATAR_COLORS[ord(letter.upper()) % len(_AVATAR_COLORS)]
-
-
 def _landing_context():
     latest_jobs = (Job.query
         .filter_by(status='open')
@@ -28,22 +19,7 @@ def _landing_context():
         .limit(8)
         .all())
 
-    job_data = []
-    for job in latest_jobs:
-        app_count = Application.query.filter_by(job_id=job.id).count()
-        recent_apps = (Application.query
-            .filter_by(job_id=job.id)
-            .limit(4)
-            .all())
-        avatars = []
-        for app in recent_apps:
-            u = User.query.get(app.candidate_user_id)
-            if u and u.first_name:
-                avatars.append({
-                    "letter": u.first_name[0].upper(),
-                    "color": _avatar_color(u.first_name[0]),
-                })
-        job_data.append({"job": job, "app_count": app_count, "avatars": avatars})
+    job_data = [{"job": job} for job in latest_jobs]
 
     return {
         "job_data": job_data,
