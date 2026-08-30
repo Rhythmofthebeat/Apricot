@@ -424,6 +424,7 @@
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item" href="{{ url_for('resumemat') }}"><i class="fas fa-file-circle-check me-2"></i>Resume Job Match <span class="badge bg-secondary ms-1" style="font-size:0.55rem;">FREE</span></a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('resumesum') }}"><i class="fas fa-file-lines me-2"></i>Resume Summarizer <span class="badge bg-secondary ms-1" style="font-size:0.55rem;">FREE</span></a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('practice_interview_hub') }}"><i class="fas fa-dumbbell me-2"></i>Practice Interview Hub <span class="badge bg-secondary ms-1" style="font-size:0.55rem;">FREE</span></a></li>
                                 </ul>
                             </div>
                         {% else %}
@@ -437,6 +438,7 @@
                                 <ul class="dropdown-menu" aria-labelledby="resumeToolsDropdownAuth">
                                     <li><a class="dropdown-item" href="{{ url_for('resumemat') }}"><i class="fas fa-file-circle-check me-2"></i>Resume Job Match</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('resumesum') }}"><i class="fas fa-file-lines me-2"></i>Resume Summarizer</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('practice_interview_hub') }}"><i class="fas fa-dumbbell me-2"></i>Practice Interview Hub</a></li>
                                 </ul>
                             </div>
                             <a class="nav-link" href="{{ url_for('candidate.dashboard') }}">
@@ -500,6 +502,7 @@
                             <ul class="dropdown-menu" aria-labelledby="resumeToolsDropdown">
                                 <li><a class="dropdown-item" href="{{ url_for('resumemat') }}"><i class="fas fa-file-circle-check me-2"></i>Resume Job Match</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('resumesum') }}"><i class="fas fa-file-lines me-2"></i>Resume Summarizer</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('practice_interview_hub') }}"><i class="fas fa-dumbbell me-2"></i>Practice Interview Hub</a></li>
                             </ul>
                         </div>
                         <a class="nav-link" href="{{ url_for('for_employers') }}">For Employers</a>

@@ -30,6 +30,10 @@ from ai_services import (
     generate_summary,
     generate_basic_analysis,
     generate_resume_from_profile,
+    run_interview_turn,
+    transcribe_audio,
+    generate_interview_question_preview,
+    generate_interview_coaching,
 )
 
 #  Load env & config
@@ -142,6 +146,119 @@ def resumemat():
         score_value=saved.get('score_value', 0),
         job_text=saved.get('job_text', ''),
     )
+
+
+VALID_INTERVIEW_LENGTHS = ("short", "standard", "thorough")
+
+
+@app.route("/practice-interview-hub")
+def practice_interview_hub():
+    """Community Edition standalone practice interview - not tied to any job
+    posting or application. Anyone can build a practice session either from
+    an AI-generated question set (paste a job description) or from their own
+    manually-written requirements/questions. Page itself is open to everyone;
+    actually running a session (below) requires login since it costs AI calls."""
+    return render_template("practice_hub.html")
+
+
+@app.route("/practice-interview-hub/chat", methods=["POST"])
+@limiter.limit("40 per hour")
+def practice_hub_chat():
+    """Stateless practice interview turn for the standalone hub - mirrors
+    candidate.practice_interview_chat but takes the role/description/
+    questions straight from the request instead of a Job row, since this
+    session isn't tied to any job posting."""
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Please log in to start a practice interview.", "login_required": True}), 401
+
+    title = (request.form.get("title") or "Practice Interview").strip()[:200]
+    description = (request.form.get("description") or "").strip()
+    requirements_raw = request.form.get("requirements") or ""
+    manual_questions = [q.strip() for q in requirements_raw.splitlines() if q.strip()][:15] or None
+    interview_length = request.form.get("interview_length") or "standard"
+    if interview_length not in VALID_INTERVIEW_LENGTHS:
+        interview_length = "standard"
+    interview_focus = (request.form.get("interview_focus") or "").strip()[:2000] or None
+
+    history = json.loads(request.form.get("history", "[]"))
+    wrap_up = request.form.get("wrap_up", "false").lower() == "true"
+    answer_audio = request.files.get("answer_audio")
+    text_answer = (request.form.get("text_answer") or "").strip()
+
+    user_message = text_answer  # text mode takes priority if provided
+    if not user_message and answer_audio and answer_audio.filename:
+        try:
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+                tmp.write(answer_audio.read())
+                tmp_path = tmp.name
+            user_message = transcribe_audio(tmp_path)
+            os.unlink(tmp_path)
+        except Exception:
+            return jsonify({"error": "Couldn't transcribe your answer. Please try again."}), 500
+
+    try:
+        reply = run_interview_turn(
+            title, description, user_message, history, force_conclude=wrap_up,
+            interview_length=interview_length, interview_focus=interview_focus,
+            interview_questions=manual_questions, practice_mode=True,
+        )
+    except Exception:
+        return jsonify({"error": "Failed to get a response. Please try again."}), 500
+
+    verdict_match = re.search(r"Verdict:\s*(Strong Yes|Yes|No|Strong No)", reply, re.IGNORECASE)
+    should_conclude = bool(verdict_match)
+
+    coaching = None
+    if should_conclude:
+        transcript_lines = [f"{m.get('role')}: {m.get('content')}" for m in history]
+        transcript_lines.append(f"assistant: {reply}")
+        full_transcript = "\n".join(transcript_lines)
+        try:
+            coaching = generate_interview_coaching(
+                transcript=full_transcript,
+                job_title=title,
+                requirements=description or requirements_raw,
+                verdict=None,
+                match_score=None,
+            )
+        except Exception:
+            coaching = None
+
+    return jsonify({
+        "reply": reply,
+        "transcribed_answer": user_message,
+        "text_answer": text_answer,
+        "concluded": should_conclude,
+        "coaching": coaching,
+    })
+
+
+@app.route("/practice-interview-hub/questions", methods=["POST"])
+@limiter.limit("15 per hour")
+def practice_hub_questions():
+    """On-demand sample question list for the standalone hub's AI-generated
+    mode, same idea as candidate.practice_questions but built from the
+    title/description the visitor typed in rather than an existing Job row."""
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Please log in to generate questions.", "login_required": True}), 401
+
+    title = (request.form.get("title") or "").strip()
+    description = (request.form.get("description") or "").strip()
+    if not title or not description:
+        return jsonify({"error": "Add a job title and description first."}), 400
+    interview_length = request.form.get("interview_length") or "standard"
+    if interview_length not in VALID_INTERVIEW_LENGTHS:
+        interview_length = "standard"
+    interview_focus = (request.form.get("interview_focus") or "").strip() or None
+
+    try:
+        questions = generate_interview_question_preview(
+            title, description, interview_length=interview_length, interview_focus=interview_focus,
+        )
+    except Exception:
+        return jsonify({"error": "Couldn't generate questions right now. Please try again."}), 500
+    return jsonify({"questions": questions})
 
 
 @app.route("/generate-profile-resume", methods=["POST"])
@@ -362,8 +479,11 @@ later, but only submitted once.
 - If hired: the employer enters the actual compensation figure; the candidate must confirm it's accurate (or \
 dispute it if it's wrong) before anything is finalized.
 - Community Edition (free, no application needed, open to everyone including employers): a standalone Resume Job \
-Match tool (paste a job description + resume, get a score) and a Resume Summarizer, both under the "Resume Tools" \
-menu.
+Match tool (paste a job description + resume, get a score), a Resume Summarizer, and a Practice Interview Hub - \
+a mock AI interview built either from a pasted job description (AI generates the questions) or from your own \
+manually-typed requirements/questions, not tied to any real job posting or application. All three live under the \
+"Resume Tools" menu; running an actual practice session or resume tool requires being logged in even though \
+browsing the page doesn't.
 - Earn: a separate paid marketplace where professionals rank, rate, fact-check, or write AI training data for \
 money, unrelated to job hunting.
 
@@ -574,7 +694,7 @@ def contact():
             return render_template("contact.html")
 
         try:
-            # Notify us
+            # Notify us only; no auto-reply is sent to the sender
             msg = Message(
                 subject=f"Contact form: {name}",
                 recipients=["bazarirhythm@gmail.com"],
@@ -583,25 +703,7 @@ def contact():
             )
             mail.send(msg)
 
-            # Auto-reply to sender
-            from email_utils import send_branded_email
-            send_branded_email(
-                to_email=email,
-                subject="We received your message",
-                heading=f"Thanks for reaching out, {name.split()[0]}!",
-                body_html=(
-                    f"We got your message and will get back to you shortly.<br><br>"
-                    f"<strong>Your message:</strong><br>"
-                    f"<div style='background:#f7f7f8;border-radius:8px;padding:14px 16px;margin-top:8px;"
-                    f"font-size:13px;color:#3a3c42;'>{message}</div>"
-                ),
-                plain_text=(
-                    f"Hi {name},\n\nWe received your message and will get back to you soon.\n\n"
-                    f"Your message:\n{message}\n\nAvants AI Team"
-                ),
-            )
-
-            flash("Message sent! Check your email for confirmation.", "success")
+            flash("Thanks for reaching out! Your message has been sent.", "success")
         except Exception as e:
             logger.error(f"Contact form send failed: {str(e)}")
             flash("Couldn't send your message right now. Please try again shortly.", "error")

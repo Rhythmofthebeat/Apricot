@@ -1,0 +1,1007 @@
+{% extends "base.html" %}
+{% block title %}Practice Interview Hub{% endblock %}
+
+{% block head %}
+<style>
+/* ── Layout ── */
+.practice-wrap { min-height: 70vh; }
+
+/* ── Practice banner ── */
+.practice-badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: #fef3c7; color: #92400e;
+    border: 1px solid #fde68a; border-radius: 999px;
+    padding: 3px 14px; font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+}
+.community-badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--primary-soft); color: var(--primary);
+    border-radius: 999px; padding: 3px 14px; font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+}
+
+/* ── Setup screen ── */
+.setup-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 32px;
+}
+.mode-select-tabs {
+    display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;
+}
+.mode-select-tab {
+    flex: 1; min-width: 220px; text-align: left; cursor: pointer;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px; background: var(--bg); transition: all 0.15s;
+}
+.mode-select-tab:hover { border-color: var(--primary); }
+.mode-select-tab.active { border-color: var(--primary); background: var(--primary-soft); }
+.mode-select-tab .mst-title { font-weight: 700; font-size: 0.92rem; margin-bottom: 3px; }
+.mode-select-tab .mst-desc { font-size: 0.8rem; color: var(--text-muted); }
+.setup-field { margin-bottom: 16px; }
+.setup-field label { font-size: 0.82rem; font-weight: 600; margin-bottom: 6px; display: block; }
+.setup-field .hint { font-size: 0.76rem; color: var(--text-muted); margin-top: 4px; }
+.setup-field textarea, .setup-field input, .setup-field select {
+    width: 100%; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; font-size: 0.88rem; font-family: inherit;
+    color: var(--text); background: var(--bg);
+}
+.setup-field textarea:focus, .setup-field input:focus, .setup-field select:focus {
+    outline: none; border-color: var(--primary);
+}
+.setup-row { display: flex; gap: 14px; flex-wrap: wrap; }
+.setup-row > .setup-field { flex: 1; min-width: 180px; }
+
+/* ── Tips card (shown after setup, before starting) ── */
+.tips-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 40px 32px; text-align: center;
+}
+.tip-row {
+    display: flex; gap: 14px; align-items: flex-start;
+    text-align: left; margin-bottom: 14px; font-size: 0.88rem;
+}
+.tip-icon {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 0.9rem;
+}
+
+/* ── Interview card ── */
+.interview-main {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+}
+.ai-question-area {
+    padding: 36px 32px 28px; text-align: center;
+    border-bottom: 1px solid var(--border);
+}
+.ai-avatar {
+    width: 72px; height: 72px; border-radius: 50%;
+    background: var(--primary-soft); color: var(--primary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.8rem; margin: 0 auto 18px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.ai-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ai-avatar.speaking { animation: speakPulse 1s infinite; }
+@keyframes speakPulse {
+    0%   { box-shadow: 0 0 0 0   rgba(79,70,229,0.4); }
+    70%  { box-shadow: 0 0 0 16px rgba(79,70,229,0);   }
+    100% { box-shadow: 0 0 0 0   rgba(79,70,229,0);   }
+}
+.ai-question-text {
+    font-size: 1.2rem; font-weight: 600;
+    max-width: 520px; margin: 0 auto; line-height: 1.55; color: var(--text);
+}
+.q-label {
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 10px;
+}
+
+.input-area { padding: 20px 24px; }
+.mode-tabs {
+    display: flex; gap: 0; border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden; margin-bottom: 16px;
+    width: fit-content;
+}
+.mode-tab {
+    padding: 6px 18px; font-size: 0.8rem; font-weight: 600;
+    cursor: pointer; border: none; background: transparent; color: var(--text-muted);
+    transition: all 0.15s;
+}
+.mode-tab.active { background: var(--primary); color: #fff; }
+
+.voice-controls { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.record-btn {
+    width: 72px; height: 72px; border-radius: 50%; border: none;
+    background: var(--primary); color: #fff; font-size: 1.5rem; cursor: pointer;
+    transition: all 0.15s; flex-shrink: 0;
+}
+.record-btn.recording { background: var(--danger); animation: rpulse 1.2s infinite; }
+.record-btn:disabled { opacity: 0.45; cursor: not-allowed; animation: none; }
+@keyframes rpulse {
+    0%   { box-shadow: 0 0 0 0   rgba(220,38,38,0.5); }
+    70%  { box-shadow: 0 0 0 16px rgba(220,38,38,0);  }
+    100% { box-shadow: 0 0 0 0   rgba(220,38,38,0);  }
+}
+.record-timer {
+    font-size: 1.1rem; font-weight: 700; color: var(--danger);
+    font-variant-numeric: tabular-nums; display: none;
+}
+.record-status-text { font-size: 0.85rem; color: var(--text-muted); text-align: center; }
+
+.answer-preview {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px; margin-top: 8px;
+    font-size: 0.88rem; color: var(--text); text-align: left;
+    display: none;
+}
+.answer-preview-label {
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 6px;
+}
+
+.text-input-area { display: none; }
+.text-input-area textarea {
+    width: 100%; border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; font-size: 0.9rem; resize: vertical; min-height: 100px;
+    font-family: inherit; color: var(--text); background: var(--bg);
+}
+.text-input-area textarea:focus { outline: none; border-color: var(--primary); }
+
+.processing-overlay {
+    display: none; align-items: center; justify-content: center;
+    gap: 10px; padding: 18px; color: var(--text-muted); font-size: 0.88rem;
+}
+
+.t-bubble { font-size: 0.81rem; line-height: 1.45; color: var(--text); }
+.t-bubble-label {
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; opacity: 0.6; margin-bottom: 3px;
+}
+
+.coaching-wrap { padding: 32px; text-align: center; }
+.score-ring-lg {
+    width: 100px; height: 100px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 12px; font-size: 2.2rem; font-weight: 800;
+    border: 5px solid var(--border); transition: border-color 0.6s;
+}
+.score-ring-fill {
+    width: 100%; height: 8px; background: var(--border);
+    border-radius: 99px; overflow: hidden; margin: 8px 0 18px;
+}
+.score-ring-fill-bar { height: 100%; border-radius: 99px; width: 0; transition: width 0.8s ease; }
+.coaching-grid { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.coaching-block {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+}
+.coaching-block-title {
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 10px;
+}
+.coaching-item {
+    display: flex; gap: 9px; margin-bottom: 8px;
+    align-items: flex-start; font-size: 0.84rem;
+}
+.coaching-item:last-child { margin-bottom: 0; }
+.ci-dot {
+    width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 0.58rem; margin-top: 1px;
+}
+.ci-s { background: var(--success-soft); color: var(--success); }
+.ci-i { background: var(--warning-soft); color: var(--warning); }
+.ci-t { background: var(--primary-soft); color: var(--primary); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="practice-wrap">
+
+<!-- Setup screen -->
+<div id="setupScreen">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            <div class="text-center mb-3">
+                <span class="community-badge"><i class="fas fa-dumbbell me-1"></i> Practice Interview Hub &middot; Community Edition</span>
+            </div>
+            <h1 class="text-center" style="font-size:1.4rem; font-weight:800; margin-bottom:6px;">Build your practice interview</h1>
+            <p class="text-center text-muted mb-4" style="font-size:0.9rem;">
+                Not tied to any job application. Rehearse with AI-generated questions from a job description,
+                or bring your own list of requirements to be interviewed on.
+            </p>
+
+            <div class="setup-card">
+                <div class="mode-select-tabs">
+                    <div class="mode-select-tab active" id="modeCardAi" onclick="selectSetupMode('ai')">
+                        <div class="mst-title"><i class="fas fa-wand-magic-sparkles me-2"></i>AI-generated from a job</div>
+                        <div class="mst-desc">Paste a job description (or write your own) and let AI build the questions.</div>
+                    </div>
+                    <div class="mode-select-tab" id="modeCardManual" onclick="selectSetupMode('manual')">
+                        <div class="mst-title"><i class="fas fa-list-check me-2"></i>Manual requirements</div>
+                        <div class="mst-desc">Type the exact requirements or questions you want to be interviewed on.</div>
+                    </div>
+                </div>
+
+                <div class="setup-field">
+                    <label for="titleInput">Job title / role you're practicing for</label>
+                    <input type="text" id="titleInput" placeholder="e.g. Senior Backend Engineer" maxlength="200">
+                </div>
+
+                <!-- AI-generated mode fields -->
+                <div id="aiModeFields">
+                    <div class="setup-field">
+                        <label for="descriptionInput">Job description</label>
+                        <textarea id="descriptionInput" rows="6" placeholder="Paste the job description you want to be interviewed against…"></textarea>
+                        <div class="hint">AI reads this and asks concrete, role-specific questions grounded in what it says.</div>
+                    </div>
+                </div>
+
+                <!-- Manual mode fields -->
+                <div id="manualModeFields" style="display:none;">
+                    <div class="setup-field">
+                        <label for="requirementsInput">Your requirements / questions (one per line)</label>
+                        <textarea id="requirementsInput" rows="6" placeholder="e.g.&#10;5+ years of Python experience&#10;Has led a team of engineers&#10;Tell me about a time you shipped under a tight deadline"></textarea>
+                        <div class="hint">These are worked into the interview verbatim or close to it - up to 15 will be used.</div>
+                    </div>
+                    <div class="setup-field">
+                        <label for="manualContextInput">Extra context <span class="text-muted fw-normal">(optional)</span></label>
+                        <textarea id="manualContextInput" rows="3" placeholder="Anything else the interviewer should know about the role…"></textarea>
+                    </div>
+                </div>
+
+                <div class="setup-row">
+                    <div class="setup-field">
+                        <label for="lengthSelect">Interview length</label>
+                        <select id="lengthSelect">
+                            <option value="short">Short (~3-4 questions)</option>
+                            <option value="standard" selected>Standard (~5-8 questions)</option>
+                            <option value="thorough">Thorough (~8-12 questions)</option>
+                        </select>
+                    </div>
+                    <div class="setup-field">
+                        <label for="focusInput">Focus areas <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="text" id="focusInput" placeholder="e.g. dig into system design experience" maxlength="500">
+                    </div>
+                </div>
+
+                <div id="setupError" class="text-danger small mb-2" style="display:none;"></div>
+
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                    <button class="btn btn-primary px-4" onclick="startFromSetup()">
+                        <i class="fas fa-play me-2"></i> Start Practice Interview
+                    </button>
+                    <button class="btn btn-outline-secondary" id="previewQuestionsBtn" onclick="showSampleQuestions()">
+                        <i class="fas fa-list-ul me-2"></i> Preview sample questions
+                    </button>
+                </div>
+                {% if not current_user.is_authenticated %}
+                <p class="text-muted small mt-3 mb-0"><i class="fas fa-circle-info me-1"></i>You'll be asked to log in before the session starts - your inputs here are kept.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Interview screen (hidden until started) -->
+<div id="interviewScreen" style="display:none;">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <span class="practice-badge"><i class="fas fa-dumbbell me-1"></i> Practice Mode</span>
+                <div style="flex:1; min-width:160px; max-width:280px;">
+                    <div style="background:var(--bg); border-radius:999px; height:6px; overflow:hidden;">
+                        <div id="progressBar" style="height:100%; width:0%; background:var(--primary); border-radius:999px; transition:width 0.5s;"></div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-1" style="font-size:0.7rem; color:var(--text-muted);">
+                        <span id="progressFraction">Warming up…</span>
+                        <span id="progressPct"></span>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showSampleQuestions()" title="See a list of sample questions for this role" id="viewQuestionsBtn">
+                    <i class="fas fa-list-ul"></i>
+                </button>
+            </div>
+
+            <div class="interview-main" id="interviewMain">
+
+                <div class="ai-question-area">
+                    <div class="ai-avatar" id="avatar"><img src="{{ url_for('static', filename='interviewer/interviewer-1.png') }}" alt="AI interviewer"></div>
+                    <div class="q-label" id="qLabel">
+                        <i class="fas fa-spinner fa-spin me-1" id="connectingSpinner"></i> Connecting…
+                    </div>
+                    <div class="ai-question-text" id="questionText" style="color:var(--text-muted); font-size:1rem;">Setting up your practice session…</div>
+                    <div id="connectError" style="display:none; margin-top:12px;">
+                        <p class="text-danger small mb-2" id="connectErrorMsg"></p>
+                        <button class="btn btn-outline-primary btn-sm" onclick="retryConnect()">
+                            <i class="fas fa-rotate-right me-1"></i> Try again
+                        </button>
+                    </div>
+                </div>
+
+                <div id="transcriptWrap" style="border-top:1px solid var(--border); max-height:220px; overflow-y:auto; padding:12px 20px; display:none;">
+                    <div id="transcriptBody" style="display:flex; flex-direction:column; gap:8px;"></div>
+                </div>
+
+                <div class="input-area" id="inputArea" style="display:none;">
+
+                    <div class="mode-tabs mb-3">
+                        <button class="mode-tab active" id="tabVoice" onclick="switchMode('voice')">
+                            <i class="fas fa-microphone me-1"></i> Voice
+                        </button>
+                        <button class="mode-tab" id="tabText" onclick="switchMode('text')">
+                            <i class="fas fa-keyboard me-1"></i> Type
+                        </button>
+                    </div>
+
+                    <div id="voiceMode">
+                        <div class="voice-controls">
+                            <button id="recordBtn" class="record-btn" onclick="handleRecordClick()">
+                                <i class="fas fa-microphone" id="recordIcon"></i>
+                            </button>
+                            <div class="record-timer" id="recordTimer">0:00</div>
+                            <div class="record-status-text" id="recordStatus">Tap to start recording</div>
+                        </div>
+
+                        <div class="answer-preview" id="answerPreview">
+                            <div class="answer-preview-label">We heard:</div>
+                            <div id="previewText"></div>
+                            <div class="d-flex gap-2 mt-3">
+                                <button class="btn btn-outline-secondary btn-sm" onclick="reRecord()">
+                                    <i class="fas fa-rotate-left me-1"></i> Re-record
+                                </button>
+                                <button class="btn btn-primary btn-sm" onclick="submitVoiceAnswer()">
+                                    Submit answer <i class="fas fa-arrow-right ms-1"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-input-area" id="textMode">
+                        <textarea id="textAnswer" placeholder="Type your answer here…"></textarea>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <span class="text-muted" style="font-size:0.76rem;" id="wordCount">0 words</span>
+                            <button class="btn btn-primary btn-sm" onclick="submitTextAnswer()">
+                                Submit answer <i class="fas fa-arrow-right ms-1"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="processing-overlay" id="processingOverlay">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span id="processingMsg">Processing…</span>
+                    </div>
+
+                    <div class="text-center mt-3" id="wrapUpRow">
+                        <button class="btn btn-link btn-sm text-muted" style="font-size:0.78rem;" onclick="wrapUp()">
+                            End session early &amp; get coaching report
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Coaching report -->
+<div id="reportScreen" style="display:none;">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            <div class="text-center mb-3">
+                <span class="practice-badge"><i class="fas fa-dumbbell me-1"></i> Practice Complete</span>
+            </div>
+            <div class="interview-main">
+                <div class="coaching-wrap">
+                    <div class="score-ring-lg" id="scoreRing">-</div>
+                    <div class="fw-bold mb-1" style="font-size:1rem;">Communication Score</div>
+                    <div class="score-ring-fill">
+                        <div class="score-ring-fill-bar" id="scoreBar"></div>
+                    </div>
+                    <p class="text-muted small mb-4" id="reportSubtitle">This is private and never shown to anyone.</p>
+                    <div class="coaching-grid" id="coachingGrid"></div>
+                    <div class="mt-5 d-flex flex-column align-items-center gap-2">
+                        <a href="{{ url_for('candidate.browse_jobs') }}" class="btn btn-primary px-5">
+                            <i class="fas fa-search me-1"></i> Browse Real Jobs
+                        </a>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">
+                            <i class="fas fa-rotate-left me-1"></i> Practice Again
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sample questions modal -->
+<div class="modal fade" id="sampleQuestionsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-list-ul me-2" style="color:var(--primary);"></i>Sample questions</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" style="font-size:0.82rem;">
+                    A fresh set generated from your job description - useful to prepare with, but the live session
+                    is a real conversation, not a fixed script, so don't expect it to ask exactly these.
+                </p>
+                <div id="sampleQuestionsLoading" class="text-center py-4">
+                    <i class="fas fa-spinner fa-spin text-muted"></i>
+                </div>
+                <ol id="sampleQuestionsList" class="d-none" style="font-size:0.9rem; line-height:1.9;"></ol>
+                <p id="sampleQuestionsError" class="text-danger d-none" style="font-size:0.85rem;"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="showSampleQuestions()">
+                    <i class="fas fa-rotate me-1"></i> Generate a different set
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div><!-- /practice-wrap -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CHAT_URL = "{{ url_for('practice_hub_chat') }}";
+const QUESTIONS_URL = "{{ url_for('practice_hub_questions') }}";
+const LOGIN_URL = "{{ url_for('auth.login') }}";
+const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }};
+const DRAFT_KEY = 'practiceHubDraft';
+const ESTIMATED_Q = 5;
+
+// ── Setup state ────────────────────────────────────────────────────────────
+let setupMode = 'ai'; // 'ai' | 'manual'
+
+function selectSetupMode(mode) {
+    setupMode = mode;
+    document.getElementById('modeCardAi').classList.toggle('active', mode === 'ai');
+    document.getElementById('modeCardManual').classList.toggle('active', mode === 'manual');
+    document.getElementById('aiModeFields').style.display = mode === 'ai' ? '' : 'none';
+    document.getElementById('manualModeFields').style.display = mode === 'manual' ? '' : 'none';
+    document.getElementById('previewQuestionsBtn').style.display = mode === 'ai' ? '' : 'none';
+}
+
+function readSetup() {
+    return {
+        mode: setupMode,
+        title: document.getElementById('titleInput').value.trim(),
+        description: setupMode === 'ai' ? document.getElementById('descriptionInput').value.trim() : document.getElementById('manualContextInput').value.trim(),
+        requirements: setupMode === 'manual' ? document.getElementById('requirementsInput').value.trim() : '',
+        interview_length: document.getElementById('lengthSelect').value,
+        interview_focus: document.getElementById('focusInput').value.trim(),
+    };
+}
+
+function applySetup(setup) {
+    if (!setup) return;
+    selectSetupMode(setup.mode === 'manual' ? 'manual' : 'ai');
+    document.getElementById('titleInput').value = setup.title || '';
+    document.getElementById('lengthSelect').value = setup.interview_length || 'standard';
+    document.getElementById('focusInput').value = setup.interview_focus || '';
+    if (setup.mode === 'manual') {
+        document.getElementById('requirementsInput').value = setup.requirements || '';
+        document.getElementById('manualContextInput').value = setup.description || '';
+    } else {
+        document.getElementById('descriptionInput').value = setup.description || '';
+    }
+}
+
+function setupError(msg) {
+    const el = document.getElementById('setupError');
+    if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
+    el.textContent = msg;
+    el.style.display = 'block';
+}
+
+function validateSetup(setup) {
+    if (!setup.title) return 'Add a job title or role first.';
+    if (setup.mode === 'ai' && !setup.description) return 'Paste a job description, or switch to Manual requirements.';
+    if (setup.mode === 'manual' && !setup.requirements) return 'Add at least one requirement or question, or switch to AI-generated.';
+    return null;
+}
+
+function startFromSetup() {
+    const setup = readSetup();
+    const err = validateSetup(setup);
+    if (err) { setupError(err); return; }
+    setupError(null);
+
+    if (!IS_AUTHENTICATED) {
+        try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(setup)); } catch (e) {}
+        window.location.href = LOGIN_URL + '?next=' + encodeURIComponent(window.location.pathname);
+        return;
+    }
+
+    beginInterview(setup);
+}
+
+(function restoreDraft() {
+    if (!IS_AUTHENTICATED) return;
+    let raw = null;
+    try { raw = sessionStorage.getItem(DRAFT_KEY); } catch (e) {}
+    if (!raw) return;
+    try { sessionStorage.removeItem(DRAFT_KEY); } catch (e) {}
+    let setup;
+    try { setup = JSON.parse(raw); } catch (e) { return; }
+    applySetup(setup);
+})();
+
+// ── Sample questions (AI mode only) ─────────────────────────────────────────
+async function showSampleQuestions() {
+    const setup = readSetup();
+    if (setup.mode !== 'ai') return;
+    if (!setup.title || !setup.description) {
+        setupError('Add a job title and description first.');
+        return;
+    }
+    if (!IS_AUTHENTICATED) {
+        try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(setup)); } catch (e) {}
+        window.location.href = LOGIN_URL + '?next=' + encodeURIComponent(window.location.pathname);
+        return;
+    }
+
+    const modalEl = document.getElementById('sampleQuestionsModal');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const loading = document.getElementById('sampleQuestionsLoading');
+    const list = document.getElementById('sampleQuestionsList');
+    const errorEl = document.getElementById('sampleQuestionsError');
+
+    loading.classList.remove('d-none');
+    list.classList.add('d-none');
+    errorEl.classList.add('d-none');
+    list.innerHTML = '';
+    modal.show();
+
+    try {
+        const fd = new FormData();
+        fd.append('title', setup.title);
+        fd.append('description', setup.description);
+        fd.append('interview_length', setup.interview_length);
+        fd.append('interview_focus', setup.interview_focus);
+        const res = await fetch(QUESTIONS_URL, { method: 'POST', body: fd });
+        const data = await res.json();
+        loading.classList.add('d-none');
+        if (!res.ok || data.error) {
+            errorEl.textContent = data.error || "Couldn't generate questions right now. Please try again.";
+            errorEl.classList.remove('d-none');
+            return;
+        }
+        (data.questions || []).forEach((q) => {
+            const li = document.createElement('li');
+            li.className = 'mb-2';
+            li.textContent = q;
+            list.appendChild(li);
+        });
+        list.classList.remove('d-none');
+    } catch (e) {
+        loading.classList.add('d-none');
+        errorEl.textContent = 'Connection error - please try again.';
+        errorEl.classList.remove('d-none');
+    }
+}
+
+// ── Interview state ──────────────────────────────────────────────────────────
+let currentSetup = null;
+let history      = [];
+let state        = 'idle';   // idle | recording | stopping | processing | done
+let wrappingUp   = false;
+let inputMode    = 'voice';
+let mediaRecorder = null;
+let audioChunks  = [];
+let timerInterval = null;
+let timerSecs    = 0;
+let pendingBlob  = null;
+let questionNum  = 0;
+
+const avatar          = document.getElementById('avatar');
+const qLabel          = document.getElementById('qLabel');
+const questionText    = document.getElementById('questionText');
+const inputArea       = document.getElementById('inputArea');
+const recordBtn       = document.getElementById('recordBtn');
+const recordIcon      = document.getElementById('recordIcon');
+const recordStatus    = document.getElementById('recordStatus');
+const recordTimer     = document.getElementById('recordTimer');
+const answerPreview   = document.getElementById('answerPreview');
+const previewText     = document.getElementById('previewText');
+const processingOverlay = document.getElementById('processingOverlay');
+const processingMsg   = document.getElementById('processingMsg');
+const transcriptBody  = document.getElementById('transcriptBody');
+const progressBar     = document.getElementById('progressBar');
+const progressFraction = document.getElementById('progressFraction');
+const progressPct     = document.getElementById('progressPct');
+const textAnswer      = document.getElementById('textAnswer');
+const wordCount       = document.getElementById('wordCount');
+
+function switchMode(mode) {
+    if (state === 'recording' || state === 'processing') return;
+    inputMode = mode;
+    document.getElementById('tabVoice').classList.toggle('active', mode === 'voice');
+    document.getElementById('tabText').classList.toggle('active', mode === 'text');
+    document.getElementById('voiceMode').style.display = mode === 'voice' ? '' : 'none';
+    document.getElementById('textMode').style.display  = mode === 'text'  ? '' : 'none';
+    answerPreview.style.display = 'none';
+}
+
+function startTimer() {
+    timerSecs = 0;
+    recordTimer.style.display = 'block';
+    timerInterval = setInterval(() => {
+        timerSecs++;
+        const m = Math.floor(timerSecs / 60);
+        const s = String(timerSecs % 60).padStart(2, '0');
+        recordTimer.textContent = `${m}:${s}`;
+    }, 1000);
+}
+function stopTimer() {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    recordTimer.style.display = 'none';
+}
+
+async function ensureRecorder() {
+    if (mediaRecorder) return true;
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+        mediaRecorder.addEventListener('dataavailable', e => audioChunks.push(e.data));
+        mediaRecorder.addEventListener('stop', onRecordStop);
+        return true;
+    } catch {
+        recordStatus.textContent = 'Microphone access denied. Switch to Text mode.';
+        return false;
+    }
+}
+
+async function handleRecordClick() {
+    if (state === 'processing' || state === 'done') return;
+
+    if (state === 'recording') {
+        state = 'stopping';
+        mediaRecorder.stop();
+        stopTimer();
+        recordBtn.disabled = true;
+        recordBtn.classList.remove('recording');
+        recordIcon.className = 'fas fa-microphone';
+        recordStatus.textContent = 'Transcribing…';
+        return;
+    }
+
+    if (!(await ensureRecorder())) return;
+    audioChunks = [];
+    pendingBlob = null;
+    answerPreview.style.display = 'none';
+    state = 'recording';
+    mediaRecorder.start();
+    startTimer();
+    recordBtn.classList.add('recording');
+    recordIcon.className = 'fas fa-stop';
+    recordStatus.textContent = 'Recording… tap to stop';
+}
+
+function buildChatForm(extra) {
+    const fd = new FormData();
+    fd.append('title', currentSetup.title);
+    fd.append('description', currentSetup.description);
+    fd.append('requirements', currentSetup.requirements || '');
+    fd.append('interview_length', currentSetup.interview_length);
+    fd.append('interview_focus', currentSetup.interview_focus || '');
+    fd.append('history', JSON.stringify(history));
+    for (const k in extra) fd.append(k, extra[k]);
+    return fd;
+}
+
+async function onRecordStop() {
+    if (wrappingUp || state === 'done') {
+        audioChunks = [];
+        return;
+    }
+
+    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+    audioChunks = [];
+
+    try {
+        setProcessing('Transcribing…');
+        const fd = buildChatForm({ wrap_up: 'false' });
+        fd.append('answer_audio', blob, 'answer.webm');
+
+        const res = await fetchWithRetry(CHAT_URL, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed.');
+
+        pendingBlob = blob;
+        window._pendingResult = data;
+
+        clearProcessing();
+        previewText.textContent = data.transcribed_answer || '(no speech detected)';
+        answerPreview.style.display = 'block';
+        recordBtn.disabled = false;
+        state = 'idle';
+        recordStatus.textContent = 'Review your answer below';
+
+        if (data.concluded && data.coaching) {
+            answerPreview.style.display = 'none';
+            finalizeAnswer(data);
+        }
+    } catch (e) {
+        clearProcessing();
+        recordStatus.textContent = e.message;
+        recordBtn.disabled = false;
+        state = 'idle';
+    }
+}
+
+function reRecord() {
+    pendingBlob = null;
+    window._pendingResult = null;
+    answerPreview.style.display = 'none';
+    recordStatus.textContent = 'Tap to start recording';
+}
+
+function submitVoiceAnswer() {
+    if (!window._pendingResult) return;
+    answerPreview.style.display = 'none';
+    finalizeAnswer(window._pendingResult);
+    window._pendingResult = null;
+    pendingBlob = null;
+}
+
+textAnswer.addEventListener('input', () => {
+    const words = textAnswer.value.trim().split(/\s+/).filter(Boolean).length;
+    wordCount.textContent = `${words} word${words !== 1 ? 's' : ''}`;
+});
+
+async function submitTextAnswer() {
+    const text = textAnswer.value.trim();
+    if (!text) return;
+    setProcessing('Sending answer…');
+    try {
+        const fd = buildChatForm({ wrap_up: 'false', text_answer: text });
+        const res = await fetchWithRetry(CHAT_URL, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed.');
+        textAnswer.value = '';
+        wordCount.textContent = '0 words';
+        clearProcessing();
+        finalizeAnswer(data);
+    } catch (e) {
+        clearProcessing();
+        recordStatus.textContent = e.message;
+    }
+}
+
+function setProcessing(msg) {
+    state = 'processing';
+    processingMsg.textContent = msg || 'Processing…';
+    processingOverlay.style.display = 'flex';
+    document.getElementById('voiceMode').style.display = 'none';
+    document.getElementById('textMode').style.display = 'none';
+    document.getElementById('wrapUpRow').style.display = 'none';
+}
+
+function clearProcessing() {
+    processingOverlay.style.display = 'none';
+    switchMode(inputMode);
+    document.getElementById('wrapUpRow').style.display = '';
+    state = 'idle';
+}
+
+function finalizeAnswer(data) {
+    const userText = data.transcribed_answer || data.text_answer || '';
+    if (userText) addBubble('user', userText);
+    history.push({ role: 'user', content: userText });
+    history.push({ role: 'assistant', content: data.reply });
+
+    if (data.concluded && data.coaching) {
+        state = 'done';
+        showCoachingReport(data.coaching);
+    } else {
+        addBubble('ai', data.reply);
+        setQuestion(data.reply);
+    }
+}
+
+async function wrapUp() {
+    if (wrappingUp || state === 'done') return;
+    wrappingUp = true;
+
+    if (state === 'recording' && mediaRecorder) {
+        mediaRecorder.stop();
+        stopTimer();
+        recordBtn.classList.remove('recording');
+        recordIcon.className = 'fas fa-microphone';
+    }
+
+    setProcessing('Generating coaching report…');
+    try {
+        const fd = buildChatForm({ wrap_up: 'true' });
+        const res = await fetchWithRetry(CHAT_URL, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed.');
+        history.push({ role: 'assistant', content: data.reply });
+        state = 'done';
+        if (data.coaching) showCoachingReport(data.coaching);
+    } catch (e) {
+        wrappingUp = false;
+        clearProcessing();
+        recordStatus.textContent = e.message;
+    }
+}
+
+function lockInput(msg) {
+    recordBtn.disabled = true;
+    recordStatus.textContent = msg || 'Wait for the question…';
+    const textBtn = document.querySelector('#textMode button');
+    if (textBtn) textBtn.disabled = true;
+    document.getElementById('wrapUpRow').style.pointerEvents = 'none';
+    document.getElementById('wrapUpRow').style.opacity = '0.4';
+}
+
+function unlockInput() {
+    if (state === 'processing' || state === 'done') return;
+    recordBtn.disabled = false;
+    recordStatus.textContent = 'Tap to start recording';
+    const textBtn = document.querySelector('#textMode button');
+    if (textBtn) textBtn.disabled = false;
+    document.getElementById('wrapUpRow').style.pointerEvents = '';
+    document.getElementById('wrapUpRow').style.opacity = '';
+}
+
+function setQuestion(text) {
+    questionNum++;
+    qLabel.textContent = `Question ${questionNum}`;
+    questionText.textContent = text;
+    questionText.style.color = '';
+    questionText.style.fontSize = '';
+
+    const pct = Math.min(Math.round(((questionNum - 1) / ESTIMATED_Q) * 100), 90);
+    progressBar.style.width = pct + '%';
+    progressFraction.textContent = `Q${questionNum} of ~${ESTIMATED_Q}`;
+    progressPct.textContent = pct + '%';
+
+    lockInput('Read the question above, then answer…');
+    setTimeout(unlockInput, 1500);
+}
+
+function addBubble(role, text) {
+    const label = document.createElement('div');
+    label.className = 't-bubble-label';
+    label.textContent = role === 'ai' ? 'AI Interviewer' : 'You';
+
+    const bubble = document.createElement('div');
+    bubble.className = `t-bubble ${role}`;
+    bubble.appendChild(label);
+    bubble.appendChild(document.createTextNode(text));
+    transcriptBody.appendChild(bubble);
+
+    const wrap = document.getElementById('transcriptWrap');
+    wrap.style.display = 'block';
+    wrap.scrollTop = wrap.scrollHeight;
+}
+
+async function fetchWithRetry(url, options, maxAttempts = 3, delayMs = 1500) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            return await fetch(url, options);
+        } catch (e) {
+            if (attempt === maxAttempts) throw e;
+            await new Promise(r => setTimeout(r, delayMs * attempt));
+        }
+    }
+}
+
+function showConnectError(msg) {
+    document.getElementById('connectingSpinner').style.display = 'none';
+    qLabel.textContent = 'Connection failed';
+    questionText.textContent = '';
+    questionText.style.color = '';
+    const errEl = document.getElementById('connectError');
+    document.getElementById('connectErrorMsg').textContent = msg;
+    errEl.style.display = 'block';
+}
+
+async function connectAndStart() {
+    document.getElementById('connectingSpinner').style.display = '';
+    document.getElementById('connectError').style.display = 'none';
+    qLabel.innerHTML = '<i class="fas fa-spinner fa-spin me-1" id="connectingSpinner"></i> Connecting…';
+    questionText.textContent = 'Setting up your practice session…';
+    questionText.style.color = 'var(--text-muted)';
+    questionText.style.fontSize = '1rem';
+
+    try {
+        const fd = buildChatForm({ wrap_up: 'false' });
+        const res = await fetchWithRetry(CHAT_URL, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Server error. Please try again.');
+
+        history.push({ role: 'assistant', content: data.reply });
+        addBubble('ai', data.reply);
+
+        questionText.style.color = '';
+        questionText.style.fontSize = '';
+        document.getElementById('connectError').style.display = 'none';
+        document.getElementById('qLabel').innerHTML = '';
+
+        setQuestion(data.reply);
+        inputArea.style.display = 'block';
+        switchMode('voice');
+    } catch (e) {
+        showConnectError('Couldn\'t connect to the practice session. Check your internet connection and try again.');
+    }
+}
+
+function retryConnect() {
+    connectAndStart();
+}
+
+function beginInterview(setup) {
+    currentSetup = setup;
+    document.getElementById('viewQuestionsBtn').style.display = setup.mode === 'ai' ? '' : 'none';
+    document.getElementById('setupScreen').style.display = 'none';
+    document.getElementById('interviewScreen').style.display = 'block';
+    inputArea.style.display = 'none';
+    connectAndStart();
+}
+
+function showCoachingReport(coaching) {
+    document.getElementById('interviewScreen').style.display = 'none';
+    document.getElementById('reportScreen').style.display = 'block';
+
+    const cs = coaching.communication_score || 0;
+    const color = cs >= 75 ? 'var(--success)' : (cs >= 50 ? 'var(--warning)' : 'var(--danger)');
+
+    const ring = document.getElementById('scoreRing');
+    ring.textContent = cs;
+    ring.style.borderColor = color;
+    ring.style.color = color;
+
+    setTimeout(() => {
+        const bar = document.getElementById('scoreBar');
+        bar.style.background = color;
+        bar.style.width = cs + '%';
+    }, 100);
+
+    const grid = document.getElementById('coachingGrid');
+    let html = '';
+
+    if (coaching.strengths?.length) {
+        html += `<div class="coaching-block">
+            <div class="coaching-block-title"><i class="fas fa-check-circle me-1" style="color:var(--success);"></i>What you did well</div>`;
+        coaching.strengths.forEach(s => {
+            html += `<div class="coaching-item"><div class="ci-dot ci-s"><i class="fas fa-check"></i></div><span>${s}</span></div>`;
+        });
+        html += '</div>';
+    }
+
+    if (coaching.improvements?.length) {
+        html += `<div class="coaching-block">
+            <div class="coaching-block-title"><i class="fas fa-arrow-trend-up me-1" style="color:var(--warning);"></i>Areas to improve</div>`;
+        coaching.improvements.forEach(i => {
+            html += `<div class="coaching-item"><div class="ci-dot ci-i"><i class="fas fa-triangle-exclamation"></i></div><span>${i}</span></div>`;
+        });
+        html += '</div>';
+    }
+
+    if (coaching.tips?.length) {
+        html += `<div class="coaching-block">
+            <div class="coaching-block-title"><i class="fas fa-lightbulb me-1" style="color:var(--primary);"></i>Tips for your real interview</div>`;
+        coaching.tips.forEach(t => {
+            html += `<div class="coaching-item"><div class="ci-dot ci-t"><i class="fas fa-lightbulb"></i></div><span>${t}</span></div>`;
+        });
+        html += '</div>';
+    }
+
+    grid.innerHTML = html || '<p class="text-muted small text-center">Great effort!</p>';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+</script>
+{% endblock %}
