@@ -60,6 +60,15 @@
                             <label class="form-label fw-semibold" style="font-size:0.85rem;">Message</label>
                             <textarea class="form-control" name="message" rows="6" placeholder="Tell us what's on your mind..." required></textarea>
                         </div>
+                        <!-- Honeypot: hidden from real visitors via CSS, so only bots that blindly fill every field trip it -->
+                        <div style="position:absolute; left:-9999px;" aria-hidden="true">
+                            <label for="contact_website">Leave this field empty</label>
+                            <input type="text" id="contact_website" name="website" tabindex="-1" autocomplete="off">
+                        </div>
+                        <div class="form-check mb-4">
+                            <input type="checkbox" class="form-check-input" id="notRobot" name="not_robot" required>
+                            <label class="form-check-label" for="notRobot" style="font-size:0.85rem;">I'm not a robot</label>
+                        </div>
                         <button type="submit" class="btn btn-primary w-100" style="padding:11px;">
                             <i class="fas fa-paper-plane me-2"></i>Send Message
                         </button>

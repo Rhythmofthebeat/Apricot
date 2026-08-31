@@ -688,9 +688,21 @@ def contact():
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip()
         message = request.form.get("message", "").strip()
+        honeypot = request.form.get("website", "").strip()
+        not_robot = request.form.get("not_robot")
+
+        if honeypot:
+            # Bot filled in the hidden field - pretend it worked so it doesn't
+            # adjust its behavior, but skip sending anything.
+            flash("Thanks for reaching out! Your message has been sent.", "success")
+            return redirect(url_for("contact"))
 
         if not name or not email or not message:
             flash("All fields are required.", "error")
+            return render_template("contact.html")
+
+        if not not_robot:
+            flash("Please confirm you're not a robot.", "error")
             return render_template("contact.html")
 
         try:
