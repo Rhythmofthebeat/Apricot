@@ -1,4 +1,5 @@
-from website import create_app, mail, limiter
+from website import create_app, mail, limiter, db
+from community_stats import resume_total, record_resume_processed
 from website.candidate import search_jobs_by_text
 from flask_mail import Message
 from flask import Flask, render_template, request, jsonify, current_app, Response, flash, redirect, url_for
@@ -69,6 +70,26 @@ _RESUME_MATCH_CACHE_MAX = 200  # evict oldest if a token is never consumed
 # Routes
 # ══════════════════════════════════════════════════════════════════════════════
 
+@app.get("/api/community-resume-count")
+def community_resume_count():
+    try:
+        response = jsonify(total=resume_total(db.engine))
+    except Exception:
+        logger.exception("Community resume count unavailable")
+        response = jsonify(error="Count temporarily unavailable")
+        response.status_code = 503
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _record_community_resume():
+    # A metrics failure must not discard a completed analysis for the user.
+    try:
+        record_resume_processed(db.engine)
+    except Exception:
+        logger.exception("Failed to record completed Community Edition resume")
+
+
 @app.route("/resume-summarizer")
 def resumesum():
     return render_template("resumesum.html")
@@ -137,6 +158,8 @@ def resumemat():
                 score_value = val
                 break
 
+        if result and result.strip():
+            _record_community_resume()
         return _stash_and_redirect(result.replace('*', ''), score_value, job_text)
 
     saved = _RESUME_MATCH_CACHE.pop(request.args.get('rid'), None) or {}
@@ -356,6 +379,8 @@ def upload_resume():
 
         try:
             text_summary = generate_summary(text)
+            if text_summary and text_summary.strip():
+                _record_community_resume()
             return jsonify({"status": "success", "text_summary": text_summary, "analysis_type": "AI"})
         except RateLimitError:
             return jsonify({"status": "rate_limited", "error": "api_rate_limited",

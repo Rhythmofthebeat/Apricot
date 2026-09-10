@@ -216,6 +216,8 @@ def create_app():
     with app.app_context():
         db.create_all()
         _run_migrations(db)
+        from community_stats import initialize_counter
+        initialize_counter(db.engine)
 
     from .views import views
     from .auth import auth
