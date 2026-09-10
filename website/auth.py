@@ -6,6 +6,7 @@ from . import db, limiter
 from flask_login import login_user, login_required, logout_user, current_user
 from supabase import create_client
 import os
+import hashlib
 
 from email_utils import send_verification_email, verify_verification_token, public_base_url
 
@@ -18,6 +19,11 @@ supabase = create_client(
 )
 
 auth = Blueprint('auth', __name__)
+
+def _email_rate_key():
+    email = request.form.get("email", "").strip().casefold()
+    return hashlib.sha256(email.encode("utf-8")).hexdigest()
+
 
 
 def _apply_referral(new_user):
@@ -86,6 +92,8 @@ def _provision_employer(user, email_domain, company_name, signature_name=None):
 # ------------------------------------------------ #
 
 @auth.route("/forgot-password", methods=["GET", "POST"])
+@limiter.limit("5 per hour", methods=["POST"])
+@limiter.shared_limit("3 per hour", scope="account-email-resends", key_func=_email_rate_key, methods=["POST"])
 def forgot_password():
     if request.method == "POST":
         email = request.form.get("email")
@@ -374,6 +382,8 @@ def verify_email_prompt():
 
 
 @auth.route("/resend-verification", methods=["POST"])
+@limiter.limit("5 per hour", methods=["POST"])
+@limiter.shared_limit("3 per hour", scope="account-email-resends", key_func=_email_rate_key, methods=["POST"])
 def resend_verification():
     email = request.form.get("email", "").strip()
     if email:

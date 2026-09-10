@@ -708,6 +708,7 @@ def privacy():
 
 
 @app.route("/contact", methods=["GET", "POST"])
+@limiter.limit("20 per hour", key_func=lambda: "contact-global", methods=["POST"])
 @limiter.limit("5 per hour", methods=["POST"])
 def contact():
     if request.method == "POST":
