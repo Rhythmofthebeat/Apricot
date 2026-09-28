@@ -196,10 +196,10 @@ def reset_password_form():
               # Get Supabase user
             user_response = authed_supabase.auth.get_user(access_token)
             supa_user = user_response.user
-            email = supa_user.email
+            email = (supa_user.email or '').lower()
 
             # Get local user
-            user = User.query.filter_by(email=email).first()
+            user = User.query.filter(db.func.lower(User.email) == email).first()
 
             if user:
                 # Block reusing old password
@@ -240,7 +240,7 @@ def login():
         return redirect(next_url or url_for('views.home'))
 
     if request.method == 'POST':
-        email = request.form.get('email')
+        email = (request.form.get('email') or '').strip().lower()
         password = request.form.get('password')
 
         try:
@@ -273,8 +273,10 @@ def login():
                 resp.set_cookie("pending_next", next_url, max_age=900, httponly=True, samesite="Lax")
             return resp
 
-        # Ensure local user exists for Flask-Login
-        local_user = User.query.filter_by(email=email).first()
+        # Ensure local user exists for Flask-Login - matched case-insensitively
+        # since older rows may have been stored with whatever case the person
+        # originally typed at signup.
+        local_user = User.query.filter(db.func.lower(User.email) == email).first()
         if not local_user:
             meta = res.user.user_metadata or {}
             role = meta.get("role", "candidate")
@@ -325,7 +327,7 @@ def sign_up():
         return redirect(next_url or url_for('views.home'))
 
     if request.method == 'POST':
-        email = request.form.get('email')
+        email = (request.form.get('email') or '').strip().lower()
         first_name = request.form.get('firstName')
         password1 = request.form.get('password1')
         password2 = request.form.get('password2')
@@ -425,9 +427,9 @@ def verify_email_prompt():
 @limiter.limit("5 per hour", methods=["POST"])
 @limiter.shared_limit("3 per hour", scope="account-email-resends", key_func=_email_rate_key, methods=["POST"])
 def resend_verification():
-    email = request.form.get("email", "").strip()
+    email = request.form.get("email", "").strip().lower()
     if email:
-        user = User.query.filter_by(email=email).first()
+        user = User.query.filter(db.func.lower(User.email) == email).first()
         if user and not user.email_verified:
             try:
                 send_verification_email(user)
@@ -456,14 +458,14 @@ def auth_confirm():
             flash("Confirmation failed. Please try signing up again.", "error")
             return redirect(url_for("auth.sign_up"))
 
-        email = supa_user.email
+        email = (supa_user.email or '').lower()
         meta = supa_user.user_metadata or {}
         role = meta.get("role", "candidate")
         first_name = meta.get("full_name", "")
         company_name = meta.get("company_name", "").strip()
         email_domain = email.split('@')[-1].lower() if '@' in email else ''
 
-        local_user = User.query.filter_by(email=email).first()
+        local_user = User.query.filter(db.func.lower(User.email) == email).first()
         is_new = local_user is None
 
         if not local_user:
@@ -604,10 +606,10 @@ def login_google_finish():
             flash("Google login failed.", "error")
             return redirect(url_for("auth.login"))
 
-        email = supa_user.email
+        email = (supa_user.email or '').lower()
         name = supa_user.user_metadata.get("full_name", "Google User")
 
-        local_user = User.query.filter_by(email=email).first()
+        local_user = User.query.filter(db.func.lower(User.email) == email).first()
         is_new_user = local_user is None
 
         if not local_user:
@@ -670,7 +672,7 @@ def employer_email_conflict():
         next_url = _safe_next(session.pop('oauth_next', None))
 
         if choice == 'candidate':
-            local_user = User.query.filter_by(email=email).first()
+            local_user = User.query.filter(db.func.lower(User.email) == email.lower()).first()
             if not local_user:
                 local_user = User(email=email, first_name=name, password=None, role='candidate', email_verified=True)
                 db.session.add(local_user)
