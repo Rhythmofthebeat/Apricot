@@ -1738,7 +1738,7 @@ def invite_member():
         return redirect(url_for('employer.company_settings'))
 
     # Don't invite someone already a member or the owner
-    existing_user = User.query.filter_by(email=email).first()
+    existing_user = User.query.filter(db.func.lower(User.email) == email).first()
     if existing_user:
         if existing_user.id == company.owner_user_id:
             flash("That person is already the company owner.", "error")
@@ -1747,6 +1747,16 @@ def invite_member():
         if already:
             flash("That person is already a team member.", "error")
             return redirect(url_for('employer.company_settings'))
+
+        # Already has an account - add them immediately instead of making
+        # them find and click an email link (that's what left someone stuck
+        # as 'candidate' with an unused invite before this existed).
+        existing_user.role = 'employer'
+        db.session.add(CompanyMember(company_id=company.id, user_id=existing_user.id))
+        CompanyInvite.query.filter_by(company_id=company.id, email=email, used=False).update({"used": True})
+        db.session.commit()
+        flash(f"{existing_user.email} added to {company.name}.", "success")
+        return redirect(url_for('employer.company_settings'))
 
     # Delete any previous unused invite for this email + company
     CompanyInvite.query.filter_by(company_id=company.id, email=email, used=False).delete()
@@ -1786,6 +1796,48 @@ def invite_member():
         print("Invite email failed:", e)
         flash(f"Invite created but email delivery failed. Share this link manually: {invite_url}", "error")
 
+    return redirect(url_for('employer.company_settings'))
+
+
+@employer.route('/employer/company/sync-domain-members', methods=['POST'])
+@login_required
+@employer_required
+def sync_domain_members():
+    """One-click catch-up: adds every existing account whose email matches
+    this company's verified domain but isn't a member yet - covers people who
+    signed up before this domain had a hub, or whose account got stuck as a
+    'candidate' by the case-sensitivity bug an earlier fix closed."""
+    company = get_owned_company()
+
+    if company.owner_user_id != current_user.id:
+        flash("Only the company owner can do this.", "error")
+        return redirect(url_for('employer.company_settings'))
+
+    if not company.email_domain:
+        flash("This company doesn't have a verified email domain on file.", "error")
+        return redirect(url_for('employer.company_settings'))
+
+    domain = company.email_domain.lower()
+    matches = User.query.filter(User.email.ilike(f"%@{domain}")).all()
+    existing_member_ids = {m.user_id for m in CompanyMember.query.filter_by(company_id=company.id).all()}
+
+    added = []
+    for user in matches:
+        if user.id == company.owner_user_id or user.id in existing_member_ids:
+            continue
+        if not user.email or user.email.split('@')[-1].lower() != domain:
+            continue
+        user.role = 'employer'
+        db.session.add(CompanyMember(company_id=company.id, user_id=user.id))
+        CompanyInvite.query.filter_by(company_id=company.id, email=user.email.lower(), used=False).update({"used": True})
+        added.append(user.email)
+
+    db.session.commit()
+
+    if added:
+        flash(f"Added {len(added)} teammate(s) from @{domain}: {', '.join(added)}.", "success")
+    else:
+        flash(f"No additional @{domain} accounts found to add.", "info")
     return redirect(url_for('employer.company_settings'))
 
 
