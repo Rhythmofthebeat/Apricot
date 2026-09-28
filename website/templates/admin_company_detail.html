@@ -85,6 +85,12 @@
             </form>
         </div>
         {% endfor %}
+        <form method="POST" action="{{ url_for('admin_bp.add_member', company_id=company.id) }}"
+              class="d-flex align-items-center gap-2 px-4 py-3">
+            <input type="email" name="email" class="form-control form-control-sm" placeholder="user@example.com" required style="max-width:280px;">
+            <button type="submit" class="btn btn-sm btn-outline-primary">Add as member</button>
+            <span class="text-muted" style="font-size:0.78rem;">Promotes an existing candidate account to employer if needed.</span>
+        </form>
     </div>
 </div>
 

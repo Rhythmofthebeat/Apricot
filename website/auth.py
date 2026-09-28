@@ -87,6 +87,28 @@ def _provision_employer(user, email_domain, company_name, signature_name=None):
     db.session.commit()
     return company
 
+
+def _auto_join_matching_hub(user):
+    """If a candidate's email domain matches an existing employer hub, promote
+    them to employer and add them as a team member automatically - no
+    confirmation step, since matching the same verified work-email domain is
+    the same trust signal _provision_employer already uses to auto-join
+    brand-new employer signups into the same hub. Returns the Company they
+    joined, or None."""
+    if user.role != 'candidate' or not user.email or '@' not in user.email:
+        return None
+    domain = user.email.split('@')[-1].lower()
+    if domain in FREE_EMAIL_DOMAINS:
+        return None
+    hub = Company.query.filter_by(email_domain=domain).first()
+    if not hub:
+        return None
+    user.role = 'employer'
+    if not CompanyMember.query.filter_by(company_id=hub.id, user_id=user.id).first():
+        db.session.add(CompanyMember(company_id=hub.id, user_id=user.id))
+    db.session.commit()
+    return hub
+
 # ------------------------------------------------ #
 # ---------------- PASSWORD RESET ---------------- #
 # ------------------------------------------------ #
@@ -265,8 +287,13 @@ def login():
             if role == 'employer':
                 _provision_employer(local_user, email_domain, company_name)
 
+        joined_hub = _auto_join_matching_hub(local_user)
+
         login_user(local_user, remember=True)
         flash("Logged in successfully!", "success")
+        if joined_hub:
+            flash(f"You've joined {joined_hub.name} on Avants AI.", "success")
+            return redirect(url_for('employer.dashboard'))
         return redirect(next_url or url_for('views.home'))
 
     return render_template("login.html", next=next_url)
@@ -347,6 +374,8 @@ def sign_up():
 
                 if role == 'employer':
                     _provision_employer(local_user, email_domain, company_name, signature_name)
+                else:
+                    _auto_join_matching_hub(local_user)
 
                 try:
                     send_verification_email(local_user)
@@ -594,11 +623,17 @@ def login_google_finish():
             db.session.commit()
             _apply_referral(local_user)
 
+        joined_hub = _auto_join_matching_hub(local_user)
+
         login_user(local_user, remember=True)
         next_url = _safe_next(session.pop("oauth_next", None))
 
         if is_new_user and local_user.role == 'employer':
             return redirect(url_for("auth.complete_employer_profile"))
+
+        if joined_hub:
+            flash(f"You've joined {joined_hub.name} on Avants AI.", "success")
+            return redirect(url_for('employer.dashboard'))
 
         return redirect(next_url or url_for("views.home"))
 

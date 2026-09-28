@@ -213,6 +213,45 @@ def remove_member(company_id, user_id):
     return redirect(url_for('admin_bp.company_detail', company_id=company_id))
 
 
+@admin_bp.route('/admin/companies/<int:company_id>/members/add', methods=['POST'])
+@login_required
+def add_member(company_id):
+    """Adds an existing user to a company as a team member, promoting them to
+    role='employer' first if they signed up as a candidate. Exists because
+    there's no self-serve way for a candidate account to become an employer
+    once the email is already registered - e.g. someone at a company that
+    already has a hub picked 'candidate' at signup by mistake."""
+    _require_admin()
+    company = Company.query.get_or_404(company_id)
+
+    email = (request.form.get('email') or '').strip().lower()
+    if not email:
+        flash("Enter an email address.", "error")
+        return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+    user = User.query.filter(db.func.lower(User.email) == email).first()
+    if not user:
+        flash(f"No account found for {email}.", "error")
+        return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+    if user.id == company.owner_user_id:
+        flash(f"{user.email} already owns this company.", "error")
+        return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+    if CompanyMember.query.filter_by(company_id=company.id, user_id=user.id).first():
+        flash(f"{user.email} is already a team member.", "error")
+        return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+    if user.role != 'employer':
+        user.role = 'employer'
+
+    db.session.add(CompanyMember(company_id=company.id, user_id=user.id))
+    db.session.commit()
+
+    flash(f"{user.email} added to {company.name}.", "success")
+    return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+
 @admin_bp.route('/admin/companies/<int:company_id>/delete', methods=['POST'])
 @login_required
 def delete_company(company_id):

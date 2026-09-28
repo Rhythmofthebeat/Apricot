@@ -93,14 +93,30 @@ def _notify_employers_of_open_to_work(profile):
         ))
 
 
+def _company_recipients(company):
+    """Owner plus every team member of a company - used for notifications that
+    matter to whoever is actually handling hiring day-to-day, not just the
+    account that originally signed up."""
+    recipients = []
+    owner = User.query.get(company.owner_user_id)
+    if owner:
+        recipients.append(owner)
+    member_ids = [m.user_id for m in CompanyMember.query.filter_by(company_id=company.id).all()]
+    if member_ids:
+        recipients.extend(User.query.filter(User.id.in_(member_ids)).all())
+    return recipients
+
+
 def _can_access_application_audio(application):
     if current_user.id == application.candidate_user_id:
         return True
     if current_user.role == 'employer':
         job = Job.query.get(application.job_id)
-        company = Company.query.filter_by(owner_user_id=current_user.id).first()
-        if job and company and job.company_id == company.id:
-            return True
+        if job:
+            owns = Company.query.filter_by(owner_user_id=current_user.id, id=job.company_id).first()
+            member = CompanyMember.query.filter_by(user_id=current_user.id, company_id=job.company_id).first()
+            if owns or member:
+                return True
     return False
 
 
@@ -1256,15 +1272,15 @@ def confirm_hire(application_id):
         company = Company.query.get(job.company_id)
         employer_user = User.query.get(company.owner_user_id)
 
-        if employer_user:
-            notif = Notification(
-                user_id=employer_user.id,
+        for recipient in _company_recipients(company):
+            db.session.add(Notification(
+                user_id=recipient.id,
                 message=f"{current_user.first_name} confirmed their hire for {job.title}.",
                 link=url_for('employer.applicants', job_id=job.id),
-            )
-            db.session.add(notif)
-            db.session.commit()
+            ))
+        db.session.commit()
 
+        if employer_user:
             from .employer import send_hire_fee_invoice
             send_hire_fee_invoice(application, job, company, current_user, employer_user)
 
@@ -1297,19 +1313,19 @@ def dispute_hire(application_id):
 
     job = Job.query.get(application.job_id)
     company = Company.query.get(job.company_id)
-    employer_user = User.query.get(company.owner_user_id)
 
-    if employer_user:
-        notif = Notification(
-            user_id=employer_user.id,
+    for recipient in _company_recipients(company):
+        db.session.add(Notification(
+            user_id=recipient.id,
             message=f"{current_user.first_name} disputed the hire compensation for {job.title} - the placement fee invoice is on hold.",
             link=url_for('employer.applicants', job_id=job.id),
-        )
-        db.session.add(notif)
-        db.session.commit()
+        ))
+    db.session.commit()
+
+    for recipient in _company_recipients(company):
         try:
             send_branded_email(
-                to_email=employer_user.email,
+                to_email=recipient.email,
                 subject=f"Hire compensation disputed - {job.title}",
                 heading="Candidate flagged the compensation figure",
                 body_html=(
