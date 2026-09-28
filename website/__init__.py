@@ -127,6 +127,9 @@ def _run_migrations(db):
         # user - referral program: own shareable code + who referred them
         "ALTER TABLE \"user\" ADD COLUMN referral_code VARCHAR(12)",
         "ALTER TABLE \"user\" ADD COLUMN referred_by_user_id INTEGER REFERENCES \"user\"(id)",
+        # meeting_room - independent local-camera recordings captured client-side
+        "ALTER TABLE meeting_room ADD COLUMN candidate_recording_path VARCHAR(300)",
+        "ALTER TABLE meeting_room ADD COLUMN employer_recording_path VARCHAR(300)",
     ]
     for stmt in new_columns:
         try:

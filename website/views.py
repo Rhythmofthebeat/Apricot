@@ -149,27 +149,78 @@ def sitemap():
     return Response(xml, mimetype='application/xml')
 
 
-@views.route('/meeting/<room_name>')
-@login_required
-def join_meeting(room_name):
-    room = MeetingRoom.query.filter_by(room_name=room_name).first_or_404()
+def _resolve_meeting_access(room):
+    """Returns (application, is_employer) for the current user's relationship
+    to this meeting room, or aborts 403 if they have none."""
     application = Application.query.get_or_404(room.application_id)
 
-    is_employer = False
     if current_user.id == application.candidate_user_id:
-        is_employer = False
-    elif current_user.role == 'employer':
+        return application, False
+    if current_user.role == 'employer':
         job = Job.query.get_or_404(application.job_id)
         from .models import CompanyMember
         owns = Company.query.filter_by(owner_user_id=current_user.id, id=job.company_id).first()
         member = CompanyMember.query.filter_by(user_id=current_user.id, company_id=job.company_id).first()
         if not owns and not member:
             abort(403)
-        is_employer = True
-    else:
-        abort(403)
+        return application, True
+    abort(403)
 
+
+@views.route('/meeting/<room_name>')
+@login_required
+def join_meeting(room_name):
+    room = MeetingRoom.query.filter_by(room_name=room_name).first_or_404()
+    application, is_employer = _resolve_meeting_access(room)
     return render_template('meeting_room.html', room=room, application=application, is_employer=is_employer)
+
+
+@views.route('/meeting/<room_name>/recording', methods=['POST'])
+@login_required
+def upload_meeting_recording_route(room_name):
+    """Receives a participant's own local-camera recording of the call (see
+    meeting_room.html's client-side MediaRecorder), uploaded once they click
+    'Save & Leave' rather than on every chunk - keeps this to one request per
+    person per call."""
+    room = MeetingRoom.query.filter_by(room_name=room_name).first_or_404()
+    _, is_employer = _resolve_meeting_access(room)
+
+    recording = request.files.get('recording')
+    if not recording or not recording.filename:
+        return {"error": "No recording provided."}, 400
+
+    from video_storage import upload_meeting_recording
+
+    try:
+        path = upload_meeting_recording(room.id, 'employer' if is_employer else 'candidate', recording.read())
+    except Exception:
+        current_app.logger.exception(f"Failed to upload meeting recording for room {room.id}")
+        return {"error": "Upload failed."}, 502
+
+    if is_employer:
+        room.employer_recording_path = path
+    else:
+        room.candidate_recording_path = path
+    db.session.commit()
+
+    return {"status": "saved"}
+
+
+@views.route('/meeting/<room_name>/recording/<role>')
+@login_required
+def play_meeting_recording(room_name, role):
+    if role not in ('candidate', 'employer'):
+        abort(404)
+
+    room = MeetingRoom.query.filter_by(room_name=room_name).first_or_404()
+    _resolve_meeting_access(room)  # any authorized party may view either side's recording
+
+    path = room.employer_recording_path if role == 'employer' else room.candidate_recording_path
+    if not path:
+        abort(404)
+
+    from video_storage import get_signed_meeting_recording_url
+    return redirect(get_signed_meeting_recording_url(path))
 
 
 @views.route('/terms')

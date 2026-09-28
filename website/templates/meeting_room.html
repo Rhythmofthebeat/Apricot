@@ -59,6 +59,17 @@
         margin-top: 10px; color: #64748b;
         font-size: 0.75rem; text-align: center;
     }
+    .own-rec-bar {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; flex-wrap: wrap;
+        background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+        padding: 12px 18px; margin-top: 14px; color: #e2e8f0; font-size: 0.85rem;
+    }
+    .own-rec-bar .rec-dot {
+        display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+        background: #ef4444; margin-right: 7px;
+        animation: pulse 1.5s ease-in-out infinite;
+    }
 </style>
 {% endblock %}
 
@@ -99,14 +110,55 @@
 
 <p class="hint-bar">
     <i class="fas fa-circle-info me-1"></i>
-    Allow camera &amp; microphone when prompted. Recording starts automatically when the meeting begins.
+    Allow camera &amp; microphone when prompted - once for the call itself, and once more for your own recording below.
 </p>
 
-{% if is_employer %}
-<!-- Recordings panel -->
+<div class="own-rec-bar">
+    <div id="ownRecStatus"><span class="rec-dot"></span> Recording your camera for this interview</div>
+    <button class="btn btn-sm btn-danger" id="saveLeaveBtn" onclick="saveAndLeave()">
+        <i class="fas fa-stop me-1"></i> Save Recording &amp; Leave
+    </button>
+</div>
+<p class="hint-bar" id="ownRecHint">
+    This only saves when you click "Save Recording &amp; Leave" - closing the tab without clicking it discards your recording.
+</p>
+
+<!-- Local camera recordings (this app's own capture, not Daily.co's) -->
 <div class="rec-section">
     <div class="rec-section-header">
-        <span><i class="fas fa-circle-play me-2" style="color:#818cf8;"></i>Recordings</span>
+        <span><i class="fas fa-video me-2" style="color:#818cf8;"></i>Camera Recordings</span>
+    </div>
+    <div style="padding:18px;">
+        <div class="rec-item">
+            <i class="fas fa-user" style="color:#818cf8;"></i>
+            <div class="flex-grow-1">Candidate's camera</div>
+            {% if room.candidate_recording_path %}
+            <a href="{{ url_for('views.play_meeting_recording', room_name=room.room_name, role='candidate') }}" target="_blank" class="btn btn-sm btn-outline-primary" style="font-size:0.78rem;">
+                <i class="fas fa-play me-1"></i> Play
+            </a>
+            {% else %}
+            <span class="text-muted" style="font-size:0.78rem;">Not saved yet</span>
+            {% endif %}
+        </div>
+        <div class="rec-item">
+            <i class="fas fa-user-tie" style="color:#818cf8;"></i>
+            <div class="flex-grow-1">Employer's camera</div>
+            {% if room.employer_recording_path %}
+            <a href="{{ url_for('views.play_meeting_recording', room_name=room.room_name, role='employer') }}" target="_blank" class="btn btn-sm btn-outline-primary" style="font-size:0.78rem;">
+                <i class="fas fa-play me-1"></i> Play
+            </a>
+            {% else %}
+            <span class="text-muted" style="font-size:0.78rem;">Not saved yet</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if is_employer %}
+<!-- Daily.co cloud recordings (requires a Daily.co plan with recording enabled) -->
+<div class="rec-section">
+    <div class="rec-section-header">
+        <span><i class="fas fa-circle-play me-2" style="color:#818cf8;"></i>Daily.co Cloud Recordings</span>
         <button class="btn btn-sm btn-outline-primary" id="loadRecBtn" onclick="loadRecordings()" style="font-size:0.78rem;">
             <i class="fas fa-rotate me-1"></i> Load recordings
         </button>
@@ -119,6 +171,73 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+// Independent local-camera recording of this call - separate from whatever
+// the Daily.co iframe does internally (we have no access into it, it's a
+// cross-origin embed). Auto-starts on load, only uploaded when the person
+// explicitly clicks "Save Recording & Leave" - avoids relying on unload
+// events, which can't reliably upload a multi-minute video blob.
+let ownRecorder = null;
+let ownChunks = [];
+let ownStream = null;
+let ownRecordingSaved = false;
+const leaveUrl = {{ (url_for('employer.employer_meetings') if is_employer else url_for('candidate.interviews'))|tojson }};
+const uploadUrl = {{ url_for('views.upload_meeting_recording_route', room_name=room.room_name)|tojson }};
+
+async function startOwnRecording() {
+    const statusEl = document.getElementById('ownRecStatus');
+    try {
+        ownStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const candidates = ["video/webm;codecs=vp8,opus", "video/webm"];
+        const mimeType = candidates.find(t => MediaRecorder.isTypeSupported(t)) || "";
+        ownRecorder = new MediaRecorder(ownStream, mimeType ? { mimeType } : undefined);
+        ownRecorder.addEventListener("dataavailable", (e) => { if (e.data.size > 0) ownChunks.push(e.data); });
+        ownRecorder.start(5000); // flush a chunk every 5s so nothing is lost if the tab crashes
+    } catch (e) {
+        statusEl.innerHTML = '<i class="fas fa-circle-info me-1"></i> Camera recording unavailable (permission denied or unsupported) - the call itself is unaffected.';
+        document.getElementById('saveLeaveBtn').style.display = 'none';
+    }
+}
+startOwnRecording();
+
+async function saveAndLeave() {
+    const btn = document.getElementById('saveLeaveBtn');
+    const statusEl = document.getElementById('ownRecStatus');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving…';
+
+    if (!ownRecorder || ownRecorder.state === "inactive") {
+        window.location.href = leaveUrl;
+        return;
+    }
+
+    const stopped = new Promise((resolve) => ownRecorder.addEventListener("stop", resolve, { once: true }));
+    ownRecorder.stop();
+    ownStream.getTracks().forEach(t => t.stop());
+    await stopped;
+
+    try {
+        const blob = new Blob(ownChunks, { type: "video/webm" });
+        const formData = new FormData();
+        formData.append("recording", blob, "recording.webm");
+        const res = await fetch(uploadUrl, { method: "POST", body: formData });
+        if (!res.ok) throw new Error("Upload failed");
+        ownRecordingSaved = true;
+        statusEl.innerHTML = '<i class="fas fa-circle-check me-1" style="color:#34d399;"></i> Recording saved.';
+    } catch (e) {
+        statusEl.innerHTML = '<i class="fas fa-triangle-exclamation me-1" style="color:#f87171;"></i> Failed to save recording: ' + e.message;
+    }
+
+    window.location.href = leaveUrl;
+}
+
+window.addEventListener("beforeunload", (e) => {
+    if (ownRecorder && ownRecorder.state === "recording" && !ownRecordingSaved) {
+        e.preventDefault();
+        e.returnValue = "";
+    }
+});
+</script>
 {% if is_employer %}
 <script>
 async function loadRecordings() {

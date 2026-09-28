@@ -472,6 +472,12 @@ class MeetingRoom(db.Model):
     scheduled_time = db.Column(db.String(10))   # HH:MM
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+    # Independent local-camera recordings captured client-side in the call
+    # page itself, not Daily.co's cloud recording - see meeting_room.html.
+    # Storage paths (Supabase Storage), not URLs - resolved to a signed URL
+    # at playback time.
+    candidate_recording_path = db.Column(db.String(300))
+    employer_recording_path = db.Column(db.String(300))
 
     application = db.relationship("Application", backref=db.backref("meeting_rooms", lazy=True))
     employer = db.relationship("User", foreign_keys=[employer_user_id])
