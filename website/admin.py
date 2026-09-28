@@ -246,6 +246,7 @@ def add_member(company_id):
         user.role = 'employer'
 
     db.session.add(CompanyMember(company_id=company.id, user_id=user.id))
+    CompanyInvite.query.filter_by(company_id=company.id, email=email, used=False).update({"used": True})
     db.session.commit()
 
     flash(f"{user.email} added to {company.name}.", "success")

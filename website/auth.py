@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session, make_response
-from .models import User, Company, CompanyMember, FREE_EMAIL_DOMAINS
+from .models import User, Company, CompanyMember, CompanyInvite, FREE_EMAIL_DOMAINS
 from werkzeug.security import generate_password_hash, check_password_hash
 from . import db, limiter
 from flask_login import login_user, login_required, logout_user, current_user
@@ -61,7 +61,8 @@ def _provision_employer(user, email_domain, company_name, signature_name=None):
     if existing:
         if not CompanyMember.query.filter_by(company_id=existing.id, user_id=user.id).first():
             db.session.add(CompanyMember(company_id=existing.id, user_id=user.id))
-            db.session.commit()
+        _clear_pending_invite(existing.id, user.email)
+        db.session.commit()
         return existing
 
     signature_name = (signature_name or '').strip()
@@ -88,6 +89,15 @@ def _provision_employer(user, email_domain, company_name, signature_name=None):
     return company
 
 
+def _clear_pending_invite(company_id, email):
+    """A CompanyInvite left 'pending' after the person already became a member
+    some other way (domain auto-join, an admin adding them directly) would
+    otherwise sit forever in the company's Pending Invitations list."""
+    if not email:
+        return
+    CompanyInvite.query.filter_by(company_id=company_id, email=email.lower(), used=False).update({"used": True})
+
+
 def _auto_join_matching_hub(user):
     """If a candidate's email domain matches an existing employer hub, promote
     them to employer and add them as a team member automatically - no
@@ -106,6 +116,7 @@ def _auto_join_matching_hub(user):
     user.role = 'employer'
     if not CompanyMember.query.filter_by(company_id=hub.id, user_id=user.id).first():
         db.session.add(CompanyMember(company_id=hub.id, user_id=user.id))
+    _clear_pending_invite(hub.id, user.email)
     db.session.commit()
     return hub
 
@@ -695,6 +706,7 @@ def complete_employer_profile():
 
     if existing_hub:
         db.session.add(CompanyMember(company_id=existing_hub.id, user_id=current_user.id))
+        _clear_pending_invite(existing_hub.id, current_user.email)
         db.session.commit()
         flash(f"You've joined {existing_hub.name} - your teammates are already set up here.", "success")
         return redirect(url_for("views.home"))
