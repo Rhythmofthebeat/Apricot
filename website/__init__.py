@@ -187,9 +187,16 @@ def create_app():
     database_url = os.environ.get('DATABASE_URL')
     if database_url:
         # Render/Heroku-style URLs sometimes use the old "postgres://" scheme,
-        # which SQLAlchemy 1.4+ no longer accepts.
+        # which SQLAlchemy 1.4+ no longer accepts. Also force the psycopg2
+        # driver explicitly rather than leaving it to SQLAlchemy's default
+        # resolution for a bare "postgresql://" URL - that silently started
+        # trying the psycopg (v3) driver instead, which isn't installed
+        # (only psycopg2-binary is, per requirements.txt), crashing the app
+        # at startup with "ModuleNotFoundError: No module named 'psycopg'".
         if database_url.startswith('postgres://'):
             database_url = database_url.replace('postgres://', 'postgresql://', 1)
+        if database_url.startswith('postgresql://'):
+            database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
         app.config['SQLALCHEMY_DATABASE_URI'] = database_url
         app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
             "pool_pre_ping": True,

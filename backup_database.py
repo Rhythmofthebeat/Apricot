@@ -56,9 +56,12 @@ def _database_url():
     if not url:
         raise RuntimeError("DATABASE_URL is not set")
     # Render/Heroku-style URLs sometimes use the old "postgres://" scheme,
-    # which SQLAlchemy 1.4+ rejects - mirrors website/__init__.py's fixup.
+    # which SQLAlchemy 1.4+ rejects - mirrors website/__init__.py's fixup,
+    # including forcing the psycopg2 driver explicitly (see that file for why).
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql://", 1)
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
     return url
 
 
