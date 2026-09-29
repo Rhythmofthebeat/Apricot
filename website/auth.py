@@ -373,17 +373,35 @@ def sign_up():
                     flash("Something went wrong. Try again.", "error")
                     return redirect(url_for("auth.sign_up"))
 
-                local_user = User(
-                    email=email,
-                    first_name=first_name,
-                    password=generate_password_hash(password1),
-                    role=role,
-                    email_verified=False,
-                    supabase_uid=res.user.id,
-                )
-                db.session.add(local_user)
+                # Reuse an existing local row for this email rather than always
+                # inserting a new one - covers re-signing up after the local
+                # Supabase auth account was lost/deleted while our own User
+                # row survived (it has no FK enforcing the two stay in sync).
+                # Without this, re-signup after that kind of drift just piles
+                # up another disconnected duplicate instead of fixing anything.
+                existing_local = User.query.filter(db.func.lower(User.email) == email).order_by(User.id.asc()).first()
+                is_new_local = existing_local is None
+
+                if existing_local:
+                    local_user = existing_local
+                    local_user.first_name = first_name or local_user.first_name
+                    local_user.password = generate_password_hash(password1)
+                    local_user.role = role
+                    local_user.email_verified = False
+                    local_user.supabase_uid = res.user.id
+                else:
+                    local_user = User(
+                        email=email,
+                        first_name=first_name,
+                        password=generate_password_hash(password1),
+                        role=role,
+                        email_verified=False,
+                        supabase_uid=res.user.id,
+                    )
+                    db.session.add(local_user)
                 db.session.commit()
-                _apply_referral(local_user)
+                if is_new_local:
+                    _apply_referral(local_user)
 
                 if role == 'employer':
                     _provision_employer(local_user, email_domain, company_name, signature_name)
