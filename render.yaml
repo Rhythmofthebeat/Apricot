@@ -6,6 +6,13 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
+      # Pinned explicitly (highest-precedence method per Render's docs) after
+      # a deploy started failing with "ModuleNotFoundError: No module named
+      # 'psycopg'" - Render had silently moved new deployments to Python
+      # 3.14, which psycopg2-binary doesn't yet have a wheel for. A
+      # .python-version file is also present as a backup/for other tooling.
+      - key: PYTHON_VERSION
+        value: 3.12.11
       - key: DATABASE_URL
         sync: false
       - key: SECRET_KEY
@@ -62,6 +69,8 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python backup_database.py
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.11
       - key: DATABASE_URL
         sync: false
       - key: GOOGLE_CREDENTIALS_JSON
