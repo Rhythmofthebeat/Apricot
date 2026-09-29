@@ -76,7 +76,18 @@
         <div class="d-flex align-items-center px-4 py-2" style="border-bottom:1px solid var(--border); font-size:0.85rem;">
             <div class="flex-grow-1">
                 {{ user.email }} <span class="text-muted">&middot; joined {{ member.joined_at.strftime('%b %d, %Y') if member.joined_at else '' }}</span>
+                {% if user.id in duplicate_ids %}
+                <span class="badge bg-warning text-dark ms-1" style="font-size:0.6rem;">Duplicate email</span>
+                {% endif %}
             </div>
+            {% if user.id in duplicate_ids %}
+            <form method="POST" action="{{ url_for('admin_bp.delete_duplicate_user', user_id=user.id) }}" class="me-2"
+                  data-confirm-title="Delete this duplicate account?"
+                  data-confirm-message="{{ user.email }} (id={{ user.id }}) will be permanently deleted. This only works if the account has no applications, profile, or other data - it will refuse otherwise."
+                  data-confirm-btn="Yes, delete duplicate">
+                <button type="submit" class="btn btn-sm btn-outline-danger">Delete duplicate</button>
+            </form>
+            {% endif %}
             <form method="POST" action="{{ url_for('admin_bp.remove_member', company_id=company.id, user_id=user.id) }}"
                   data-confirm-title="Remove this member?"
                   data-confirm-message="{{ user.email }} will lose access to {{ company.name }}'s jobs and applicants. They can be re-invited later."

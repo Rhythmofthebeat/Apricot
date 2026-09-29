@@ -102,9 +102,18 @@ def company_detail(company_id):
         .order_by(DeletedJob.created_at.desc())
         .all()
     )
+
+    # Flag any member whose email has another account under a different
+    # case (e.g. the case-sensitivity bug fixed in auth.py) - lets the admin
+    # spot and clean these up right from this page.
+    duplicate_ids = set()
+    for user, _ in members:
+        if User.query.filter(db.func.lower(User.email) == user.email.lower(), User.id != user.id).first():
+            duplicate_ids.add(user.id)
+
     return render_template('admin_company_detail.html',
         company=company, owner=owner, members=members, jobs=jobs, application_counts=application_counts,
-        deleted_jobs=deleted_jobs)
+        deleted_jobs=deleted_jobs, duplicate_ids=duplicate_ids)
 
 
 def _cascade_delete_applications(application_ids):
@@ -211,6 +220,73 @@ def remove_member(company_id, user_id):
     db.session.commit()
     flash("Member removed.", "success")
     return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+
+@admin_bp.route('/admin/users/<int:user_id>/delete-duplicate', methods=['POST'])
+@login_required
+def delete_duplicate_user(user_id):
+    """Deletes a User row that is a confirmed duplicate of another account
+    with the same email (case-insensitive) - e.g. left over from the
+    case-sensitivity bug fixed in auth.py, where a mismatched-case lookup
+    created a second, disconnected account instead of matching the first.
+    Refuses unless there's a sibling account with the same email AND this
+    row has zero data anywhere else in the app, so it can never silently
+    discard someone's real applications, profile, or history."""
+    _require_admin()
+    user = User.query.get_or_404(user_id)
+
+    sibling = User.query.filter(
+        db.func.lower(User.email) == user.email.lower(), User.id != user.id
+    ).first()
+    if not sibling:
+        flash(f"No other account shares {user.email} - not a confirmed duplicate, refusing to delete.", "error")
+        return redirect(request.referrer or url_for('admin_bp.dashboard'))
+
+    from .models import CandidateProfile
+
+    blockers = []
+    if Company.query.filter_by(owner_user_id=user.id).first():
+        blockers.append("owns a company")
+    if CandidateProfile.query.filter_by(user_id=user.id).first():
+        blockers.append("has a candidate profile")
+    if Application.query.filter_by(candidate_user_id=user.id).first():
+        blockers.append("has applications")
+    if SavedJob.query.filter_by(user_id=user.id).first():
+        blockers.append("has saved jobs")
+    if Referral.query.filter_by(referrer_user_id=user.id).first():
+        blockers.append("has referrals made")
+    if Referral.query.filter_by(referred_user_id=user.id).first():
+        blockers.append("was referred by someone")
+    if TaskSubmission.query.filter_by(user_id=user.id).first():
+        blockers.append("has Earn task submissions")
+    if ContractorProfile.query.filter_by(user_id=user.id).first():
+        blockers.append("has a contractor profile")
+    if MeetingProposal.query.filter_by(employer_user_id=user.id).first():
+        blockers.append("has meeting proposals")
+    if Message.query.filter_by(sender_user_id=user.id).first():
+        blockers.append("has sent messages")
+    if MeetingRoom.query.filter_by(employer_user_id=user.id).first():
+        blockers.append("has meeting rooms")
+    if CompanyInvite.query.filter_by(invited_by_user_id=user.id).first():
+        blockers.append("sent invites")
+    if DeletedJob.query.filter_by(deleted_by_user_id=user.id).first():
+        blockers.append("deleted a job")
+    if User.query.filter_by(referred_by_user_id=user.id).first():
+        blockers.append("referred other users")
+
+    if blockers:
+        flash(f"Refusing to delete {user.email} - this account {', '.join(blockers)}. Not a clean duplicate.", "error")
+        return redirect(request.referrer or url_for('admin_bp.dashboard'))
+
+    CompanyMember.query.filter_by(user_id=user.id).delete()
+    from .models import Notification
+    Notification.query.filter_by(user_id=user.id).delete()
+    email = user.email
+    db.session.delete(user)
+    db.session.commit()
+
+    flash(f"Deleted duplicate account {email} (id={user_id}).", "success")
+    return redirect(request.referrer or url_for('admin_bp.dashboard'))
 
 
 @admin_bp.route('/admin/companies/<int:company_id>/members/add', methods=['POST'])
