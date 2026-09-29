@@ -72,6 +72,15 @@
                 <span class="text-muted">&middot; joined {{ company.created_at.strftime('%b %d, %Y') if company.created_at else '' }}</span>
             </div>
         </div>
+        <form method="POST" action="{{ url_for('admin_bp.set_company_owner', company_id=company.id) }}"
+              class="d-flex align-items-center gap-2 px-4 py-3"
+              data-confirm-title="Transfer company ownership?"
+              data-confirm-message="This changes who controls billing, team management, and the signed Employer Platform Agreement for {{ company.name }}. The current owner will be kept on as a regular team member."
+              data-confirm-btn="Yes, transfer ownership">
+            <input type="email" name="email" class="form-control form-control-sm" placeholder="new-owner@example.com" required style="max-width:280px;">
+            <button type="submit" class="btn btn-sm btn-outline-warning">Transfer ownership</button>
+            <span class="text-muted" style="font-size:0.78rem;">Must be an existing account. The current owner keeps access as a team member.</span>
+        </form>
         {% for user, member in members %}
         <div class="d-flex align-items-center px-4 py-2" style="border-bottom:1px solid var(--border); font-size:0.85rem;">
             <div class="flex-grow-1">

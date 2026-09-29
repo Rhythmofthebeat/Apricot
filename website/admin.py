@@ -222,6 +222,50 @@ def remove_member(company_id, user_id):
     return redirect(url_for('admin_bp.company_detail', company_id=company_id))
 
 
+@admin_bp.route('/admin/companies/<int:company_id>/set-owner', methods=['POST'])
+@login_required
+def set_company_owner(company_id):
+    """Transfers ownership of a company to a different existing user -
+    admin-only, since ownership controls billing, who can invite/remove team
+    members, and who signed the Employer Platform Agreement. There's no
+    self-serve way to do this otherwise (owner_user_id is only ever set once,
+    at company creation). The previous owner is kept on as a regular team
+    member rather than losing access outright."""
+    _require_admin()
+    company = Company.query.get_or_404(company_id)
+
+    email = (request.form.get('email') or '').strip().lower()
+    if not email:
+        flash("Enter an email address.", "error")
+        return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+    new_owner = User.query.filter(db.func.lower(User.email) == email).first()
+    if not new_owner:
+        flash(f"No account found for {email}.", "error")
+        return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+    if new_owner.id == company.owner_user_id:
+        flash(f"{new_owner.email} already owns this company.", "error")
+        return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+    old_owner_id = company.owner_user_id
+
+    # The owner is tracked exclusively via Company.owner_user_id, never also
+    # as a CompanyMember - drop any existing membership row for the incoming
+    # owner so they're not double-counted.
+    CompanyMember.query.filter_by(company_id=company.id, user_id=new_owner.id).delete()
+
+    new_owner.role = 'employer'
+    company.owner_user_id = new_owner.id
+
+    if not CompanyMember.query.filter_by(company_id=company.id, user_id=old_owner_id).first():
+        db.session.add(CompanyMember(company_id=company.id, user_id=old_owner_id))
+
+    db.session.commit()
+    flash(f"{new_owner.email} is now the owner of {company.name}. The previous owner was kept on as a team member.", "success")
+    return redirect(url_for('admin_bp.company_detail', company_id=company_id))
+
+
 @admin_bp.route('/admin/users/<int:user_id>/delete-duplicate', methods=['POST'])
 @login_required
 def delete_duplicate_user(user_id):

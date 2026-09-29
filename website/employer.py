@@ -1603,6 +1603,7 @@ def company_settings():
 
         return redirect(url_for('employer.company_settings'))
 
+    owner = User.query.get(company.owner_user_id)
     members = CompanyMember.query.filter_by(company_id=company.id).all()
     pending_invites = CompanyInvite.query.filter_by(company_id=company.id, used=False).all()
     open_jobs_count = Job.query.filter_by(company_id=company.id, status='open').count()
@@ -1610,6 +1611,7 @@ def company_settings():
     return render_template(
         "company_settings.html",
         company=company,
+        owner=owner,
         members=members,
         pending_invites=pending_invites,
         sizes=COMPANY_SIZES,

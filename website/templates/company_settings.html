@@ -310,9 +310,9 @@
 
                     <!-- Owner row -->
                     <div class="member-row">
-                        <div class="member-avatar">{{ current_user.first_name[0]|upper if current_user.first_name else current_user.email[0]|upper }}</div>
+                        <div class="member-avatar">{{ owner.first_name[0]|upper if owner and owner.first_name else (owner.email[0]|upper if owner else '?') }}</div>
                         <div class="flex-grow-1">
-                            <div class="fw-semibold small">{{ current_user.first_name or '' }} <span class="text-muted fw-normal">{{ current_user.email }}</span></div>
+                            <div class="fw-semibold small">{{ owner.first_name or '' if owner else '' }} <span class="text-muted fw-normal">{{ owner.email if owner else 'Unknown' }}</span></div>
                             <div class="text-muted" style="font-size:0.75rem;">Owner · Can manage all jobs and team members</div>
                         </div>
                         <span class="badge bg-primary bg-opacity-10 text-primary" style="font-size:0.7rem; font-weight:600; padding:4px 10px; border-radius:999px;">Owner</span>
