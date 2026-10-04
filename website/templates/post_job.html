@@ -254,6 +254,13 @@
                         <p class="preview-note mt-1">Short: ~3-4 questions &middot; Standard: ~5-8 &middot; Thorough: ~8-12</p>
                     </div>
 
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" name="camera_required" id="cameraRequired" value="1"
+                               {{ 'checked' if job and job.camera_required }}>
+                        <label class="form-check-label fw-bold" for="cameraRequired">Require camera for the AI interview</label>
+                        <p class="preview-note mt-1">Off by default - candidates can choose audio-only. Turn this on to require video so you can see the candidate during their AI interview.</p>
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label fw-bold">Guidance for the AI Interviewer (optional)</label>
                         <textarea class="form-control" name="interview_focus" id="interviewFocus" rows="3"
@@ -372,6 +379,7 @@ function collectDraft() {
             contract_terms: document.getElementById('sec_contract_terms')?.value ?? '',
         },
         interview_length: document.getElementById('interviewLength')?.value ?? '',
+        camera_required: document.getElementById('cameraRequired')?.checked ?? false,
         interview_focus: document.getElementById('interviewFocus')?.value ?? '',
         questions: Array.from(document.querySelectorAll('.question-input')).map(i => i.value),
         savedAt: Date.now(),
@@ -405,6 +413,7 @@ function applyDraft(draft) {
         document.getElementById('sec_contract_terms').value = draft.sections.contract_terms ?? '';
     }
     if (draft.interview_length) document.getElementById('interviewLength').value = draft.interview_length;
+    if (draft.camera_required !== undefined) document.getElementById('cameraRequired').checked = !!draft.camera_required;
     if (draft.interview_focus !== undefined) document.getElementById('interviewFocus').value = draft.interview_focus;
     if (Array.isArray(draft.questions)) {
         questionsList.innerHTML = '';

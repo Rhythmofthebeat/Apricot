@@ -596,6 +596,7 @@ def post_job():
         interview_length = request.form.get('interview_length', 'standard')
         if interview_length not in INTERVIEW_LENGTH_OPTIONS:
             interview_length = 'standard'
+        camera_required = request.form.get('camera_required') == '1'
         interview_focus = request.form.get('interview_focus', '').strip()
         interview_questions = _parse_interview_questions(request.form.get('interview_questions', ''))
 
@@ -635,6 +636,7 @@ def post_job():
             employment_type=employment_type,
             category=category,
             interview_length=interview_length,
+            camera_required=camera_required,
             interview_focus=interview_focus or None,
             interview_questions=interview_questions,
             salary_usd=salary_usd,
@@ -717,6 +719,7 @@ def edit_job(job_id):
         job.employment_type = request.form.get('employment_type', '').strip()
         job.category = category
         job.interview_length = interview_length
+        job.camera_required = request.form.get('camera_required') == '1'
         job.interview_focus = request.form.get('interview_focus', '').strip() or None
         job.interview_questions = _parse_interview_questions(request.form.get('interview_questions', ''))
         if save_as_draft:

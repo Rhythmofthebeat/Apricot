@@ -165,6 +165,7 @@ class Job(db.Model):
     interview_length = db.Column(db.String(20), nullable=False, default="standard")  # short | standard | thorough
     interview_focus = db.Column(db.Text)  # optional employer instructions on what the AI should cover
     interview_questions = db.Column(db.Text)  # JSON list of employer-curated questions the AI should make sure to ask
+    camera_required = db.Column(db.Boolean, nullable=False, default=False)  # candidate must enable their camera for the AI interview, not just optional
     # Column names predate multi-currency support - the amount is in
     # salary_currency's units, not necessarily actual USD. See SUPPORTED_CURRENCIES.
     salary_usd = db.Column(db.Integer)
