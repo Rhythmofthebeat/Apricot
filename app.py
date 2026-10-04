@@ -21,6 +21,7 @@ from PIL import Image
 import pytesseract
 from flask import send_from_directory
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
 from ai_services import (
@@ -220,33 +221,65 @@ def practice_hub_chat():
         except Exception:
             return jsonify({"error": "Couldn't transcribe your answer. Please try again."}), 500
 
-    try:
-        reply = run_interview_turn(
-            title, description, user_message, history, force_conclude=wrap_up,
-            interview_length=interview_length, interview_focus=interview_focus,
-            interview_questions=manual_questions, practice_mode=True,
-        )
-    except Exception:
-        return jsonify({"error": "Failed to get a response. Please try again."}), 500
-
-    verdict_match = re.search(r"Verdict:\s*(Strong Yes|Yes|No|Strong No)", reply, re.IGNORECASE)
-    should_conclude = bool(verdict_match)
-
     coaching = None
-    if should_conclude:
+    if wrap_up:
+        # force_conclude=True guarantees this turn ends in a verdict, not
+        # another question - so it's safe to kick off the coaching report
+        # immediately instead of waiting to see the reply first. Coaching
+        # generation was the single biggest contributor to how long "stop
+        # early" took, since it used to run only after the verdict call
+        # finished rather than alongside it.
         transcript_lines = [f"{m.get('role')}: {m.get('content')}" for m in history]
-        transcript_lines.append(f"assistant: {reply}")
+        if user_message:
+            transcript_lines.append(f"user: {user_message}")
         full_transcript = "\n".join(transcript_lines)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            reply_future = pool.submit(
+                run_interview_turn, title, description, user_message, history,
+                force_conclude=True, interview_length=interview_length,
+                interview_focus=interview_focus, interview_questions=manual_questions,
+                practice_mode=True,
+            )
+            coaching_future = pool.submit(
+                generate_interview_coaching, transcript=full_transcript, job_title=title,
+                requirements=description or requirements_raw, verdict=None, match_score=None,
+            )
+            try:
+                reply = reply_future.result()
+            except Exception:
+                return jsonify({"error": "Failed to get a response. Please try again."}), 500
+            try:
+                coaching = coaching_future.result()
+            except Exception:
+                coaching = None
+        should_conclude = True
+    else:
         try:
-            coaching = generate_interview_coaching(
-                transcript=full_transcript,
-                job_title=title,
-                requirements=description or requirements_raw,
-                verdict=None,
-                match_score=None,
+            reply = run_interview_turn(
+                title, description, user_message, history, force_conclude=False,
+                interview_length=interview_length, interview_focus=interview_focus,
+                interview_questions=manual_questions, practice_mode=True,
             )
         except Exception:
-            coaching = None
+            return jsonify({"error": "Failed to get a response. Please try again."}), 500
+
+        verdict_match = re.search(r"Verdict:\s*(Strong Yes|Yes|No|Strong No)", reply, re.IGNORECASE)
+        should_conclude = bool(verdict_match)
+        if should_conclude:
+            transcript_lines = [f"{m.get('role')}: {m.get('content')}" for m in history]
+            transcript_lines.append(f"assistant: {reply}")
+            full_transcript = "\n".join(transcript_lines)
+            try:
+                coaching = generate_interview_coaching(
+                    transcript=full_transcript,
+                    job_title=title,
+                    requirements=description or requirements_raw,
+                    verdict=None,
+                    match_score=None,
+                )
+            except Exception:
+                coaching = None
 
     return jsonify({
         "reply": reply,

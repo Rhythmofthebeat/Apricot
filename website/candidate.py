@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 import uuid
 
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, abort, send_from_directory, Response
@@ -1174,36 +1175,68 @@ def practice_interview_chat(job_id):
         except Exception:
             return jsonify({"error": "Couldn't transcribe your answer. Please try again."}), 500
 
-    try:
-        # Never pass the real employer questions - practice uses generated ones
-        # so the actual interview remains a surprise for the candidate.
-        reply = run_interview_turn(
-            job.title, job.description_text, user_message, history, force_conclude=wrap_up,
-            interview_length=job.interview_length, interview_focus=job.interview_focus,
-            interview_questions=None, practice_mode=True,
-        )
-    except Exception:
-        return jsonify({"error": "Failed to get a response. Please try again."}), 500
-
-    verdict_match = re.search(r"Verdict:\s*(Strong Yes|Yes|No|Strong No)", reply, re.IGNORECASE)
-    should_conclude = bool(verdict_match)
-
+    secs = job.description_sections or {}
     coaching = None
-    if should_conclude:
+
+    if wrap_up:
+        # force_conclude=True guarantees this turn ends in a verdict, not
+        # another question - safe to kick off the coaching report
+        # immediately instead of waiting for the verdict call to finish
+        # first. That serial wait was the main reason "stop early" felt slow.
         transcript_lines = [f"{m.get('role')}: {m.get('content')}" for m in history]
-        transcript_lines.append(f"assistant: {reply}")
+        if user_message:
+            transcript_lines.append(f"user: {user_message}")
         full_transcript = "\n".join(transcript_lines)
-        secs = job.description_sections or {}
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            # Never pass the real employer questions - practice uses generated
+            # ones so the actual interview remains a surprise for the candidate.
+            reply_future = pool.submit(
+                run_interview_turn, job.title, job.description_text, user_message, history,
+                force_conclude=True, interview_length=job.interview_length,
+                interview_focus=job.interview_focus, interview_questions=None, practice_mode=True,
+            )
+            coaching_future = pool.submit(
+                generate_interview_coaching, transcript=full_transcript, job_title=job.title,
+                requirements=secs.get('requirements', ''), verdict=None, match_score=None,
+            )
+            try:
+                reply = reply_future.result()
+            except Exception:
+                return jsonify({"error": "Failed to get a response. Please try again."}), 500
+            try:
+                coaching = coaching_future.result()
+            except Exception:
+                coaching = None
+        should_conclude = True
+    else:
         try:
-            coaching = generate_interview_coaching(
-                transcript=full_transcript,
-                job_title=job.title,
-                requirements=secs.get('requirements', ''),
-                verdict=None,
-                match_score=None,
+            # Never pass the real employer questions - practice uses generated
+            # ones so the actual interview remains a surprise for the candidate.
+            reply = run_interview_turn(
+                job.title, job.description_text, user_message, history, force_conclude=False,
+                interview_length=job.interview_length, interview_focus=job.interview_focus,
+                interview_questions=None, practice_mode=True,
             )
         except Exception:
-            coaching = None
+            return jsonify({"error": "Failed to get a response. Please try again."}), 500
+
+        verdict_match = re.search(r"Verdict:\s*(Strong Yes|Yes|No|Strong No)", reply, re.IGNORECASE)
+        should_conclude = bool(verdict_match)
+        if should_conclude:
+            transcript_lines = [f"{m.get('role')}: {m.get('content')}" for m in history]
+            transcript_lines.append(f"assistant: {reply}")
+            full_transcript = "\n".join(transcript_lines)
+            try:
+                coaching = generate_interview_coaching(
+                    transcript=full_transcript,
+                    job_title=job.title,
+                    requirements=secs.get('requirements', ''),
+                    verdict=None,
+                    match_score=None,
+                )
+            except Exception:
+                coaching = None
 
     return jsonify({
         "reply": reply,

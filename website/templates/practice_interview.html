@@ -574,14 +574,42 @@ async function handleRecordClick() {
 }
 
 async function onRecordStop() {
-    // Wrap-up was triggered mid-recording - discard this audio, wrapUp() owns the turn
-    if (wrappingUp || state === 'done') {
+    if (state === 'done') {
         audioChunks = [];
         return;
     }
 
     const blob = new Blob(audioChunks, { type: 'audio/webm' });
     audioChunks = [];
+
+    // Wrap-up was triggered while recording - transcribe whatever was said
+    // so far and fold it straight into the wrap-up request, instead of
+    // throwing the recording away just because they stopped it via "End
+    // session early" rather than the normal record button.
+    if (wrappingUp) {
+        setProcessing('Generating coaching report…');
+        try {
+            const fd = new FormData();
+            fd.append('history', JSON.stringify(history));
+            fd.append('wrap_up', 'true');
+            if (blob.size > 0) fd.append('answer_audio', blob, 'answer.webm');
+            const res = await fetchWithRetry(CHAT_URL, { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed.');
+            if (data.transcribed_answer) {
+                addBubble('user', data.transcribed_answer);
+                history.push({ role: 'user', content: data.transcribed_answer });
+            }
+            history.push({ role: 'assistant', content: data.reply });
+            state = 'done';
+            if (data.coaching) showCoachingReport(data.coaching);
+        } catch (e) {
+            wrappingUp = false;
+            clearProcessing();
+            recordStatus.textContent = e.message;
+        }
+        return;
+    }
 
     // Transcribe first, show preview
     try {
@@ -701,23 +729,39 @@ async function wrapUp() {
     if (wrappingUp || state === 'done') return;
     wrappingUp = true;
 
-    // Stop any active recording - onRecordStop will see wrappingUp=true and discard the audio
+    // Stop any active recording - onRecordStop() (which checks wrappingUp)
+    // owns transcribing this answer and sending the wrap-up request, so
+    // don't also send one here and don't throw the recording away.
     if (state === 'recording' && mediaRecorder) {
         mediaRecorder.stop();
         stopTimer();
         isRecording = false;
         recordBtn.classList.remove('recording');
         recordIcon.className = 'fas fa-microphone';
+        return;
     }
+
+    // An answer may already be sitting transcribed-but-unsubmitted in the
+    // preview (recorded, reviewed, not yet confirmed) - carry it into the
+    // wrap-up request instead of silently dropping it too.
+    const pendingText = window._pendingResult?.transcribed_answer || window._pendingResult?.text_answer || '';
+    answerPreview.style.display = 'none';
+    window._pendingResult = null;
+    pendingBlob = null;
 
     setProcessing('Generating coaching report…');
     try {
         const fd = new FormData();
         fd.append('history', JSON.stringify(history));
         fd.append('wrap_up', 'true');
+        if (pendingText) fd.append('text_answer', pendingText);
         const res = await fetchWithRetry(CHAT_URL, { method: 'POST', body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed.');
+        if (pendingText) {
+            addBubble('user', pendingText);
+            history.push({ role: 'user', content: pendingText });
+        }
         history.push({ role: 'assistant', content: data.reply });
         state = 'done';
         if (data.coaching) showCoachingReport(data.coaching);
