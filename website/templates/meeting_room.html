@@ -182,6 +182,22 @@ let ownChunks = [];
 let ownStream = null;
 let ownRecordingSaved = false;
 let ownRecordingMimeType = '';
+
+function describeMediaError(e, deviceLabel) {
+    switch (e.name) {
+        case 'NotAllowedError':
+        case 'SecurityError':
+            return `${deviceLabel} access was blocked. Check your browser's permission icon in the address bar, and also check your system's privacy settings - on Windows: Settings → Privacy & Security → Camera/Microphone; on Mac: System Settings → Privacy & Security → Camera/Microphone.`;
+        case 'NotFoundError':
+        case 'OverconstrainedError':
+            return `No working ${deviceLabel.toLowerCase()} was found on this device.`;
+        case 'NotReadableError':
+        case 'TrackStartError':
+            return `Your ${deviceLabel.toLowerCase()} is already in use by another app (on Windows, this can also happen with Windows Hello's camera lock).`;
+        default:
+            return `${deviceLabel} access failed (${e.name || 'unknown error'}).`;
+    }
+}
 const leaveUrl = {{ (url_for('employer.employer_meetings') if is_employer else url_for('candidate.interviews'))|tojson }};
 const uploadUrl = {{ url_for('views.upload_meeting_recording_route', room_name=room.room_name)|tojson }};
 
@@ -199,7 +215,7 @@ async function startOwnRecording() {
         ownRecorder.addEventListener("dataavailable", (e) => { if (e.data.size > 0) ownChunks.push(e.data); });
         ownRecorder.start(5000); // flush a chunk every 5s so nothing is lost if the tab crashes
     } catch (e) {
-        statusEl.innerHTML = '<i class="fas fa-circle-info me-1"></i> Camera recording unavailable (permission denied or unsupported) - the call itself is unaffected.';
+        statusEl.innerHTML = '<i class="fas fa-circle-info me-1"></i> ' + describeMediaError(e, 'Camera/mic') + ' The call itself is unaffected, only this local recording.';
         document.getElementById('saveLeaveBtn').style.display = 'none';
     }
 }

@@ -317,6 +317,29 @@ function extFromMimeType(type) {
     if (type.includes("ogg")) return "ogg";
     return "webm";
 }
+
+// getUserMedia failures get lumped into one generic "access denied" message
+// by default, but the actual cause matters - "you clicked deny" needs a
+// different fix than "Windows is blocking this at the OS level" or "Windows
+// Hello/another app already has the camera locked", which are the most
+// common real-world Windows-specific failures reported for this page even
+// though Edge/Chrome on Windows support the same APIs as every other
+// Chromium browser.
+function describeMediaError(e, deviceLabel) {
+    switch (e.name) {
+        case "NotAllowedError":
+        case "SecurityError":
+            return `${deviceLabel} access was blocked. Check your browser's permission icon in the address bar, and also check your system's privacy settings - on Windows: Settings → Privacy & Security → Camera/Microphone, make sure "Let apps access your camera/microphone" is on; on Mac: System Settings → Privacy & Security → Camera/Microphone.`;
+        case "NotFoundError":
+        case "OverconstrainedError":
+            return `No working ${deviceLabel.toLowerCase()} was found on this device. Make sure one is connected and isn't disabled.`;
+        case "NotReadableError":
+        case "TrackStartError":
+            return `Your ${deviceLabel.toLowerCase()} is already in use by another app (on Windows, this can also happen when Windows Hello's face/IR camera has an exclusive lock on it). Close other apps using it and try again.`;
+        default:
+            return `${deviceLabel} access failed (${e.name || "unknown error"}). Please try again.`;
+    }
+}
 let recordingHasVideo = false;
 
 // Estimated total questions by interview length
@@ -668,7 +691,7 @@ async function setupRecorder() {
         mediaRecorder.addEventListener("stop", onRecordingStop);
         return true;
     } catch (e) {
-        recordStatus.textContent = "Microphone access denied. Enable it to continue.";
+        recordStatus.textContent = describeMediaError(e, "Microphone");
         recordBtn.disabled = true;
         return false;
     }
@@ -752,6 +775,11 @@ async function beginInterview(withCamera) {
             cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
             document.getElementById("selfVideo").srcObject = cameraStream;
         } catch (e) {
+            const reason = describeMediaError(e, "Camera");
+            const requiredNote = CAMERA_REQUIRED
+                ? ' This employer requires video for this interview, so you need to resolve this before continuing.'
+                : ' Starting with audio only instead.';
+            errBox.innerHTML = `<i class="fas fa-video-slash me-2"></i><strong>${reason}</strong>${requiredNote}`;
             errBox.style.display = '';
             btn.disabled = false;
             if (skipBtn) skipBtn.disabled = false;

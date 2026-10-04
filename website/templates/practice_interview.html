@@ -484,6 +484,22 @@ function extFromMimeType(type) {
     if (type.includes('ogg')) return 'ogg';
     return 'webm';
 }
+
+function describeMediaError(e, deviceLabel) {
+    switch (e.name) {
+        case 'NotAllowedError':
+        case 'SecurityError':
+            return `${deviceLabel} access was blocked. Check your browser's permission icon in the address bar, and also check your system's privacy settings - on Windows: Settings → Privacy & Security → Camera/Microphone; on Mac: System Settings → Privacy & Security → Camera/Microphone.`;
+        case 'NotFoundError':
+        case 'OverconstrainedError':
+            return `No working ${deviceLabel.toLowerCase()} was found on this device.`;
+        case 'NotReadableError':
+        case 'TrackStartError':
+            return `Your ${deviceLabel.toLowerCase()} is already in use by another app (on Windows, this can also happen with Windows Hello's camera lock).`;
+        default:
+            return `${deviceLabel} access failed (${e.name || 'unknown error'}).`;
+    }
+}
 let pendingBlob  = null;   // transcribed blob waiting for submit/re-record
 let questionNum  = 0;
 
@@ -551,8 +567,8 @@ async function ensureRecorder() {
         mediaRecorder.addEventListener('dataavailable', e => audioChunks.push(e.data));
         mediaRecorder.addEventListener('stop', onRecordStop);
         return true;
-    } catch {
-        recordStatus.textContent = 'Microphone access denied. Switch to Text mode.';
+    } catch (e) {
+        recordStatus.textContent = describeMediaError(e, 'Microphone') + ' Or switch to Text mode.';
         return false;
     }
 }
