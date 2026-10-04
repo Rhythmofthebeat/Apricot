@@ -28,6 +28,12 @@
         background-color: #e9f7fe;
         border-color: var(--primary);
     }
+
+    .upload-area.has-file {
+        border-style: solid;
+        border-color: var(--success, #198754);
+        background-color: #eafaf1;
+    }
     
     .score-circle {
         width: 100px;
@@ -124,6 +130,13 @@
         vertical-align: middle;
         margin-left: 10px;
         font-style: italic;
+    }
+
+    .file-name.has-file {
+        font-style: normal;
+        font-weight: 600;
+        color: var(--success, #198754);
+        max-width: none;
     }
     
     .error-message {
@@ -376,8 +389,8 @@
                         <div class="mb-4">
                             <label class="form-label fw-bold">Upload Resume</label>
                             <div class="upload-area" id="upload-area">
-                                <i class="fas fa-cloud-upload-alt fa-2x text-primary mb-3"></i>
-                                <p class="mb-1">Drag & drop your resume here</p>
+                                <i class="fas fa-cloud-upload-alt fa-2x text-primary mb-3" id="upload-icon"></i>
+                                <p class="mb-1" id="upload-main-text">Drag & drop your resume here</p>
                                 <p class="text-muted small">or</p>
                                 <button type="button" class="btn btn-outline-primary btn-sm">
                                     <i class="fas fa-folder-open me-1"></i>Browse Files
@@ -579,8 +592,8 @@
 
                     {% if current_user.is_authenticated %}
                     <div class="upload-area" id="video-upload-area">
-                        <i class="fas fa-video fa-2x text-primary mb-3"></i>
-                        <p class="mb-1">Drag & drop your interview video here</p>
+                        <i class="fas fa-video fa-2x text-primary mb-3" id="video-upload-icon"></i>
+                        <p class="mb-1" id="video-upload-main-text">Drag & drop your interview video here</p>
                         <p class="text-muted small">or</p>
                         <button type="button" class="btn btn-outline-primary btn-sm">
                             <i class="fas fa-folder-open me-1"></i>Browse Files
@@ -696,32 +709,51 @@
     
     // Click on upload area to trigger file input
     uploadArea.addEventListener('click', () => fileInput.click());
-    
+
+    const uploadIcon = document.getElementById('upload-icon');
+    const uploadMainText = document.getElementById('upload-main-text');
+
+    function markFileUploaded(file) {
+        fileNameDisplay.textContent = '✓ ' + file.name;
+        fileNameDisplay.classList.add('has-file');
+        uploadArea.classList.add('has-file');
+        if (uploadIcon) { uploadIcon.classList.remove('fa-cloud-upload-alt'); uploadIcon.classList.add('fa-circle-check', 'text-success'); uploadIcon.classList.remove('text-primary'); }
+        if (uploadMainText) uploadMainText.textContent = 'File uploaded - click to change';
+    }
+
+    function clearFileUploaded() {
+        fileNameDisplay.textContent = 'No file chosen';
+        fileNameDisplay.classList.remove('has-file');
+        uploadArea.classList.remove('has-file');
+        if (uploadIcon) { uploadIcon.classList.add('fa-cloud-upload-alt'); uploadIcon.classList.remove('fa-circle-check', 'text-success'); uploadIcon.classList.add('text-primary'); }
+        if (uploadMainText) uploadMainText.textContent = 'Drag & drop your resume here';
+    }
+
     // Drag and drop events
     uploadArea.addEventListener('dragover', (e) => {
         e.preventDefault();
         uploadArea.classList.add('dragover');
     });
-    
+
     uploadArea.addEventListener('dragleave', () => {
         uploadArea.classList.remove('dragover');
     });
-    
+
     uploadArea.addEventListener('drop', (e) => {
         e.preventDefault();
         uploadArea.classList.remove('dragover');
         if (e.dataTransfer.files.length > 0) {
             fileInput.files = e.dataTransfer.files;
-            fileNameDisplay.textContent = e.dataTransfer.files[0].name;
+            markFileUploaded(e.dataTransfer.files[0]);
         }
     });
-    
+
     // File selection change
     fileInput.addEventListener('change', () => {
         if (fileInput.files.length > 0) {
-            fileNameDisplay.textContent = fileInput.files[0].name;
+            markFileUploaded(fileInput.files[0]);
         } else {
-            fileNameDisplay.textContent = 'No file chosen';
+            clearFileUploaded();
         }
     });
     
@@ -1269,9 +1301,25 @@ return newId;
         applySelectedFile(file);
     }
 
+    const uploadIcon = document.getElementById('video-upload-icon');
+    const uploadMainText = document.getElementById('video-upload-main-text');
+
     function applySelectedFile(file) {
-        fileNameDisplay.textContent = file.name + ' (' + formatMB(file.size) + ')';
+        fileNameDisplay.textContent = '✓ ' + file.name + ' (' + formatMB(file.size) + ')';
+        fileNameDisplay.classList.add('has-file');
+        uploadArea.classList.add('has-file');
+        if (uploadIcon) { uploadIcon.classList.remove('fa-video'); uploadIcon.classList.add('fa-circle-check', 'text-success'); uploadIcon.classList.remove('text-primary'); }
+        if (uploadMainText) uploadMainText.textContent = 'Video uploaded - click to change';
         analyzeBtn.disabled = false;
+    }
+
+    function clearSelectedFile() {
+        fileNameDisplay.textContent = 'No file chosen';
+        fileNameDisplay.classList.remove('has-file');
+        uploadArea.classList.remove('has-file');
+        if (uploadIcon) { uploadIcon.classList.add('fa-video'); uploadIcon.classList.remove('fa-circle-check', 'text-success'); uploadIcon.classList.add('text-primary'); }
+        if (uploadMainText) uploadMainText.textContent = 'Drag & drop your interview video here';
+        analyzeBtn.disabled = true;
     }
 
     uploadArea.addEventListener('click', () => fileInput.click());
@@ -1293,8 +1341,7 @@ return newId;
         if (fileInput.files.length > 0) {
             applySelectedFile(fileInput.files[0]);
         } else {
-            fileNameDisplay.textContent = 'No file chosen';
-            analyzeBtn.disabled = true;
+            clearSelectedFile();
         }
     });
 
