@@ -100,6 +100,20 @@
 </div>
 {% else %}
 
+{% set calendar_events = [] %}
+{% for room in upcoming + past %}
+    {% if room.scheduled_date %}
+        {% set _app = app_map[room.application_id] %}
+        {% set _ = calendar_events.append({
+            'date': room.scheduled_date,
+            'time': room.scheduled_time or '',
+            'title': _app.job.company.name ~ ' · ' ~ _app.job.title,
+            'url': url_for('views.join_meeting', room_name=room.room_name),
+        }) %}
+    {% endif %}
+{% endfor %}
+{% include "_mini_calendar.html" %}
+
 {% if upcoming %}
 <h2 class="h6 fw-bold text-muted text-uppercase mb-3" style="letter-spacing:.06em;font-size:0.72rem;">
     Upcoming <span class="badge bg-success ms-1" style="font-size:0.65rem;">{{ upcoming|length }}</span>

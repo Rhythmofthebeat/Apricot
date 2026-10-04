@@ -57,6 +57,23 @@
     </div>
 </div>
 {% else %}
+
+{% set calendar_events = [] %}
+{% for room in rooms %}
+    {% if room.scheduled_date %}
+        {% set _app = room.application %}
+        {% set _candidate = candidate_map.get(_app.candidate_user_id) %}
+        {% set _job = job_map.get(_app.job_id) %}
+        {% set _ = calendar_events.append({
+            'date': room.scheduled_date,
+            'time': room.scheduled_time or '',
+            'title': (_candidate.first_name or _candidate.email if _candidate else 'Candidate') ~ ' · ' ~ (_job.title if _job else ''),
+            'url': url_for('views.join_meeting', room_name=room.room_name),
+        }) %}
+    {% endif %}
+{% endfor %}
+{% include "_mini_calendar.html" %}
+
 <p class="text-muted mb-3" style="font-size:0.82rem;">
     {{ rooms|length }} meeting{{ 's' if rooms|length != 1 }} - click <strong>Recordings</strong> to fetch saved video after a call ends.
 </p>

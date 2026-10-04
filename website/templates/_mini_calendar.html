@@ -1,0 +1,127 @@
+{# Reusable month calendar surfacing scheduled meetings - takes `calendar_events`:
+   a list of {date: "YYYY-MM-DD", time: "HH:MM" or "", title: str, url: str}.
+   Pure display - creates nothing, just a different view of data the page
+   already loaded. Include once per page. #}
+<div class="mini-cal-wrap mb-4">
+    <div class="mini-cal-header">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="miniCalPrev"><i class="fas fa-chevron-left"></i></button>
+        <div class="mini-cal-label" id="miniCalLabel"></div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="miniCalNext"><i class="fas fa-chevron-right"></i></button>
+    </div>
+    <div class="mini-cal-weekdays">
+        <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+    </div>
+    <div class="mini-cal-grid" id="miniCalGrid"></div>
+    <div id="miniCalDayDetail" class="mini-cal-day-detail" style="display:none;"></div>
+</div>
+
+<script type="application/json" id="miniCalData">{{ calendar_events|tojson }}</script>
+
+<style>
+    .mini-cal-wrap {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 16px 18px;
+    }
+    .mini-cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .mini-cal-label { font-weight: 700; font-size: 0.95rem; }
+    .mini-cal-weekdays {
+        display: grid; grid-template-columns: repeat(7, 1fr);
+        font-size: 0.7rem; font-weight: 700; color: var(--text-muted);
+        text-align: center; margin-bottom: 4px;
+    }
+    .mini-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+    .mini-cal-day {
+        min-height: 54px; border-radius: 8px; padding: 4px 5px;
+        font-size: 0.78rem; cursor: default; background: var(--bg);
+        border: 1px solid transparent;
+    }
+    .mini-cal-day.empty { background: transparent; }
+    .mini-cal-day.today { border-color: var(--primary); }
+    .mini-cal-day.has-events { cursor: pointer; background: var(--primary-soft); }
+    .mini-cal-day.has-events:hover { border-color: var(--primary); }
+    .mini-cal-day-num { font-weight: 600; }
+    .mini-cal-dot-row { display: flex; gap: 2px; margin-top: 3px; flex-wrap: wrap; }
+    .mini-cal-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); }
+    .mini-cal-day-detail {
+        margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+    }
+    .mini-cal-event-row {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; padding: 6px 0; font-size: 0.85rem;
+    }
+</style>
+
+<script>
+(function() {
+    const rawEl = document.getElementById('miniCalData');
+    const events = rawEl ? JSON.parse(rawEl.textContent) : [];
+    const byDate = {};
+    events.forEach(e => { (byDate[e.date] = byDate[e.date] || []).push(e); });
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let viewYear, viewMonth;
+    const initial = events.find(e => e.date >= todayStr) || events[events.length - 1];
+    if (initial) {
+        const [y, m] = initial.date.split('-').map(Number);
+        viewYear = y; viewMonth = m - 1;
+    } else {
+        const now = new Date();
+        viewYear = now.getFullYear(); viewMonth = now.getMonth();
+    }
+
+    const label = document.getElementById('miniCalLabel');
+    const grid = document.getElementById('miniCalGrid');
+    const detail = document.getElementById('miniCalDayDetail');
+    const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    function render() {
+        label.textContent = `${MONTH_NAMES[viewMonth]} ${viewYear}`;
+        grid.innerHTML = '';
+        const firstDow = new Date(viewYear, viewMonth, 1).getDay();
+        const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+        for (let i = 0; i < firstDow; i++) {
+            grid.insertAdjacentHTML('beforeend', '<div class="mini-cal-day empty"></div>');
+        }
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${viewYear}-${pad(viewMonth + 1)}-${pad(day)}`;
+            const dayEvents = byDate[dateStr] || [];
+            const cls = ['mini-cal-day'];
+            if (dateStr === todayStr) cls.push('today');
+            if (dayEvents.length) cls.push('has-events');
+            const dots = dayEvents.slice(0, 4).map(() => '<span class="mini-cal-dot"></span>').join('');
+            const cell = document.createElement('div');
+            cell.className = cls.join(' ');
+            cell.innerHTML = `<div class="mini-cal-day-num">${day}</div><div class="mini-cal-dot-row">${dots}</div>`;
+            if (dayEvents.length) cell.addEventListener('click', () => showDay(dateStr, dayEvents));
+            grid.appendChild(cell);
+        }
+    }
+
+    function showDay(dateStr, dayEvents) {
+        const niceDate = new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+        const rows = dayEvents.map(e => `
+            <div class="mini-cal-event-row">
+                <div><strong>${e.time || ''}</strong> ${e.title}</div>
+                ${e.url ? `<a href="${e.url}" class="btn btn-sm btn-outline-primary">Open</a>` : ''}
+            </div>`).join('');
+        detail.innerHTML = `<div class="fw-bold mb-1">${niceDate}</div>${rows}`;
+        detail.style.display = 'block';
+    }
+
+    document.getElementById('miniCalPrev').addEventListener('click', () => {
+        viewMonth--; if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+        detail.style.display = 'none';
+        render();
+    });
+    document.getElementById('miniCalNext').addEventListener('click', () => {
+        viewMonth++; if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+        detail.style.display = 'none';
+        render();
+    });
+
+    render();
+})();
+</script>
