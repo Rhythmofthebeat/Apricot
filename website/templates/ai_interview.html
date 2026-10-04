@@ -309,6 +309,7 @@ let isRecording     = false;
 let questionNum     = 0;
 let cameraStream    = null;
 let interviewStarted = false;
+let savingAndExiting = false;
 let recordingHasVideo = false;
 
 // Estimated total questions by interview length
@@ -586,8 +587,7 @@ async function startInterview() {
     }
 }
 
-document.getElementById("saveExitBtn").addEventListener("click", async () => {
-    if (concluded) return;
+async function saveSessionAndExit() {
     const btn = document.getElementById("saveExitBtn");
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
@@ -603,6 +603,28 @@ document.getElementById("saveExitBtn").addEventListener("click", async () => {
     }
     interviewStarted = false; // saved on purpose, don't also force-submit via beforeunload
     window.location.href = dashboardUrl;
+}
+
+document.getElementById("saveExitBtn").addEventListener("click", async () => {
+    if (concluded) return;
+
+    if (isRecording) {
+        // Don't just navigate away mid-recording - that silently throws away
+        // whatever answer was being recorded, since nothing gets pushed into
+        // history until a recording is stopped and transcribed. Stop it and
+        // let onRecordingStop() (which checks savingAndExiting) transcribe
+        // it into history first, then save and leave from there instead.
+        savingAndExiting = true;
+        const btn = document.getElementById("saveExitBtn");
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+        mediaRecorder.stop();
+        isRecording = false;
+        recordBtn.classList.remove("recording");
+        return;
+    }
+
+    await saveSessionAndExit();
 });
 
 async function setupRecorder() {
@@ -656,6 +678,11 @@ async function onRecordingStop() {
         history.push({ role: "user", content: result.transcribed_answer });
         history.push({ role: "assistant", content: result.reply });
 
+        if (savingAndExiting) {
+            await saveSessionAndExit();
+            return;
+        }
+
         if (result.concluded) {
             concluded = true;
             showVerdict(result.reply);
@@ -663,6 +690,12 @@ async function onRecordingStop() {
             setQuestion(result.reply, result.reply_audio_url);
         }
     } catch (e) {
+        if (savingAndExiting) {
+            // Transcription failed, but still save whatever history already
+            // has rather than trap them on this screen or discard progress.
+            await saveSessionAndExit();
+            return;
+        }
         recordStatus.textContent = e.message;
         recordBtn.disabled = false;
     }
