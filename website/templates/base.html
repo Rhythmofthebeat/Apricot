@@ -593,10 +593,36 @@
                 document.getElementById('confirmActionMessage').textContent = form.dataset.confirmMessage || 'This action cannot be undone.';
                 const btn = document.getElementById('confirmActionBtn');
                 btn.textContent = form.dataset.confirmBtn || 'Confirm';
-                btn.onclick = () => { modal.hide(); delete form.dataset.confirmTitle; form.submit(); };
+                btn.onclick = () => {
+                    modal.hide();
+                    delete form.dataset.confirmTitle;
+                    setFormLoading(form, form.querySelector('[type="submit"]'));
+                    form.submit();
+                };
                 modal.show();
             });
         })();
+
+        // General loading state for any plain form submit across the site -
+        // disables the clicked submit button and shows a spinner so people
+        // get feedback instead of wondering if their click did anything, and
+        // can't double-submit by clicking again while it's processing. Skips
+        // forms still waiting on the confirm modal above (data-confirm-title
+        // not yet cleared) and anything a page's own JS already intercepted
+        // with preventDefault (defaultPrevented stays false only when the
+        // browser is actually about to submit/navigate).
+        function setFormLoading(form, button) {
+            if (!button || button.dataset.loading) return;
+            button.dataset.loading = '1';
+            button.dataset.originalHtml = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> ' + (button.dataset.loadingText || 'Processing…');
+        }
+        document.addEventListener('submit', function(e) {
+            const form = e.target;
+            if (form.dataset.confirmTitle || e.defaultPrevented) return;
+            setFormLoading(form, e.submitter || form.querySelector('[type="submit"]'));
+        });
     </script>
 
     {% block scripts %}{% endblock %}
