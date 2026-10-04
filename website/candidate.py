@@ -25,6 +25,7 @@ from ai_services import (
     compare_resume_to_job,
     run_interview_turn,
     transcribe_audio,
+    audio_file_extension,
     synthesize_speech,
     generate_resume_from_profile,
     suggest_jobs_for_profile,
@@ -483,7 +484,12 @@ def interview_chat(job_id, application_id):
     user_message = ""
     if answer_media and answer_media.filename:
         media_bytes = answer_media.read()
-        tmp_path = os.path.join(audio_dir, f"_tmp_{uuid.uuid4().hex}.webm")
+        # Safari sends mp4, not webm - OpenAI's transcription API picks a
+        # decoder from this suffix, so a mismatched one (e.g. always ".webm"
+        # regardless of what the browser actually recorded) breaks
+        # transcription for any browser that isn't webm-native.
+        ext = audio_file_extension(answer_media.filename)
+        tmp_path = os.path.join(audio_dir, f"_tmp_{uuid.uuid4().hex}{ext}")
         with open(tmp_path, "wb") as f:
             f.write(media_bytes)
         try:
@@ -495,7 +501,10 @@ def interview_chat(job_id, application_id):
 
         turn_number = len(audio_log) + 1
         try:
-            video_path = upload_interview_video(application_id, turn_number, media_bytes)
+            video_path = upload_interview_video(
+                application_id, turn_number, media_bytes,
+                content_type=answer_media.content_type or "video/webm",
+            )
         except Exception:
             logger.exception(f"Failed to upload interview recording for application {application_id}")
             video_path = None
@@ -1167,7 +1176,8 @@ def practice_interview_chat(job_id):
     if not user_message and answer_audio and answer_audio.filename:
         try:
             import tempfile, os as _os
-            with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+            ext = audio_file_extension(answer_audio.filename)
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
                 tmp.write(answer_audio.read())
                 tmp_path = tmp.name
             user_message = transcribe_audio(tmp_path)

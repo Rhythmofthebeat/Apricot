@@ -194,7 +194,10 @@ def upload_meeting_recording_route(room_name):
     from video_storage import upload_meeting_recording
 
     try:
-        path = upload_meeting_recording(room.id, 'employer' if is_employer else 'candidate', recording.read())
+        path = upload_meeting_recording(
+            room.id, 'employer' if is_employer else 'candidate', recording.read(),
+            content_type=recording.content_type or "video/webm",
+        )
     except Exception:
         current_app.logger.exception(f"Failed to upload meeting recording for room {room.id}")
         return {"error": "Upload failed."}, 502

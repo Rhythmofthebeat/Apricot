@@ -942,6 +942,21 @@ def transcribe_audio(file_path):
     return transcript.text.strip()
 
 
+_ALLOWED_AUDIO_EXTENSIONS = {".webm", ".mp4", ".ogg", ".m4a", ".wav", ".mp3"}
+
+
+def audio_file_extension(uploaded_filename):
+    """Picks the suffix for the temp file a recorded answer gets written to
+    before transcription, from whatever filename the browser's upload sent.
+    Matters because Whisper's API decides how to decode the file from this
+    suffix - Safari (desktop and iOS) doesn't support WebM at all and records
+    mp4 instead, so hardcoding ".webm" regardless of what was actually
+    uploaded silently breaks transcription on any non-WebM browser."""
+    import os as _os
+    ext = _os.path.splitext(uploaded_filename or "")[1].lower()
+    return ext if ext in _ALLOWED_AUDIO_EXTENSIONS else ".webm"
+
+
 def synthesize_speech(text, out_path):
     """Text-to-speech for an AI interview question — mirrors app.py's /speak route."""
     from google.cloud import texttospeech

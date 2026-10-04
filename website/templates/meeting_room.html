@@ -181,6 +181,7 @@ let ownRecorder = null;
 let ownChunks = [];
 let ownStream = null;
 let ownRecordingSaved = false;
+let ownRecordingMimeType = '';
 const leaveUrl = {{ (url_for('employer.employer_meetings') if is_employer else url_for('candidate.interviews'))|tojson }};
 const uploadUrl = {{ url_for('views.upload_meeting_recording_route', room_name=room.room_name)|tojson }};
 
@@ -188,8 +189,12 @@ async function startOwnRecording() {
     const statusEl = document.getElementById('ownRecStatus');
     try {
         ownStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        const candidates = ["video/webm;codecs=vp8,opus", "video/webm"];
+        // Safari (desktop and iOS) doesn't support webm at all - include an
+        // mp4 fallback so the actual recorded format is always known for
+        // the Blob type / upload below instead of silently guessing webm.
+        const candidates = ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
         const mimeType = candidates.find(t => MediaRecorder.isTypeSupported(t)) || "";
+        ownRecordingMimeType = mimeType || "video/webm";
         ownRecorder = new MediaRecorder(ownStream, mimeType ? { mimeType } : undefined);
         ownRecorder.addEventListener("dataavailable", (e) => { if (e.data.size > 0) ownChunks.push(e.data); });
         ownRecorder.start(5000); // flush a chunk every 5s so nothing is lost if the tab crashes
@@ -217,9 +222,10 @@ async function saveAndLeave() {
     await stopped;
 
     try {
-        const blob = new Blob(ownChunks, { type: "video/webm" });
+        const blob = new Blob(ownChunks, { type: ownRecordingMimeType || "video/webm" });
+        const ext = blob.type.includes("mp4") ? "mp4" : blob.type.includes("ogg") ? "ogg" : "webm";
         const formData = new FormData();
-        formData.append("recording", blob, "recording.webm");
+        formData.append("recording", blob, `recording.${ext}`);
         const res = await fetch(uploadUrl, { method: "POST", body: formData });
         if (!res.ok) throw new Error("Upload failed");
         ownRecordingSaved = true;

@@ -310,6 +310,13 @@ let questionNum     = 0;
 let cameraStream    = null;
 let interviewStarted = false;
 let savingAndExiting = false;
+let recordingMimeType = "";
+
+function extFromMimeType(type) {
+    if (type.includes("mp4")) return "mp4";
+    if (type.includes("ogg")) return "ogg";
+    return "webm";
+}
 let recordingHasVideo = false;
 
 // Estimated total questions by interview length
@@ -555,7 +562,7 @@ async function sendTurn(mediaBlob, hasVideo) {
     formData.append("history", JSON.stringify(history));
     formData.append("wrap_up", "false");
     formData.append("has_video", hasVideo ? "true" : "false");
-    if (mediaBlob) formData.append("answer_media", mediaBlob, "answer.webm");
+    if (mediaBlob) formData.append("answer_media", mediaBlob, `answer.${extFromMimeType(mediaBlob.type)}`);
 
     const response = await fetch(chatUrl, { method: "POST", body: formData });
     const result = await response.json();
@@ -646,10 +653,15 @@ async function setupRecorder() {
             recordingHasVideo = false;
         }
 
+        // Safari (desktop and iOS) doesn't support webm at all - include an
+        // mp4 fallback so it gets a real, explicitly-chosen format instead
+        // of silently falling through to "" (browser default), which this
+        // code then has no way to know the actual codec of afterward.
         const candidates = recordingHasVideo
-            ? ["video/webm;codecs=vp8,opus", "video/webm"]
-            : ["audio/webm"];
+            ? ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"]
+            : ["audio/webm", "audio/mp4"];
         const mimeType = candidates.find(t => MediaRecorder.isTypeSupported(t)) || "";
+        recordingMimeType = mimeType || (recordingHasVideo ? "video/webm" : "audio/webm");
         mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
 
         mediaRecorder.addEventListener("dataavailable", (e) => audioChunks.push(e.data));
@@ -668,7 +680,7 @@ async function onRecordingStop() {
         return;
     }
 
-    const blob = new Blob(audioChunks, { type: recordingHasVideo ? "video/webm" : "audio/webm" });
+    const blob = new Blob(audioChunks, { type: recordingMimeType || (recordingHasVideo ? "video/webm" : "audio/webm") });
     audioChunks = [];
     recordBtn.disabled = true;
     recordStatus.textContent = "Transcribing your answer...";

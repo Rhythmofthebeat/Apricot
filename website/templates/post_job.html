@@ -466,6 +466,13 @@ document.getElementById("addQuestionBtn").addEventListener("click", () => addQue
 let questionRecorder = null;
 let questionChunks = [];
 let isRecordingQuestion = false;
+let questionMimeType = '';
+
+function extFromMimeType(type) {
+    if (type.includes('mp4')) return 'mp4';
+    if (type.includes('ogg')) return 'ogg';
+    return 'webm';
+}
 
 document.getElementById("recordQuestionBtn").addEventListener("click", async () => {
     const btn = document.getElementById("recordQuestionBtn");
@@ -484,7 +491,12 @@ document.getElementById("recordQuestionBtn").addEventListener("click", async () 
         return;
     }
 
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    // Safari (desktop and iOS) doesn't support webm at all - fall back to
+    // mp4 explicitly instead of "" (browser default), so the actual
+    // recorded format is always known for the Blob type / upload below.
+    const candidates = ['audio/webm', 'audio/mp4'];
+    const mimeType = candidates.find(t => MediaRecorder.isTypeSupported(t)) || '';
+    questionMimeType = mimeType || 'audio/webm';
     questionRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
     questionChunks = [];
     questionRecorder.addEventListener('dataavailable', e => questionChunks.push(e.data));
@@ -497,9 +509,9 @@ document.getElementById("recordQuestionBtn").addEventListener("click", async () 
         btn.disabled = true;
         status.textContent = "Transcribing…";
 
-        const blob = new Blob(questionChunks, { type: 'audio/webm' });
+        const blob = new Blob(questionChunks, { type: questionMimeType || 'audio/webm' });
         const fd = new FormData();
-        fd.append('audio', blob, 'question.webm');
+        fd.append('audio', blob, `question.${extFromMimeType(blob.type)}`);
 
         try {
             const res = await fetch("{{ url_for('employer.transcribe_question') }}", { method: 'POST', body: fd });

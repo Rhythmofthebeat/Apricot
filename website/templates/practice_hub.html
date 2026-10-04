@@ -596,9 +596,16 @@ let wrappingUp   = false;
 let inputMode    = 'voice';
 let mediaRecorder = null;
 let audioChunks  = [];
+let recordingMimeType = '';
 let timerInterval = null;
 let timerSecs    = 0;
 let pendingBlob  = null;
+
+function extFromMimeType(type) {
+    if (type.includes('mp4')) return 'mp4';
+    if (type.includes('ogg')) return 'ogg';
+    return 'webm';
+}
 let questionNum  = 0;
 
 const avatar          = document.getElementById('avatar');
@@ -650,7 +657,12 @@ async function ensureRecorder() {
     if (mediaRecorder) return true;
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+        // Safari (desktop and iOS) doesn't support webm at all - fall back
+        // to mp4 explicitly instead of "" (browser default), so the actual
+        // recorded format is always known for the Blob type / upload below.
+        const candidates = ['audio/webm', 'audio/mp4'];
+        const mimeType = candidates.find(t => MediaRecorder.isTypeSupported(t)) || '';
+        recordingMimeType = mimeType || 'audio/webm';
         mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
         mediaRecorder.addEventListener('dataavailable', e => audioChunks.push(e.data));
         mediaRecorder.addEventListener('stop', onRecordStop);
@@ -705,8 +717,9 @@ async function onRecordStop() {
         return;
     }
 
-    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+    const blob = new Blob(audioChunks, { type: recordingMimeType || 'audio/webm' });
     audioChunks = [];
+    const blobFilename = `answer.${extFromMimeType(blob.type)}`;
 
     // Wrap-up was triggered while recording - transcribe whatever was said
     // so far and fold it straight into the wrap-up request, instead of
@@ -716,7 +729,7 @@ async function onRecordStop() {
         setProcessing('Generating coaching report…');
         try {
             const fd = buildChatForm({ wrap_up: 'true' });
-            if (blob.size > 0) fd.append('answer_audio', blob, 'answer.webm');
+            if (blob.size > 0) fd.append('answer_audio', blob, blobFilename);
             const res = await fetchWithRetry(CHAT_URL, { method: 'POST', body: fd });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed.');
@@ -738,7 +751,7 @@ async function onRecordStop() {
     try {
         setProcessing('Transcribing…');
         const fd = buildChatForm({ wrap_up: 'false' });
-        fd.append('answer_audio', blob, 'answer.webm');
+        fd.append('answer_audio', blob, blobFilename);
 
         const res = await fetchWithRetry(CHAT_URL, { method: 'POST', body: fd });
         const data = await res.json();

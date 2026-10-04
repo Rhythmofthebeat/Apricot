@@ -27,7 +27,7 @@ from .models import (
     JOB_CATEGORIES, JOB_LOCATIONS, COMPANY_SIZES, INDUSTRIES,
     SUPPORTED_CURRENCIES, DEFAULT_CURRENCY,
 )
-from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description, transcribe_audio, compare_resume_to_job, suggest_candidates_for_jobs
+from ai_services import generate_interview_question_preview, generate_rejection_feedback, analyze_job_description, transcribe_audio, audio_file_extension, compare_resume_to_job, suggest_candidates_for_jobs
 from .candidate import _extract_score
 from .matching import keyword_set, overlap_score, NOTIFY_SCORE_THRESHOLD, NOTIFY_MAX_RECIPIENTS
 from email_utils import send_branded_email, external_url
@@ -888,7 +888,7 @@ def transcribe_question():
     import tempfile
     tmp_path = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(suffix=audio_file_extension(audio.filename), delete=False) as tmp:
             audio.save(tmp.name)
             tmp_path = tmp.name
         text = transcribe_audio(tmp_path)

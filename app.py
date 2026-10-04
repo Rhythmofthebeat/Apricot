@@ -34,6 +34,7 @@ from ai_services import (
     generate_resume_from_profile,
     run_interview_turn,
     transcribe_audio,
+    audio_file_extension,
     generate_interview_question_preview,
     generate_interview_coaching,
 )
@@ -213,7 +214,7 @@ def practice_hub_chat():
     if not user_message and answer_audio and answer_audio.filename:
         try:
             import tempfile
-            with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+            with tempfile.NamedTemporaryFile(suffix=audio_file_extension(answer_audio.filename), delete=False) as tmp:
                 tmp.write(answer_audio.read())
                 tmp_path = tmp.name
             user_message = transcribe_audio(tmp_path)
