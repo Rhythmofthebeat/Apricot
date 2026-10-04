@@ -528,6 +528,10 @@
 
             <!-- Overall score breakdown -->
             {% set cscore = composite_scores.get(app.id, app.match_score or 0) %}
+            {% set vs = verdict_score_map.get(app.interview_verdict) %}
+            {% set has_manual_score = app.manual_interview_score is not none %}
+            {% set has_manual_interview = has_manual_score or meetings.get(app.id) or app.meeting_rooms %}
+            {% set interview_weight = '30%' if (vs is not none and has_manual_score) else '45%' %}
             <div class="detail-section">
                 <div class="detail-section-label">Overall Score Breakdown</div>
                 <div class="score-breakdown-grid">
@@ -545,10 +549,9 @@
                             </svg>
                         </div>
                         <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">Resume</div>
-                        <div style="font-size:0.65rem;color:var(--text-muted);">45%</div>
+                        <div style="font-size:0.65rem;color:var(--text-muted);">{{ interview_weight }}</div>
                     </div>
                     <!-- Interview -->
-                    {% set vs = verdict_score_map.get(app.interview_verdict) %}
                     {% if vs is not none %}
                         {% set vs_color = '#10b981' if vs >= 70 else ('#f59e0b' if vs >= 40 else '#ef4444') %}
                         <div class="score-breakdown-item">
@@ -561,8 +564,8 @@
                                     <text x="18" y="18" fill="{{ vs_color }}" font-size="0.45em" text-anchor="middle" dominant-baseline="middle" font-weight="bold">{{ vs }}</text>
                                 </svg>
                             </div>
-                            <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">Interview</div>
-                            <div style="font-size:0.65rem;color:var(--text-muted);">45%</div>
+                            <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">AI Interview</div>
+                            <div style="font-size:0.65rem;color:var(--text-muted);">{{ interview_weight }}</div>
                         </div>
                     {% else %}
                         <div class="score-breakdown-item" style="opacity:0.45;">
@@ -572,7 +575,7 @@
                                     <text x="18" y="18" fill="#9ca3af" font-size="0.3em" text-anchor="middle" dominant-baseline="middle">-</text>
                                 </svg>
                             </div>
-                            <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">Interview</div>
+                            <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">AI Interview</div>
                             <div style="font-size:0.65rem;color:var(--text-muted);">Pending</div>
                         </div>
                     {% endif %}
@@ -604,6 +607,43 @@
                             </div>
                             <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">Authentic</div>
                             <div style="font-size:0.65rem;color:var(--text-muted);">Pending</div>
+                        </div>
+                    {% endif %}
+                    <!-- Manual (live) interview - only shown once a meeting has actually been scheduled/created for this applicant -->
+                    {% if has_manual_interview %}
+                        {% if has_manual_score %}
+                            {% set ms = app.manual_interview_score %}
+                            {% set ms_color = '#10b981' if ms >= 70 else ('#f59e0b' if ms >= 40 else '#ef4444') %}
+                            <div class="score-breakdown-item">
+                                <div style="width:56px;height:56px;margin:0 auto 6px;">
+                                    <svg viewBox="0 0 36 36" style="display:block;width:100%;height:100%;">
+                                        <path fill="none" stroke="#e5e7eb" stroke-width="3.8" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                        <path class="ai-circle-fill" fill="none" stroke="{{ ms_color }}" stroke-width="3.8" stroke-linecap="round"
+                                              style="transform:rotate(-90deg);transform-origin:50% 50%;" data-score="{{ ms }}"
+                                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                        <text x="18" y="18" fill="{{ ms_color }}" font-size="0.45em" text-anchor="middle" dominant-baseline="middle" font-weight="bold">{{ ms }}</text>
+                                    </svg>
+                                </div>
+                                <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">Live Interview</div>
+                                <div style="font-size:0.65rem;color:var(--text-muted);">{{ interview_weight }}</div>
+                                <button type="button" class="btn btn-link btn-sm p-0" style="font-size:0.65rem;" onclick="editManualScore({{ app.id }}, event)">Edit</button>
+                            </div>
+                        {% else %}
+                            <div class="score-breakdown-item" id="manual-score-display-{{ app.id }}">
+                                <div style="width:56px;height:56px;margin:0 auto 6px;">
+                                    <svg viewBox="0 0 36 36" style="display:block;width:100%;height:100%;">
+                                        <path fill="none" stroke="#e5e7eb" stroke-width="3.8" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                        <text x="18" y="18" fill="#9ca3af" font-size="0.3em" text-anchor="middle" dominant-baseline="middle">-</text>
+                                    </svg>
+                                </div>
+                                <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);">Live Interview</div>
+                                <button type="button" class="btn btn-link btn-sm p-0" style="font-size:0.65rem;" onclick="editManualScore({{ app.id }}, event)">Add score</button>
+                            </div>
+                        {% endif %}
+                        <div class="score-breakdown-item" id="manual-score-edit-{{ app.id }}" style="display:none;">
+                            <input type="number" min="0" max="100" value="{{ app.manual_interview_score or '' }}"
+                                   id="manual-score-input-{{ app.id }}" class="form-control form-control-sm" style="width:64px;margin:0 auto 6px;text-align:center;">
+                            <button type="button" class="btn btn-primary btn-sm" style="font-size:0.65rem;padding:2px 8px;" onclick="saveManualScore({{ app.id }}, event)">Save</button>
                         </div>
                     {% endif %}
                     <!-- Overall -->
@@ -1108,6 +1148,38 @@ async function saveNotes(appId, event) {
     });
     savedEl.style.display = 'inline';
     setTimeout(() => savedEl.style.display = 'none', 2000);
+}
+
+function editManualScore(appId, event) {
+    event.stopPropagation();
+    const displayEl = document.getElementById(`manual-score-display-${appId}`);
+    if (displayEl) displayEl.style.display = 'none';
+    document.getElementById(`manual-score-edit-${appId}`).style.display = '';
+    document.getElementById(`manual-score-input-${appId}`).focus();
+}
+
+async function saveManualScore(appId, event) {
+    event.stopPropagation();
+    const input = document.getElementById(`manual-score-input-${appId}`);
+    const score = parseInt(input.value, 10);
+    if (isNaN(score) || score < 0 || score > 100) {
+        alert('Enter a score from 0 to 100.');
+        return;
+    }
+    const res = await fetch(`/employer/applications/${appId}/manual-interview-score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ score }),
+    });
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Failed to save score.');
+        return;
+    }
+    // Reloads since the score affects the composite weighting/colors for
+    // multiple widgets at once - simpler and more correct than replicating
+    // that calculation in JS.
+    location.reload();
 }
 
 // ── Filter logic ───────────────────────────────────────────────

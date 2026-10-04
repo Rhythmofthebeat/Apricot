@@ -40,13 +40,25 @@ TALENT_POOL_AI_LIMIT = 60  # cap on how many open-to-work profiles get sent to t
 _VERDICT_SCORE = {"Strong Yes": 100, "Yes": 75, "No": 25, "Strong No": 0}
 
 def compute_composite_score(app, ai_data):
-    """Weighted overall score: resume 45%, interview verdict 45%, AI authenticity 10%.
-    If no interview exists yet, falls back to resume score alone."""
+    """Weighted overall score. With both an AI-interview verdict and a
+    manual (live/human) interview score: resume 30%, AI interview 30%,
+    manual interview 30%, authenticity 10%. With only one of the two
+    interview signals, that one fills the "interview" slot alone at 45% -
+    resume 45%, authenticity 10%, same weighting as before this existed.
+    With neither, falls back to resume score alone."""
     resume = app.match_score or 0
-    if app.interview_verdict in _VERDICT_SCORE:
-        verdict = _VERDICT_SCORE[app.interview_verdict]
-        ai_penalty = (ai_data.get("score", 0) if ai_data else 0)
-        return round(resume * 0.45 + verdict * 0.45 + (100 - ai_penalty) * 0.10)
+    ai_penalty = (ai_data.get("score", 0) if ai_data else 0)
+    authenticity = 100 - ai_penalty
+
+    ai_verdict = _VERDICT_SCORE.get(app.interview_verdict)
+    manual = app.manual_interview_score
+
+    if ai_verdict is not None and manual is not None:
+        return round(resume * 0.30 + ai_verdict * 0.30 + manual * 0.30 + authenticity * 0.10)
+    if ai_verdict is not None:
+        return round(resume * 0.45 + ai_verdict * 0.45 + authenticity * 0.10)
+    if manual is not None:
+        return round(resume * 0.45 + manual * 0.45 + authenticity * 0.10)
     return resume
 PLATFORM_FEE_PERCENT = 15  # flat rate across every pay type
 
@@ -1547,6 +1559,32 @@ def save_notes(application_id):
     application.employer_notes = request.get_json().get('notes', '').strip() or None
     db.session.commit()
     return jsonify({"status": "saved"})
+
+
+@employer.route('/employer/applications/<int:application_id>/manual-interview-score', methods=['POST'])
+@login_required
+@employer_required
+def save_manual_interview_score(application_id):
+    """The employer's own 0-100 rating after conducting a live/manual
+    interview themselves - factored into the composite score alongside the
+    AI screening interview verdict, see compute_composite_score()."""
+    company = get_owned_company()
+    application = Application.query.get_or_404(application_id)
+    job = Job.query.get_or_404(application.job_id)
+    if job.company_id != company.id:
+        abort(403)
+
+    raw = (request.get_json() or {}).get('score')
+    try:
+        score = int(raw)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Score must be a number from 0 to 100."}), 400
+    if not 0 <= score <= 100:
+        return jsonify({"error": "Score must be between 0 and 100."}), 400
+
+    application.manual_interview_score = score
+    db.session.commit()
+    return jsonify({"status": "saved", "score": score})
 
 
 # ------------------------------------------------------------------ #

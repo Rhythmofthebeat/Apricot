@@ -132,6 +132,8 @@ def _run_migrations(db):
         "ALTER TABLE meeting_room ADD COLUMN employer_recording_path VARCHAR(300)",
         # job - employer can require camera on, not just optional, for the AI interview
         "ALTER TABLE job ADD COLUMN camera_required BOOLEAN NOT NULL DEFAULT FALSE",
+        # application - employer's own 0-100 rating after a live/manual interview
+        "ALTER TABLE application ADD COLUMN manual_interview_score INTEGER",
     ]
     for stmt in new_columns:
         try:

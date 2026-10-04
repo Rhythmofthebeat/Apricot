@@ -280,6 +280,7 @@ class Application(db.Model):
     interview_transcript = db.Column(db.Text)
     interview_audio_log = db.Column(db.Text)  # JSON list of {role, text, audio_filename}
     interview_verdict = db.Column(db.String(20))  # "Strong Yes" | "Yes" | "No" | "Strong No"
+    manual_interview_score = db.Column(db.Integer)  # 0-100, employer's own rating after a live/manual interview
     status = db.Column(db.String(20), nullable=False, default="applied")  # applied | interviewing | rejected | hired
     candidate_confirmed_hire = db.Column(db.Boolean, nullable=False, default=False)  # candidate must confirm before the fee invoice fires
     hire_confirmed_at = db.Column(db.DateTime(timezone=True))
