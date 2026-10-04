@@ -524,21 +524,33 @@
 
         </div>
 
-        <!-- ── Saved Results ── -->
-        <div class="col-lg-4">
-            <div class="card h-100">
+        <!-- ── Saved Results (resume matches, then video scans right underneath) ── -->
+        <div class="col-lg-4 d-flex flex-column gap-3">
+            <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">
                         <i class="fas fa-history me-2"></i>Saved Results
                     </h5>
                 </div>
-                <div class="card-body" style="max-height:700px; overflow-y:auto;">
+                <div class="card-body" style="max-height:320px; overflow-y:auto;">
                     <div id="history-list"></div>
                     <div id="empty-history" class="text-center text-muted">
                         No saved analyses yet
                     </div>
                 </div>
             </div>
+
+            {% if current_user.is_authenticated %}
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-video me-2"></i>Saved Video Scans</h6>
+                </div>
+                <div class="card-body" style="max-height:260px; overflow-y:auto;">
+                    <div id="video-history-list"></div>
+                    <div id="video-empty-history" class="text-center text-muted small">No saved scans yet</div>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
     </div><!-- /row g-4 -->
@@ -605,18 +617,6 @@
                     </div>
                 </div>
             </div>
-
-            {% if current_user.is_authenticated %}
-            <div class="card mt-3">
-                <div class="card-header">
-                    <h6 class="mb-0"><i class="fas fa-history me-2"></i>Saved Video Scans</h6>
-                </div>
-                <div class="card-body" style="max-height:260px; overflow-y:auto;">
-                    <div id="video-history-list"></div>
-                    <div id="video-empty-history" class="text-center text-muted small">No saved scans yet</div>
-                </div>
-            </div>
-            {% endif %}
         </div>
     </div><!-- /row g-4 video feedback -->
 
