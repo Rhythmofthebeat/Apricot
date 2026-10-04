@@ -152,16 +152,11 @@
                 <div class="section-label mb-3" style="font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-muted);">Your Progress</div>
 
                 <!-- Bar -->
-                <div style="background:var(--bg); border-radius:999px; height:8px; margin-bottom:10px; overflow:hidden;">
+                <div id="progressPct" style="font-size:1.8rem; font-weight:800; color:var(--primary); margin-bottom:8px;">0%</div>
+                <div style="background:var(--bg); border-radius:999px; height:8px; margin-bottom:4px; overflow:hidden;">
                     <div id="progressBar" style="height:100%; width:0%; background:var(--primary); border-radius:999px; transition:width 0.5s ease;"></div>
                 </div>
-                <div class="d-flex justify-content-between mb-4" style="font-size:0.75rem; color:var(--text-muted);">
-                    <span id="progressFraction">Starting…</span>
-                    <span id="progressPct">0%</span>
-                </div>
-
-                <!-- Question dots -->
-                <div id="dotTrack" style="display:flex; flex-direction:column; gap:10px;"></div>
+                <div class="mb-4" style="font-size:0.75rem; color:var(--text-muted);">through the interview</div>
 
                 <div class="mt-4 pt-3" style="border-top:1px solid var(--border); font-size:0.78rem; color:var(--text-muted); line-height:1.5;">
                     <i class="fas fa-circle-info me-1"></i>
@@ -355,64 +350,20 @@ const recordBtn = document.getElementById("recordBtn");
 const recordStatus = document.getElementById("recordStatus");
 
 // --- Sidebar helpers ---
-const dotTrack = document.getElementById("dotTrack");
 const progressBar = document.getElementById("progressBar");
-const progressFraction = document.getElementById("progressFraction");
 const progressPct = document.getElementById("progressPct");
-
-function renderDots(current, total) {
-    dotTrack.innerHTML = "";
-    const shown = Math.max(total, current);
-    for (let i = 1; i <= shown; i++) {
-        const row = document.createElement("div");
-        row.style.cssText = "display:flex; align-items:center; gap:10px;";
-
-        const dot = document.createElement("div");
-        dot.style.cssText = "width:10px; height:10px; border-radius:50%; flex-shrink:0; transition:background 0.3s;";
-
-        const label = document.createElement("span");
-        label.style.cssText = "font-size:0.8rem;";
-
-        if (i < current) {
-            dot.style.background = "var(--success)";
-            label.style.color = "var(--text-muted)";
-            label.innerHTML = `<s>Question ${i}</s>`;
-        } else if (i === current) {
-            dot.style.background = "var(--primary)";
-            dot.style.boxShadow = "0 0 0 3px var(--primary-soft)";
-            label.style.color = "var(--text)";
-            label.style.fontWeight = "600";
-            label.textContent = `Question ${i} (current)`;
-        } else {
-            dot.style.background = "var(--border)";
-            label.style.color = "var(--text-muted)";
-            label.textContent = `Question ${i}`;
-        }
-
-        row.appendChild(dot);
-        row.appendChild(label);
-        dotTrack.appendChild(row);
-    }
-}
 
 function updateProgress(current) {
     const pct = Math.min(Math.round(((current - 1) / ESTIMATED_TOTAL) * 100), 95);
     progressBar.style.width = pct + "%";
-    progressFraction.textContent = `Q${current} of ~${ESTIMATED_TOTAL}`;
     progressPct.textContent = pct + "%";
-    renderDots(current, ESTIMATED_TOTAL);
 }
 
 function markComplete() {
     progressBar.style.width = "100%";
     progressBar.style.background = "var(--success)";
-    progressFraction.textContent = "Complete";
     progressPct.textContent = "100%";
-    // Fill all dots green
-    dotTrack.querySelectorAll("div > div:first-child").forEach(d => {
-        d.style.background = "var(--success)";
-        d.style.boxShadow = "none";
-    });
+    progressPct.style.color = "var(--success)";
 }
 
 function lockRecording(msg) {
