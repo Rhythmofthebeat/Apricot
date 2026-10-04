@@ -18,7 +18,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: PUBLIC_BASE_URL
-        value: https://apricot-u9ap.onrender.com
+        value: https://avants.ai
       - key: OPENAI_API_KEY
         sync: false
       - key: MAIL_USERNAME
