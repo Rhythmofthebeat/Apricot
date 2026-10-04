@@ -943,6 +943,40 @@ class AudioTooLargeError(Exception):
     pass
 
 
+def extract_audio_for_transcription(input_path):
+    """Strips an uploaded video down to just its audio track, compressed to
+    a small mono MP3, before handing it to Whisper - a video file's picture
+    data is what actually eats into the 25MB cap, not the speech, so this
+    lets much longer uploads fit under that same fixed limit. Falls back to
+    returning the original path untouched (not raising) if ffmpeg isn't on
+    PATH or the conversion fails for any reason - callers always get back a
+    valid, existing file path, just not necessarily a smaller one."""
+    import shutil
+    import subprocess
+
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return input_path
+
+    out_path = f"{input_path}.audio.mp3"
+    try:
+        result = subprocess.run(
+            [ffmpeg, "-y", "-i", input_path, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", out_path],
+            capture_output=True, timeout=120,
+        )
+        if result.returncode == 0 and os.path.getsize(out_path) > 0:
+            return out_path
+    except Exception:
+        logger.exception("ffmpeg audio extraction failed - falling back to the original upload")
+
+    if os.path.exists(out_path):
+        try:
+            os.unlink(out_path)
+        except OSError:
+            pass
+    return input_path
+
+
 def transcribe_audio(file_path):
     """Speech-to-text for a candidate's recorded interview answer."""
     with open(file_path, "rb") as f:

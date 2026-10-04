@@ -586,7 +586,7 @@
                     <div class="mt-2">
                         <span id="video-file-name" class="file-name">No file chosen</span>
                     </div>
-                    <div class="form-text mb-3">MP4, WebM, MOV, etc. Transcription is capped at 25MB, which is roughly a minute or two of video.</div>
+                    <div class="form-text mb-3">MP4, WebM, MOV, etc. No length limit - longer videos just take a bit longer to process.</div>
 
                     <div class="d-grid">
                         <button type="button" id="video-analyze-btn" class="btn btn-primary btn-lg" disabled>
@@ -1237,12 +1237,6 @@ return newId;
     const fileInput = document.getElementById('video-file-upload');
     if (!uploadArea || !fileInput) return;  // visitor isn't signed in - widget isn't rendered
 
-    // Whisper's hard cap - checked client-side right after a file is picked
-    // so a too-large video is rejected instantly instead of only failing
-    // after a full upload + transcription attempt (and burning the hourly
-    // rate limit on a call that was always going to fail).
-    const MAX_VIDEO_BYTES = 25 * 1024 * 1024;
-
     const fileNameDisplay = document.getElementById('video-file-name');
     const analyzeBtn = document.getElementById('video-analyze-btn');
     const errorMessage = document.getElementById('video-error-message');
@@ -1273,12 +1267,7 @@ return newId;
 
     function applySelectedFile(file) {
         fileNameDisplay.textContent = file.name + ' (' + formatMB(file.size) + ')';
-        if (file.size > MAX_VIDEO_BYTES) {
-            analyzeBtn.disabled = true;
-            showError(`That video is ${formatMB(file.size)}, over Whisper's 25MB transcription cap. Try a shorter clip or a lower-quality export.`);
-        } else {
-            analyzeBtn.disabled = false;
-        }
+        analyzeBtn.disabled = false;
     }
 
     uploadArea.addEventListener('click', () => fileInput.click());

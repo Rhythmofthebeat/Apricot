@@ -34,6 +34,7 @@ from ai_services import (
     generate_resume_from_profile,
     run_interview_turn,
     transcribe_audio,
+    extract_audio_for_transcription,
     audio_file_extension,
     AudioTooLargeError,
     generate_interview_question_preview,
@@ -195,9 +196,20 @@ def resumemat_video_feedback():
         video_file.save(tmp.name)
         tmp_path = tmp.name
 
+    # Not persisted anywhere - both the original upload and any extracted
+    # audio live only in this temp dir and are deleted in `finally` below,
+    # regardless of which code path returns.
+    audio_path = tmp_path
     try:
+        # Strips the video down to just its audio track first - that's what
+        # actually lets a long recording fit under Whisper's fixed 25MB cap,
+        # since the picture data (not the speech) is almost all of a video
+        # file's size. No-ops back to the original file if ffmpeg isn't
+        # available in this environment.
+        audio_path = extract_audio_for_transcription(tmp_path)
+
         try:
-            transcript = transcribe_audio(tmp_path)
+            transcript = transcribe_audio(audio_path)
         except AudioTooLargeError as e:
             return jsonify({"error": str(e)}), 400
         except Exception:
@@ -220,6 +232,8 @@ def resumemat_video_feedback():
             return jsonify({"error": "Transcribed your video, but couldn't generate the feedback report. Please try again."}), 500
     finally:
         os.unlink(tmp_path)
+        if audio_path != tmp_path and os.path.exists(audio_path):
+            os.unlink(audio_path)
 
     return jsonify({"transcript": transcript, "coaching": coaching})
 
