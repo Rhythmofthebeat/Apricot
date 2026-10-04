@@ -286,6 +286,48 @@
 .chat-input-row input {
     flex: 1;
 }
+
+/* ── Video coaching report - same visual language as the practice interview hub ── */
+.coaching-wrap { padding: 20px 4px 4px; text-align: center; }
+.score-ring-lg {
+    width: 100px; height: 100px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 12px; font-size: 2.2rem; font-weight: 800;
+    border: 5px solid var(--border); transition: border-color 0.6s;
+}
+.score-ring-fill {
+    width: 100%; height: 8px; background: var(--border);
+    border-radius: 99px; overflow: hidden; margin: 8px 0 18px;
+}
+.score-ring-fill-bar { height: 100%; border-radius: 99px; width: 0; transition: width 0.8s ease; }
+.coaching-grid { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.coaching-block {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+}
+.coaching-block-title {
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 10px;
+}
+.coaching-item {
+    display: flex; gap: 9px; margin-bottom: 8px;
+    align-items: flex-start; font-size: 0.84rem;
+}
+.coaching-item:last-child { margin-bottom: 0; }
+.ci-dot {
+    width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 0.58rem; margin-top: 1px;
+}
+.ci-s { background: var(--success-soft); color: var(--success); }
+.ci-i { background: var(--warning-soft); color: var(--warning); }
+.ci-t { background: var(--primary-soft); color: var(--primary); }
+
+/* ── Compact saved-item row, shared by both saved-results lists ── */
+.compact-history-item { border: 1px solid #eee; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
+.compact-history-item .chi-top { display: flex; justify-content: space-between; align-items: center; }
+.compact-history-item .chi-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+.compact-history-item .chi-time { font-size: 11px; color: #666; }
+.compact-history-item .btn { padding: 1px 8px; font-size: 0.72rem; }
 </style>
 {% endblock %}
 
@@ -545,39 +587,36 @@
                     </a>
                     {% endif %}
 
-                    <div id="video-results" style="display:none;" class="mt-4">
+                    <div id="video-results" style="display:none;" class="mt-2">
                         <hr>
-                        <div class="text-center mb-3">
-                            <div class="score-circle mx-auto">
-                                <svg viewBox="0 0 36 36" class="circular-chart">
-                                    <path class="circle-bg" stroke="#eee"
-                                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                    <path class="circle" id="video-score-path"
-                                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                    <text x="18" y="18" class="percentage" id="video-score-text">0%</text>
-                                </svg>
+                        <div class="coaching-wrap">
+                            <div class="score-ring-lg" id="videoScoreRing">-</div>
+                            <div class="fw-bold mb-1" style="font-size:1rem;">Communication Score</div>
+                            <div class="score-ring-fill">
+                                <div class="score-ring-fill-bar" id="videoScoreBar"></div>
                             </div>
-                            <h5 class="mt-1 mb-0">Communication Score</h5>
+                            <p class="text-muted small mb-4">This is private and only visible to you.</p>
+                            <div class="coaching-grid" id="videoCoachingGrid"></div>
                         </div>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <h6 class="text-success"><i class="fa-solid fa-circle-check me-1"></i>What Was Good</h6>
-                                <ul id="video-strengths" class="small"></ul>
-                            </div>
-                            <div class="col-md-6">
-                                <h6 class="text-danger"><i class="fa-solid fa-circle-xmark me-1"></i>What Was Bad</h6>
-                                <ul id="video-improvements" class="small"></ul>
-                            </div>
-                        </div>
-                        <h6 class="mt-3"><i class="fas fa-lightbulb me-1 text-warning"></i>Tips For Next Time</h6>
-                        <ul id="video-tips" class="small"></ul>
-                        <details class="mt-3">
+                        <details class="mt-2">
                             <summary class="text-muted small" style="cursor:pointer;">View transcript</summary>
                             <p id="video-transcript" class="small text-muted mt-2" style="white-space:pre-wrap;"></p>
                         </details>
                     </div>
                 </div>
             </div>
+
+            {% if current_user.is_authenticated %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-history me-2"></i>Saved Video Scans</h6>
+                </div>
+                <div class="card-body" style="max-height:260px; overflow-y:auto;">
+                    <div id="video-history-list"></div>
+                    <div id="video-empty-history" class="text-center text-muted small">No saved scans yet</div>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div><!-- /row g-4 video feedback -->
 
@@ -824,33 +863,26 @@ if (empty) empty.style.display = "none";
 history.forEach(item => {
 
     const div = document.createElement("div");
-    div.className = "border rounded p-2 mb-2";
-
-    // Extract plain-text preview from stored HTML analysis
-    const _tmp = document.createElement('div');
-    _tmp.innerHTML = item.analysis || '';
-    const _rawText = (_tmp.textContent || _tmp.innerText || '').replace(/\s+/g, ' ').trim();
-    const _preview = _rawText.length > 0
-        ? _rawText.substring(0, 140) + (_rawText.length > 140 ? '…' : '')
-        : '';
+    div.className = "compact-history-item";
 
     // Safely escape the title for use inside an HTML attribute
     const _safeTitle = (item.title || 'Resume Match')
         .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
     div.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div class="chi-top">
         <input type="text"
                class="form-control form-control-sm title-input"
                value="${_safeTitle}"
-               style="width:60%;">
+               style="width:55%;">
         <span class="badge bg-primary">${item.score}%</span>
     </div>
-    <div style="font-size:12px;color:#666;">${item.time}</div>
-    ${_preview ? `<div style="font-size:11px;color:#555;margin-top:5px;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${_preview}</div>` : ''}
-    <div class="mt-2">
-        <button class="btn btn-sm btn-outline-primary view-btn">View</button>
-        <button class="btn btn-sm btn-outline-danger delete-btn">Delete</button>
+    <div class="chi-bottom">
+        <span class="chi-time">${item.time}</span>
+        <div>
+            <button class="btn btn-outline-primary view-btn">View</button>
+            <button class="btn btn-outline-danger delete-btn">Delete</button>
+        </div>
     </div>
 `;
 const titleInput = div.querySelector(".title-input");
@@ -1205,6 +1237,12 @@ return newId;
     const fileInput = document.getElementById('video-file-upload');
     if (!uploadArea || !fileInput) return;  // visitor isn't signed in - widget isn't rendered
 
+    // Whisper's hard cap - checked client-side right after a file is picked
+    // so a too-large video is rejected instantly instead of only failing
+    // after a full upload + transcription attempt (and burning the hourly
+    // rate limit on a call that was always going to fail).
+    const MAX_VIDEO_BYTES = 25 * 1024 * 1024;
+
     const fileNameDisplay = document.getElementById('video-file-name');
     const analyzeBtn = document.getElementById('video-analyze-btn');
     const errorMessage = document.getElementById('video-error-message');
@@ -1219,6 +1257,10 @@ return newId;
         setTimeout(() => { errorMessage.style.display = 'none'; errorMessage.classList.remove('fade-out'); }, 5000);
     }
 
+    function formatMB(bytes) {
+        return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
+    }
+
     function setFile(file) {
         if (!file) return;
         fileInput.files = (() => {
@@ -1226,8 +1268,17 @@ return newId;
             dt.items.add(file);
             return dt.files;
         })();
-        fileNameDisplay.textContent = file.name;
-        analyzeBtn.disabled = false;
+        applySelectedFile(file);
+    }
+
+    function applySelectedFile(file) {
+        fileNameDisplay.textContent = file.name + ' (' + formatMB(file.size) + ')';
+        if (file.size > MAX_VIDEO_BYTES) {
+            analyzeBtn.disabled = true;
+            showError(`That video is ${formatMB(file.size)}, over Whisper's 25MB transcription cap. Try a shorter clip or a lower-quality export.`);
+        } else {
+            analyzeBtn.disabled = false;
+        }
     }
 
     uploadArea.addEventListener('click', () => fileInput.click());
@@ -1247,23 +1298,127 @@ return newId;
 
     fileInput.addEventListener('change', () => {
         if (fileInput.files.length > 0) {
-            fileNameDisplay.textContent = fileInput.files[0].name;
-            analyzeBtn.disabled = false;
+            applySelectedFile(fileInput.files[0]);
         } else {
             fileNameDisplay.textContent = 'No file chosen';
             analyzeBtn.disabled = true;
         }
     });
 
-    function renderList(ulId, items) {
-        const ul = document.getElementById(ulId);
-        ul.innerHTML = '';
-        (items || []).forEach(text => {
-            const li = document.createElement('li');
-            li.textContent = text;
-            ul.appendChild(li);
+    function showVideoCoachingReport(coaching) {
+        const cs = coaching.communication_score || 0;
+        const color = cs >= 75 ? 'var(--success)' : (cs >= 50 ? 'var(--warning)' : 'var(--danger)');
+
+        const ring = document.getElementById('videoScoreRing');
+        ring.textContent = cs;
+        ring.style.borderColor = color;
+        ring.style.color = color;
+
+        setTimeout(() => {
+            const bar = document.getElementById('videoScoreBar');
+            bar.style.background = color;
+            bar.style.width = cs + '%';
+        }, 100);
+
+        const grid = document.getElementById('videoCoachingGrid');
+        let html = '';
+
+        if (coaching.strengths?.length) {
+            html += `<div class="coaching-block">
+                <div class="coaching-block-title"><i class="fas fa-check-circle me-1" style="color:var(--success);"></i>What you did well</div>`;
+            coaching.strengths.forEach(s => {
+                html += `<div class="coaching-item"><div class="ci-dot ci-s"><i class="fas fa-check"></i></div><span>${s}</span></div>`;
+            });
+            html += '</div>';
+        }
+
+        if (coaching.improvements?.length) {
+            html += `<div class="coaching-block">
+                <div class="coaching-block-title"><i class="fas fa-arrow-trend-up me-1" style="color:var(--warning);"></i>Areas to improve</div>`;
+            coaching.improvements.forEach(i => {
+                html += `<div class="coaching-item"><div class="ci-dot ci-i"><i class="fas fa-triangle-exclamation"></i></div><span>${i}</span></div>`;
+            });
+            html += '</div>';
+        }
+
+        if (coaching.tips?.length) {
+            html += `<div class="coaching-block">
+                <div class="coaching-block-title"><i class="fas fa-lightbulb me-1" style="color:var(--primary);"></i>Tips for next time</div>`;
+            coaching.tips.forEach(t => {
+                html += `<div class="coaching-item"><div class="ci-dot ci-t"><i class="fas fa-lightbulb"></i></div><span>${t}</span></div>`;
+            });
+            html += '</div>';
+        }
+
+        grid.innerHTML = html || '<p class="text-muted small text-center">Great effort!</p>';
+    }
+
+    // ── Saved Video Scans - same localStorage-backed pattern as the resume
+    // match history, just its own key since the two aren't related.
+    const VIDEO_HISTORY_KEY = 'videoAnalysisNotes';
+    const VIDEO_HISTORY_MAX = 20;
+
+    function loadVideoHistory() {
+        const list = document.getElementById('video-history-list');
+        const empty = document.getElementById('video-empty-history');
+        if (!list) return;
+
+        list.innerHTML = '';
+        const history = JSON.parse(localStorage.getItem(VIDEO_HISTORY_KEY)) || [];
+
+        if (history.length === 0) {
+            if (empty) empty.style.display = 'block';
+            return;
+        }
+        if (empty) empty.style.display = 'none';
+
+        history.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'compact-history-item';
+            div.innerHTML = `
+                <div class="chi-top">
+                    <span class="fw-semibold small">Video Scan</span>
+                    <span class="badge bg-primary">${item.score}%</span>
+                </div>
+                <div class="chi-bottom">
+                    <span class="chi-time">${item.time}</span>
+                    <div>
+                        <button class="btn btn-outline-primary view-btn">View</button>
+                        <button class="btn btn-outline-danger delete-btn">Delete</button>
+                    </div>
+                </div>
+            `;
+            div.querySelector('.view-btn').addEventListener('click', () => {
+                showVideoCoachingReport(item.coaching || {});
+                document.getElementById('video-transcript').textContent = item.transcript || '';
+                resultsBox.style.display = 'block';
+                resultsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+            div.querySelector('.delete-btn').addEventListener('click', () => {
+                const remaining = (JSON.parse(localStorage.getItem(VIDEO_HISTORY_KEY)) || []).filter(h => h.id !== item.id);
+                localStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(remaining));
+                loadVideoHistory();
+            });
+            list.appendChild(div);
         });
     }
+
+    function saveVideoScan(coaching, transcript) {
+        try {
+            const history = JSON.parse(localStorage.getItem(VIDEO_HISTORY_KEY)) || [];
+            history.unshift({
+                id: Date.now(),
+                score: coaching.communication_score || 0,
+                time: new Date().toLocaleString(),
+                coaching,
+                transcript,
+            });
+            localStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(history.slice(0, VIDEO_HISTORY_MAX)));
+            loadVideoHistory();
+        } catch (e) { /* localStorage unavailable - skip persistence, feature still works */ }
+    }
+
+    try { loadVideoHistory(); } catch (e) { /* ignore */ }
 
     analyzeBtn.addEventListener('click', async () => {
         if (!fileInput.files.length) return;
@@ -1287,23 +1442,9 @@ return newId;
             }
 
             const coaching = data.coaching || {};
-            const score = coaching.communication_score || 0;
-            const path = document.getElementById('video-score-path');
-            const text = document.getElementById('video-score-text');
-            const R = 15.9155, C = 2 * Math.PI * R;
-            const color = score >= 81 ? '#28a745' : score >= 61 ? '#4a90e2' : score >= 31 ? '#ffc107' : '#dc3545';
-
-            text.textContent = score + '%';
-            path.style.stroke = color;
-            path.setAttribute('stroke', color);
-            path.setAttribute('stroke-dasharray', C);
-            path.setAttribute('stroke-dashoffset', C);
-            setTimeout(() => path.setAttribute('stroke-dashoffset', C * (1 - score / 100)), 50);
-
-            renderList('video-strengths', coaching.strengths);
-            renderList('video-improvements', coaching.improvements);
-            renderList('video-tips', coaching.tips);
+            showVideoCoachingReport(coaching);
             document.getElementById('video-transcript').textContent = data.transcript || '';
+            saveVideoScan(coaching, data.transcript || '');
 
             resultsBox.style.display = 'block';
             resultsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
