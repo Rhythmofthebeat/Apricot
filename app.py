@@ -174,6 +174,56 @@ def resumemat():
     )
 
 
+@app.route('/resume-jobmatch/video-feedback', methods=['POST'])
+@limiter.limit("15 per hour")
+def resumemat_video_feedback():
+    """Upload a video of yourself answering an interview question (right on
+    the resume job-match page) and get back a transcript plus a strict
+    good/bad coaching report - same engine as the logged-in practice hub,
+    just a one-shot standalone version with no session/history."""
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Please log in to use this feature.", "login_required": True}), 401
+
+    video_file = request.files.get('video')
+    if not video_file or not video_file.filename:
+        return jsonify({"error": "Please upload a video of your interview answer."}), 400
+
+    job_text = (request.form.get('job_req') or '').strip()
+
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=audio_file_extension(video_file.filename), delete=False) as tmp:
+        video_file.save(tmp.name)
+        tmp_path = tmp.name
+
+    try:
+        try:
+            transcript = transcribe_audio(tmp_path)
+        except AudioTooLargeError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception:
+            logger.exception("Video interview transcription failed")
+            return jsonify({"error": "Couldn't transcribe that video. Please try again."}), 500
+
+        if not transcript.strip():
+            return jsonify({"error": "Couldn't make out any speech in that video. Try again with clear audio."}), 400
+
+        try:
+            coaching = generate_interview_coaching(
+                transcript=transcript,
+                job_title="this role",
+                requirements=job_text or "General interview performance.",
+                verdict=None,
+                match_score=None,
+            )
+        except Exception:
+            logger.exception("Video interview coaching report failed")
+            return jsonify({"error": "Transcribed your video, but couldn't generate the feedback report. Please try again."}), 500
+    finally:
+        os.unlink(tmp_path)
+
+    return jsonify({"transcript": transcript, "coaching": coaching})
+
+
 VALID_INTERVIEW_LENGTHS = ("short", "standard", "thorough")
 
 

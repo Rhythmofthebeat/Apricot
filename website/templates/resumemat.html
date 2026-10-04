@@ -501,6 +501,86 @@
 
     </div><!-- /row g-4 -->
 
+    <!-- ── Video Interview Feedback ── -->
+    <div class="row g-4 mt-1">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="mb-0"><i class="fas fa-video me-2"></i>Video Interview Feedback</h3>
+                </div>
+                <div class="card-body position-relative">
+                    <div id="video-loading-overlay" class="spinner-overlay" style="display: none;">
+                        <div class="spinner"></div>
+                        <p class="fw-bold text-primary">Scanning your interview - please wait...</p>
+                        <p class="text-muted fst-italic">Transcribing and scoring - this can take up to 30 seconds...</p>
+                    </div>
+
+                    <div id="video-error-message" class="error-message"></div>
+
+                    <p class="text-muted mb-3">Upload a video of yourself answering an interview question - we'll transcribe it and give you a candid report on what was good and what was bad, using the job description above for context if you've filled it in.</p>
+
+                    {% if current_user.is_authenticated %}
+                    <div class="upload-area" id="video-upload-area">
+                        <i class="fas fa-video fa-2x text-primary mb-3"></i>
+                        <p class="mb-1">Drag & drop your interview video here</p>
+                        <p class="text-muted small">or</p>
+                        <button type="button" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-folder-open me-1"></i>Browse Files
+                        </button>
+                    </div>
+                    <input id="video-file-upload" type="file" class="d-none" accept="video/*">
+                    <div class="mt-2">
+                        <span id="video-file-name" class="file-name">No file chosen</span>
+                    </div>
+                    <div class="form-text mb-3">MP4, WebM, MOV, etc. Transcription is capped at 25MB, which is roughly a minute or two of video.</div>
+
+                    <div class="d-grid">
+                        <button type="button" id="video-analyze-btn" class="btn btn-primary btn-lg" disabled>
+                            <i class="fas fa-magnifying-glass me-2"></i>Scan My Interview
+                        </button>
+                    </div>
+                    {% else %}
+                    <a href="{{ url_for('auth.login', next=request.path) }}" class="btn btn-primary btn-lg" style="display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;">
+                        <i class="fas fa-sign-in-alt"></i> Sign In to Analyze
+                    </a>
+                    {% endif %}
+
+                    <div id="video-results" style="display:none;" class="mt-4">
+                        <hr>
+                        <div class="text-center mb-3">
+                            <div class="score-circle mx-auto">
+                                <svg viewBox="0 0 36 36" class="circular-chart">
+                                    <path class="circle-bg" stroke="#eee"
+                                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                    <path class="circle" id="video-score-path"
+                                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                    <text x="18" y="18" class="percentage" id="video-score-text">0%</text>
+                                </svg>
+                            </div>
+                            <h5 class="mt-1 mb-0">Communication Score</h5>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <h6 class="text-success"><i class="fa-solid fa-circle-check me-1"></i>What Was Good</h6>
+                                <ul id="video-strengths" class="small"></ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-danger"><i class="fa-solid fa-circle-xmark me-1"></i>What Was Bad</h6>
+                                <ul id="video-improvements" class="small"></ul>
+                            </div>
+                        </div>
+                        <h6 class="mt-3"><i class="fas fa-lightbulb me-1 text-warning"></i>Tips For Next Time</h6>
+                        <ul id="video-tips" class="small"></ul>
+                        <details class="mt-3">
+                            <summary class="text-muted small" style="cursor:pointer;">View transcript</summary>
+                            <p id="video-transcript" class="small text-muted mt-2" style="white-space:pre-wrap;"></p>
+                        </details>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div><!-- /row g-4 video feedback -->
+
     {# Always present - provides initial context; JS can override via updateChatContext() #}
     <script type="application/json" id="resume-chat-data">{{ {"jobText": job_text or "", "analysis": result or ""} | tojson }}</script>
 
@@ -1118,4 +1198,122 @@ return newId;
 
 
     </script>
+
+<script>
+(function () {
+    const uploadArea = document.getElementById('video-upload-area');
+    const fileInput = document.getElementById('video-file-upload');
+    if (!uploadArea || !fileInput) return;  // visitor isn't signed in - widget isn't rendered
+
+    const fileNameDisplay = document.getElementById('video-file-name');
+    const analyzeBtn = document.getElementById('video-analyze-btn');
+    const errorMessage = document.getElementById('video-error-message');
+    const overlay = document.getElementById('video-loading-overlay');
+    const resultsBox = document.getElementById('video-results');
+
+    function showError(message) {
+        errorMessage.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>' + message;
+        errorMessage.style.display = 'block';
+        errorMessage.classList.remove('fade-out');
+        setTimeout(() => errorMessage.classList.add('fade-out'), 4000);
+        setTimeout(() => { errorMessage.style.display = 'none'; errorMessage.classList.remove('fade-out'); }, 5000);
+    }
+
+    function setFile(file) {
+        if (!file) return;
+        fileInput.files = (() => {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            return dt.files;
+        })();
+        fileNameDisplay.textContent = file.name;
+        analyzeBtn.disabled = false;
+    }
+
+    uploadArea.addEventListener('click', () => fileInput.click());
+
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) setFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) {
+            fileNameDisplay.textContent = fileInput.files[0].name;
+            analyzeBtn.disabled = false;
+        } else {
+            fileNameDisplay.textContent = 'No file chosen';
+            analyzeBtn.disabled = true;
+        }
+    });
+
+    function renderList(ulId, items) {
+        const ul = document.getElementById(ulId);
+        ul.innerHTML = '';
+        (items || []).forEach(text => {
+            const li = document.createElement('li');
+            li.textContent = text;
+            ul.appendChild(li);
+        });
+    }
+
+    analyzeBtn.addEventListener('click', async () => {
+        if (!fileInput.files.length) return;
+
+        errorMessage.style.display = 'none';
+        overlay.style.display = 'flex';
+        analyzeBtn.disabled = true;
+
+        try {
+            const formData = new FormData();
+            formData.append('video', fileInput.files[0]);
+            const jobTextarea = document.querySelector('textarea[name="job_req"]');
+            formData.append('job_req', jobTextarea ? jobTextarea.value : '');
+
+            const res = await fetch('/resume-jobmatch/video-feedback', { method: 'POST', body: formData });
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                showError(data.error || 'Something went wrong analyzing your video. Please try again.');
+                return;
+            }
+
+            const coaching = data.coaching || {};
+            const score = coaching.communication_score || 0;
+            const path = document.getElementById('video-score-path');
+            const text = document.getElementById('video-score-text');
+            const R = 15.9155, C = 2 * Math.PI * R;
+            const color = score >= 81 ? '#28a745' : score >= 61 ? '#4a90e2' : score >= 31 ? '#ffc107' : '#dc3545';
+
+            text.textContent = score + '%';
+            path.style.stroke = color;
+            path.setAttribute('stroke', color);
+            path.setAttribute('stroke-dasharray', C);
+            path.setAttribute('stroke-dashoffset', C);
+            setTimeout(() => path.setAttribute('stroke-dashoffset', C * (1 - score / 100)), 50);
+
+            renderList('video-strengths', coaching.strengths);
+            renderList('video-improvements', coaching.improvements);
+            renderList('video-tips', coaching.tips);
+            document.getElementById('video-transcript').textContent = data.transcript || '';
+
+            resultsBox.style.display = 'block';
+            resultsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } catch (e) {
+            showError('Something went wrong analyzing your video. Please try again.');
+        } finally {
+            overlay.style.display = 'none';
+            analyzeBtn.disabled = false;
+        }
+    });
+})();
+</script>
 {% endblock %}

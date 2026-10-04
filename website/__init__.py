@@ -202,10 +202,15 @@ def create_app():
         if database_url.startswith('postgresql://'):
             database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
         app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-            "pool_pre_ping": True,
-            "connect_args": {"options": "-c default_transaction_read_only=off"},
-        }
+        if database_url.startswith('postgresql+psycopg2://'):
+            # This connect_args is Postgres-only syntax - applying it
+            # unconditionally also broke DATABASE_URL pointed at a sqlite
+            # file (e.g. for local/isolated testing), since sqlite3.connect()
+            # has no "options" kwarg and raises a TypeError at every query.
+            app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+                "pool_pre_ping": True,
+                "connect_args": {"options": "-c default_transaction_read_only=off"},
+            }
     else:
         #sqlite is stored at this location - local dev fallback only
         app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_NAME}'
