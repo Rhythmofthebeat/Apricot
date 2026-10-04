@@ -524,15 +524,19 @@
 
         </div>
 
-        <!-- ── Saved Results (resume matches, then video scans right underneath) ── -->
+        <!-- ── Saved Results (resume matches, then video scans right underneath) ──
+             The first card grows to fill the column's full stretched height
+             (matching the Upload/Match Results columns beside it) instead of
+             sitting at its own compact height and leaving a bare gap below -
+             only the Saved Video Scans card underneath it stays a fixed size. -->
         <div class="col-lg-4 d-flex flex-column gap-3">
-            <div class="card">
+            <div class="card flex-grow-1" style="min-height:0;">
                 <div class="card-header">
                     <h5 class="mb-0">
                         <i class="fas fa-history me-2"></i>Saved Results
                     </h5>
                 </div>
-                <div class="card-body" style="max-height:320px; overflow-y:auto;">
+                <div class="card-body" style="flex:1 1 auto; min-height:0; overflow-y:auto;">
                     <div id="history-list"></div>
                     <div id="empty-history" class="text-center text-muted">
                         No saved analyses yet
@@ -541,7 +545,7 @@
             </div>
 
             {% if current_user.is_authenticated %}
-            <div class="card">
+            <div class="card" style="flex-shrink:0;">
                 <div class="card-header">
                     <h6 class="mb-0"><i class="fas fa-video me-2"></i>Saved Video Scans</h6>
                 </div>
