@@ -5,8 +5,10 @@ from datetime import timezone
 from sqlalchemy.sql import func
 
 from . import db
-from .models import Application, Job, User, Company, MeetingRoom, Referral
+from .models import Application, Job, User, Company, MeetingRoom, Referral, Notification
 from .employer import _placement_fee_basis
+from .candidate import _company_recipients
+from email_utils import send_branded_email, external_url
 
 REFERRAL_COMMISSION_PERCENT = 10  # referrer's cut of the platform's placement fee, not of the hire's salary
 
@@ -183,7 +185,7 @@ def upload_meeting_recording_route(room_name):
     'Save & Leave' rather than on every chunk - keeps this to one request per
     person per call."""
     room = MeetingRoom.query.filter_by(room_name=room_name).first_or_404()
-    _, is_employer = _resolve_meeting_access(room)
+    application, is_employer = _resolve_meeting_access(room)
 
     recording = request.files.get('recording')
     if not recording or not recording.filename:
@@ -203,7 +205,50 @@ def upload_meeting_recording_route(room_name):
         room.candidate_recording_path = path
     db.session.commit()
 
+    if not is_employer:
+        _notify_company_of_interview_recording(room, application)
+
     return {"status": "saved"}
+
+
+def _notify_company_of_interview_recording(room, application):
+    """The candidate's side of the interview is the one the employer actually
+    wants to review - once it's saved, let the whole company know (not just
+    whoever happened to schedule the room), same as every other company-wide
+    notification in this app."""
+    job = application.job
+    company = job.company
+    candidate = application.candidate
+    join_url = external_url('views.join_meeting', room_name=room.room_name)
+    candidate_name = candidate.first_name or candidate.email
+
+    for recipient in _company_recipients(company):
+        db.session.add(Notification(
+            user_id=recipient.id,
+            message=f"{candidate_name}'s interview recording for {job.title} is ready to watch.",
+            link=url_for('views.join_meeting', room_name=room.room_name),
+        ))
+    db.session.commit()
+
+    for recipient in _company_recipients(company):
+        try:
+            send_branded_email(
+                to_email=recipient.email,
+                subject=f"Interview recording ready - {candidate_name} / {job.title}",
+                heading="Interview recording ready to watch",
+                body_html=(
+                    f"<strong>{candidate_name}</strong>'s interview for <strong>{job.title}</strong> "
+                    f"has finished, and their recording is ready to watch."
+                ),
+                plain_text=(
+                    f"{candidate_name}'s interview for {job.title} has finished, and their "
+                    f"recording is ready to watch.\n\nWatch it here: {join_url}"
+                ),
+                cta_label="Watch Recording",
+                cta_url=join_url,
+            )
+        except Exception:
+            current_app.logger.exception(f"Failed to send interview-recording-ready email for room {room.id}")
 
 
 @views.route('/meeting/<room_name>/recording/<role>')
