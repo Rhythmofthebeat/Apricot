@@ -300,6 +300,8 @@ let currentQuestion = null;
 let concluded       = false;
 let mediaRecorder   = null;
 let audioChunks     = [];
+let recordedBytes   = 0;
+const MAX_RECORDING_BYTES = 23 * 1024 * 1024; // stay under Whisper's 25MB cap with margin
 let isRecording     = false;
 let questionNum     = 0;
 let cameraStream    = null;
@@ -638,7 +640,19 @@ async function setupRecorder() {
         recordingMimeType = mimeType || (recordingHasVideo ? "video/webm" : "audio/webm");
         mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
 
-        mediaRecorder.addEventListener("dataavailable", (e) => audioChunks.push(e.data));
+        mediaRecorder.addEventListener("dataavailable", (e) => {
+            audioChunks.push(e.data);
+            recordedBytes += e.data.size;
+            // Whisper's transcription API hard-caps uploads at 25MB - video
+            // answers (camera on) can hit that in roughly a minute or two
+            // depending on quality. Auto-stop with margin to spare rather
+            // than let them keep talking into a recording that's guaranteed
+            // to fail to transcribe.
+            if (recordedBytes > MAX_RECORDING_BYTES && isRecording) {
+                recordStatus.textContent = "Answer reached the maximum length - stopping and transcribing now.";
+                recordBtn.click();
+            }
+        });
         mediaRecorder.addEventListener("stop", onRecordingStop);
         return true;
     } catch (e) {
@@ -696,7 +710,8 @@ recordBtn.addEventListener("click", async () => {
             if (!ok) return;
         }
         audioChunks = [];
-        mediaRecorder.start();
+        recordedBytes = 0;
+        mediaRecorder.start(1000); // periodic chunks so recordedBytes can be checked while still recording
         isRecording = true;
         recordBtn.classList.add("recording");
         recordBtn.innerHTML = '<i class="fas fa-stop"></i>';

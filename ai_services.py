@@ -935,10 +935,27 @@ Detail: ..."""
     return {"summary": summary or content[:400], "recommendations": recommendations[:5]}
 
 
+class AudioTooLargeError(Exception):
+    """Raised when a recorded answer is too long/large for Whisper's 25MB
+    cap (likely hit with the camera on, since video is far larger per
+    second than audio-only) - callers should show a specific, actionable
+    message instead of the generic transcription-failed one."""
+    pass
+
+
 def transcribe_audio(file_path):
     """Speech-to-text for a candidate's recorded interview answer."""
     with open(file_path, "rb") as f:
-        transcript = client.audio.transcriptions.create(model="whisper-1", file=f)
+        try:
+            transcript = client.audio.transcriptions.create(model="whisper-1", file=f)
+        except openai.BadRequestError as e:
+            if "size" in str(e).lower() or "25 mb" in str(e).lower() or "maximum content" in str(e).lower():
+                raise AudioTooLargeError(
+                    "That answer was too long to transcribe - recordings are capped at 25MB, which "
+                    "video answers can hit in roughly a minute or two depending on quality. Try a "
+                    "shorter answer, or turn off your camera for longer responses."
+                ) from e
+            raise
     return transcript.text.strip()
 
 

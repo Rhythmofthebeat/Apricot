@@ -26,6 +26,7 @@ from ai_services import (
     run_interview_turn,
     transcribe_audio,
     audio_file_extension,
+    AudioTooLargeError,
     synthesize_speech,
     generate_resume_from_profile,
     suggest_jobs_for_profile,
@@ -494,6 +495,9 @@ def interview_chat(job_id, application_id):
             f.write(media_bytes)
         try:
             user_message = transcribe_audio(tmp_path)
+        except AudioTooLargeError as e:
+            os.remove(tmp_path)
+            return jsonify({"error": str(e)}), 400
         except Exception:
             os.remove(tmp_path)
             return jsonify({"error": "Couldn't transcribe your answer. Please try again."}), 500
@@ -1174,16 +1178,19 @@ def practice_interview_chat(job_id):
 
     user_message = text_answer  # text mode takes priority if provided
     if not user_message and answer_audio and answer_audio.filename:
+        import tempfile, os as _os
+        ext = audio_file_extension(answer_audio.filename)
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            tmp.write(answer_audio.read())
+            tmp_path = tmp.name
         try:
-            import tempfile, os as _os
-            ext = audio_file_extension(answer_audio.filename)
-            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-                tmp.write(answer_audio.read())
-                tmp_path = tmp.name
             user_message = transcribe_audio(tmp_path)
-            _os.unlink(tmp_path)
+        except AudioTooLargeError as e:
+            return jsonify({"error": str(e)}), 400
         except Exception:
             return jsonify({"error": "Couldn't transcribe your answer. Please try again."}), 500
+        finally:
+            _os.unlink(tmp_path)
 
     secs = job.description_sections or {}
     coaching = None
