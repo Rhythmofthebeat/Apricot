@@ -416,12 +416,23 @@ function applyDraft(draft) {
     restoringDraft = false;
 }
 
+const DRAFT_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours
+
 function restoreDraftIfAny() {
     let raw;
     try { raw = localStorage.getItem(draftKey); } catch (_) { return; }
     if (!raw) return;
     let draft;
     try { draft = JSON.parse(raw); } catch (_) { localStorage.removeItem(draftKey); return; }
+
+    // A draft this old is almost certainly a leftover from a job that was
+    // already successfully posted or saved earlier, not unsaved work from
+    // a failed submission moments ago - quietly drop it instead of
+    // resurrecting old content on someone's next new job.
+    if (draft.savedAt && Date.now() - draft.savedAt > DRAFT_MAX_AGE_MS) {
+        try { localStorage.removeItem(draftKey); } catch (_) { /* not critical */ }
+        return;
+    }
 
     applyDraft(draft);
 
@@ -605,13 +616,18 @@ document.getElementById("postJobForm").addEventListener("submit", () => {
         .filter(text => text);
     document.getElementById("interviewQuestionsField").value = JSON.stringify(questions);
 
-    // Submitting the button blurs whatever field was focused, which can fire
-    // one last 'change' -> scheduleDraftSave() *after* this handler starts
-    // running. Without formSubmitted, that pending timer would fire during
-    // the navigation and resurrect the draft we're about to clear.
+    // Deliberately NOT clearing the draft here: this fires the instant the
+    // button is clicked, before the server has validated anything. If a
+    // required field is missing, the server re-renders this same page with
+    // a flash error and nothing saved - clearing eagerly would have already
+    // destroyed the only copy of what they typed, right before the page
+    // that needed to restore it reloads. A successful submission navigates
+    // away to the dashboard, so the leftover draft only matters again if
+    // they start another new job later - restoreDraftIfAny()'s staleness
+    // check handles that case instead of trying to signal success across
+    // the redirect.
     formSubmitted = true;
     clearTimeout(draftSaveTimer);
-    try { localStorage.removeItem(draftKey); } catch (_) { /* not critical */ }
 });
 
 const PAY_CONFIG = {
