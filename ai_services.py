@@ -599,6 +599,56 @@ Respond with ONLY the 10 questions, one per line, no numbering, no extra comment
     return questions[:10]
 
 
+JOB_FIT_VERDICTS = ("Strong Yes", "Yes", "No", "Strong No")
+JOB_FIT_VERDICT_SCORE = {"Strong Yes": 100, "Yes": 75, "No": 25, "Strong No": 0}
+
+
+def generate_job_fit_verdict(transcript, job_description):
+    """One-shot assessment of whether what a candidate actually SAID in an
+    interview answer demonstrates fit for a job description - distinct from
+    generate_interview_coaching's communication-style score, this judges the
+    content/substance against the role's requirements, not how well they
+    spoke. Returns {"verdict": one of JOB_FIT_VERDICTS, "reasoning": str}.
+    Raises ValueError if the model's output doesn't parse - same
+    treat-as-unavailable contract as generate_interview_coaching."""
+    prompt = f"""You are assessing whether a candidate's interview answer demonstrates they'd be a good fit for this specific job, based only on what they actually said - not how well or confidently they said it.
+
+Job Description:
+{(job_description or '')[:2000]}
+
+Candidate's interview answer(s):
+{transcript[:3000]}
+
+Judge strictly: does the SUBSTANCE of what they said show relevant experience, skills, or understanding that matches this job's requirements? A well-spoken but generic or irrelevant answer should NOT score well here. A specific, relevant answer that directly addresses the role should score well even if communication style is plain.
+
+Respond EXACTLY in this format, no extra commentary:
+Verdict: <Strong Yes|Yes|No|Strong No>
+Reasoning: <1-2 sentences explaining why, referencing specifics from both the job description and what they said>"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=200,
+        temperature=0.2,
+    )
+    content = response.choices[0].message.content.strip()
+
+    verdict, reasoning = None, None
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith("Verdict:"):
+            candidate = line[8:].strip()
+            if candidate in JOB_FIT_VERDICTS:
+                verdict = candidate
+        elif line.startswith("Reasoning:"):
+            reasoning = line[10:].strip()
+
+    if not verdict or not reasoning:
+        raise ValueError(f"Job fit verdict did not parse into a complete result: {content[:200]!r}")
+
+    return {"verdict": verdict, "reasoning": reasoning}
+
+
 def generate_skills_roadmap(job_title, match_explanation, match_score, requirements):
     """Generate a specific 30-day action plan to close the skills gap for a role.
     Returns a list of {step, description, timeline} dicts."""

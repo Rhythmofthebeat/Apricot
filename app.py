@@ -42,6 +42,7 @@ from ai_services import (
     generate_interview_question_preview,
     generate_interview_coaching,
     generate_practice_questions,
+    generate_job_fit_verdict,
 )
 from video_storage import create_scan_upload_url, download_scan_to_file, delete_scan
 
@@ -278,12 +279,23 @@ def _process_video_scan_job(job_id, path, job_text, resume_text):
             _VIDEO_SCAN_JOBS[job_id] = {"status": "error", "error": "Couldn't make out any speech in that video. Try again with clear audio."}
             return
 
+        # Whether what they SAID fits the job, as distinct from how well
+        # they said it (that's the coaching report below) - only makes
+        # sense when a job description was actually provided. Non-fatal if
+        # it fails: the coaching report alone is still useful on its own.
+        job_fit = None
+        if job_text:
+            try:
+                job_fit = generate_job_fit_verdict(transcript, job_text)
+            except Exception:
+                logger.exception("Job fit verdict generation failed - continuing without it")
+
         try:
             coaching = generate_interview_coaching(
                 transcript=transcript,
                 job_title="this role",
                 requirements=job_text or "General interview performance.",
-                verdict=None,
+                verdict=job_fit.get("verdict") if job_fit else None,
                 match_score=None,
                 resume=resume_text,
             )
@@ -292,7 +304,7 @@ def _process_video_scan_job(job_id, path, job_text, resume_text):
             _VIDEO_SCAN_JOBS[job_id] = {"status": "error", "error": "Transcribed your video, but couldn't generate the feedback report. Please try again."}
             return
 
-        _VIDEO_SCAN_JOBS[job_id] = {"status": "done", "transcript": transcript, "coaching": coaching}
+        _VIDEO_SCAN_JOBS[job_id] = {"status": "done", "transcript": transcript, "coaching": coaching, "job_fit": job_fit}
     except Exception:
         logger.exception(f"Unexpected error processing video scan job {job_id}")
         _VIDEO_SCAN_JOBS[job_id] = {"status": "error", "error": "Something went wrong analyzing your video. Please try again."}

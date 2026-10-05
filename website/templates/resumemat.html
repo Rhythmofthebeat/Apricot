@@ -628,6 +628,11 @@
                     <div id="video-results" style="display:none;" class="mt-2">
                         <hr>
                         <div class="coaching-wrap">
+                            <div id="video-job-fit" style="display:none;" class="mb-4">
+                                <div class="small fw-bold text-muted text-uppercase mb-1" style="letter-spacing:0.05em; font-size:0.68rem;">Fit for this role (based on what you said)</div>
+                                <span class="badge" id="video-job-fit-badge" style="font-size:0.85rem; padding:6px 14px;">-</span>
+                                <p class="text-muted small mt-2 mb-0" id="video-job-fit-reasoning"></p>
+                            </div>
                             <div class="score-ring-lg" id="videoScoreRing">-</div>
                             <div class="fw-bold mb-1" style="font-size:1rem;">Communication Score</div>
                             <div class="score-ring-fill">
@@ -1374,7 +1379,21 @@ return newId;
         }
     });
 
-    function showVideoCoachingReport(coaching) {
+    function showVideoCoachingReport(coaching, jobFit) {
+        const fitBox = document.getElementById('video-job-fit');
+        if (jobFit && jobFit.verdict) {
+            const fitColors = { 'Strong Yes': '#198754', 'Yes': '#4a90e2', 'No': '#ffc107', 'Strong No': '#dc3545' };
+            const fitLabels = { 'Strong Yes': 'Strong Fit', 'Yes': 'Good Fit', 'No': 'Weak Fit', 'Strong No': 'Not a Fit' };
+            const badge = document.getElementById('video-job-fit-badge');
+            badge.textContent = fitLabels[jobFit.verdict] || jobFit.verdict;
+            badge.style.backgroundColor = fitColors[jobFit.verdict] || '#6c757d';
+            badge.style.color = '#fff';
+            document.getElementById('video-job-fit-reasoning').textContent = jobFit.reasoning || '';
+            fitBox.style.display = 'block';
+        } else {
+            fitBox.style.display = 'none';
+        }
+
         const cs = coaching.communication_score || 0;
         const color = cs >= 75 ? 'var(--success)' : (cs >= 50 ? 'var(--warning)' : 'var(--danger)');
 
@@ -1458,7 +1477,7 @@ return newId;
                 </div>
             `;
             div.querySelector('.view-btn').addEventListener('click', () => {
-                showVideoCoachingReport(item.coaching || {});
+                showVideoCoachingReport(item.coaching || {}, item.jobFit || null);
                 document.getElementById('video-transcript').textContent = item.transcript || '';
                 resultsBox.style.display = 'block';
                 resultsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1472,7 +1491,7 @@ return newId;
         });
     }
 
-    function saveVideoScan(coaching, transcript) {
+    function saveVideoScan(coaching, transcript, jobFit) {
         try {
             const history = JSON.parse(localStorage.getItem(VIDEO_HISTORY_KEY)) || [];
             history.unshift({
@@ -1481,6 +1500,7 @@ return newId;
                 time: new Date().toLocaleString(),
                 coaching,
                 transcript,
+                jobFit: jobFit || null,
             });
             localStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(history.slice(0, VIDEO_HISTORY_MAX)));
             loadVideoHistory();
@@ -1652,9 +1672,9 @@ return newId;
             const data = await analyzeUploadedScan(path);
 
             const coaching = data.coaching || {};
-            showVideoCoachingReport(coaching);
+            showVideoCoachingReport(coaching, data.job_fit || null);
             document.getElementById('video-transcript').textContent = data.transcript || '';
-            saveVideoScan(coaching, data.transcript || '');
+            saveVideoScan(coaching, data.transcript || '', data.job_fit || null);
 
             resultsBox.style.display = 'block';
             resultsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
