@@ -4,7 +4,17 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    # gthread (not more worker *processes*) + a longer timeout - the video
+    # scan route can now run for minutes (ffmpeg + Whisper + a coaching GPT
+    # call on a long upload), and gunicorn's bare default is a single sync
+    # worker with a 30s timeout, which would both kill that request AND
+    # block every other visitor to the whole site for its entire duration.
+    # Extra *processes* instead of threads would silently break two things
+    # that are explicitly single-process-only: app.py's _RESUME_MATCH_CACHE
+    # (an in-memory dict keyed by a one-time redirect token) and
+    # Flask-Limiter's in-memory rate-limit storage - both assume one shared
+    # memory space, which threads preserve and extra processes would not.
+    startCommand: gunicorn app:app --worker-class gthread --threads 4 --timeout 300
     envVars:
       # Pinned explicitly (highest-precedence method per Render's docs) after
       # a deploy started failing with "ModuleNotFoundError: No module named
