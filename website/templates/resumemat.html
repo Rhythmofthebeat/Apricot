@@ -619,6 +619,9 @@
                             <i class="fas fa-magnifying-glass me-2"></i>Scan My Interview
                         </button>
                     </div>
+                    <div id="video-jd-hint" style="display:none;" class="form-text text-warning mt-2">
+                        <i class="fas fa-triangle-exclamation me-1"></i>Add a job description above to also get a fit score and 10 tailored practice questions.
+                    </div>
                     {% else %}
                     <a href="{{ url_for('auth.login', next=request.path) }}" class="btn btn-primary btn-lg" style="display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;">
                         <i class="fas fa-sign-in-alt"></i> Sign In to Analyze
@@ -1596,6 +1599,20 @@ return newId;
         return jobTextarea ? jobTextarea.value : '';
     }
 
+    // Live warning that fit-score + practice-questions need a job
+    // description - shown upfront rather than only discovered after
+    // scanning, since both features otherwise fail silently with no JD.
+    (function () {
+        const jdHint = document.getElementById('video-jd-hint');
+        const jobTextarea = document.querySelector('textarea[name="job_req"]');
+        if (!jdHint || !jobTextarea) return;
+        function updateHint() {
+            jdHint.style.display = jobTextarea.value.trim() ? 'none' : 'block';
+        }
+        updateHint();
+        jobTextarea.addEventListener('input', updateHint);
+    })();
+
     function currentResumeFile() {
         const resumeInput = document.getElementById('video-resume-upload');
         return (resumeInput && resumeInput.files.length) ? resumeInput.files[0] : null;
@@ -1650,7 +1667,16 @@ return newId;
         const loadingEl = document.getElementById('practice-questions-loading');
         const listEl = document.getElementById('practice-questions-list');
 
-        if (!jobText.trim()) return;  // nothing to tailor questions to
+        if (!jobText.trim()) {
+            // Silently doing nothing here used to look identical to a
+            // broken feature - the job-fit badge above has the same
+            // requirement and the same silent-skip problem, so this one
+            // message covers both: the real cause is almost always a job
+            // description that was never filled in.
+            emptyEl.innerHTML = '<i class="fas fa-triangle-exclamation fa-2x mb-3 text-warning"></i><p class="mb-0">Add a job description above (in the Upload & Analyze box) to get a fit assessment and 10 tailored practice questions.</p>';
+            emptyEl.style.display = 'block';
+            return;
+        }
 
         emptyEl.style.display = 'none';
         listEl.style.display = 'none';
