@@ -489,18 +489,28 @@ Include 3-7 issues total. Be specific to this actual posting — do not give gen
     return {"score": min(100, max(0, score)), "issues": issues}
 
 
-def generate_interview_coaching(transcript, job_title, requirements, verdict, match_score):
+def generate_interview_coaching(transcript, job_title, requirements, verdict, match_score, resume=None):
     """Analyze a candidate's interview transcript and produce a private coaching report.
     Returns a dict with: communication_score, strengths (list), improvements (list), tips (list).
     Raises ValueError if the model's output doesn't parse into a usable report - callers
-    should treat that as "temporarily unavailable," not silently show a fabricated score."""
+    should treat that as "temporarily unavailable," not silently show a fabricated score.
+
+    When a resume is supplied, the model is also asked to cross-check what was actually
+    said against what the resume claims - flagging unsupported or inflated claims as an
+    Improvement rather than just grading communication style in isolation."""
+    resume_block = (
+        f"\nCandidate's resume (verify their answers against this - flag anything they "
+        f"claimed in the interview that isn't backed up here, or that contradicts it):\n"
+        f"{resume[:2000]}\n"
+    ) if resume else ""
+
     prompt = f"""You are a strict, critical communication coach analyzing a job interview. Your report is private — the candidate will use it to improve. Grade rigorously: most real candidates should NOT score above 75. Do not be encouraging or generous — an unspecific, rambling, or filler-heavy answer is a weak answer regardless of confidence or tone.
 
 Job: {job_title}
 Requirements: {(requirements or '')[:400]}
 AI verdict: {verdict or 'Not yet determined'}
 Match score: {match_score}/100 (0–100 scale)
-
+{resume_block}
 Interview transcript:
 {transcript[:3000]}
 
@@ -511,7 +521,7 @@ Produce a coaching report with:
    - 50-69: mixed — some substance but noticeably vague, generic, or unfocused answers.
    - Below 50: weak — mostly vague, evasive, filler-heavy, or off-topic answers.
 2. Exactly 2-3 Strengths — each MUST quote or closely paraphrase a specific moment from the transcript. Do not invent generic strengths ("good communicator") with no textual basis.
-3. Exactly 2-3 Improvements — concrete, specific gaps tied to actual answers given, not generic advice like "be more confident."
+3. Exactly 2-3 Improvements — concrete, specific gaps tied to actual answers given, not generic advice like "be more confident."{" At least one Improvement MUST address any claim in the transcript that the resume doesn't support or contradicts, if one exists." if resume else ""}
 4. Exactly 2-3 actionable Tips for their next interview, specific to the gaps you identified above.
 
 If the transcript is too short or low-effort to support a real assessment, say so honestly with a low score rather than padding the report.
@@ -558,6 +568,35 @@ Tip: <1 sentence>"""
         raise ValueError(f"Coaching report did not parse into a complete result: {content[:200]!r}")
 
     return result
+
+
+def generate_practice_questions(job_description, resume=None):
+    """Exactly 10 interview questions tailored to a job description (and,
+    when provided, a candidate's resume) for the resume job-match page's
+    video scan - shown after a scan completes so the candidate has
+    something concrete to practice next, not a generic question bank."""
+    resume_block = (
+        f"\nCandidate's resume - tailor several questions to probe specific "
+        f"experience it lists (depth, not just restating it):\n{resume[:2000]}\n"
+    ) if resume else ""
+
+    prompt = f"""Draft exactly 10 interview questions for this role, the kind a candidate should practice answering before a real interview.
+
+Job Description: {(job_description or '')[:2000]}
+{resume_block}
+Cover a mix: a few background/motivation questions, several hands-on experience questions tied to specifics in the job description{" and the candidate's resume" if resume else ""}, at least one behavioral/situational question, and at least one question probing a likely weak spot relative to the role's requirements.
+
+Respond with ONLY the 10 questions, one per line, no numbering, no extra commentary."""
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=500,
+        temperature=0.7,
+    )
+    lines = response.choices[0].message.content.strip().split("\n")
+    questions = [line.strip().lstrip("-•0123456789. ").strip() for line in lines if line.strip()]
+    return questions[:10]
 
 
 def generate_skills_roadmap(job_title, match_explanation, match_score, requirements):

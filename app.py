@@ -40,6 +40,7 @@ from ai_services import (
     AudioTooLargeError,
     generate_interview_question_preview,
     generate_interview_coaching,
+    generate_practice_questions,
 )
 from video_storage import create_scan_upload_url, download_scan_to_file, delete_scan
 
@@ -219,12 +220,21 @@ def resumemat_video_feedback():
     if not current_user.is_authenticated:
         return jsonify({"error": "Please log in to use this feature.", "login_required": True}), 401
 
-    body = request.get_json(silent=True) or {}
-    path = body.get('path') or ''
+    # multipart, not JSON - the optional resume file needs a file field, and
+    # Flask can't mix a file upload into a JSON body.
+    path = request.form.get('path') or ''
     if not _SCAN_PATH_RE.match(path):
         return jsonify({"error": "Missing or invalid upload reference. Please upload the video again."}), 400
 
-    job_text = (body.get('job_req') or '').strip()
+    job_text = (request.form.get('job_req') or '').strip()
+
+    resume_text = None
+    resume_file = request.files.get('resume')
+    if resume_file and resume_file.filename:
+        try:
+            resume_text = extract_text_from_file(resume_file.filename, resume_file.read()).strip() or None
+        except Exception:
+            logger.exception("Resume extraction failed for video scan - continuing without it")
 
     import tempfile
     with tempfile.NamedTemporaryFile(suffix=os.path.splitext(path)[1], delete=False) as tmp:
@@ -272,6 +282,7 @@ def resumemat_video_feedback():
                 requirements=job_text or "General interview performance.",
                 verdict=None,
                 match_score=None,
+                resume=resume_text,
             )
         except Exception:
             logger.exception("Video interview coaching report failed")
@@ -283,6 +294,36 @@ def resumemat_video_feedback():
         delete_scan(path)
 
     return jsonify({"transcript": transcript, "coaching": coaching})
+
+
+@app.route('/resume-jobmatch/video-feedback/questions', methods=['POST'])
+@limiter.limit("15 per hour")
+def resumemat_practice_questions():
+    """10 tailored practice questions shown beside the video scan's results
+    once a scan completes - reuses whatever job description/resume context
+    is on the page rather than asking for it twice."""
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Please log in to use this feature.", "login_required": True}), 401
+
+    job_text = (request.form.get('job_req') or '').strip()
+    if not job_text:
+        return jsonify({"error": "Add a job description first."}), 400
+
+    resume_text = None
+    resume_file = request.files.get('resume')
+    if resume_file and resume_file.filename:
+        try:
+            resume_text = extract_text_from_file(resume_file.filename, resume_file.read()).strip() or None
+        except Exception:
+            logger.exception("Resume extraction failed for practice questions - continuing without it")
+
+    try:
+        questions = generate_practice_questions(job_text, resume=resume_text)
+    except Exception:
+        logger.exception("Practice question generation failed")
+        return jsonify({"error": "Couldn't generate questions right now. Please try again."}), 500
+
+    return jsonify({"questions": questions})
 
 
 VALID_INTERVIEW_LENGTHS = ("short", "standard", "thorough")
