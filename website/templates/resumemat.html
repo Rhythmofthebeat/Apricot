@@ -1558,6 +1558,17 @@ return newId;
         return (resumeInput && resumeInput.files.length) ? resumeInput.files[0] : null;
     }
 
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // Kicks off processing, then polls for the result instead of waiting on
+    // one long-held request - the actual pipeline (download + ffmpeg +
+    // Whisper + a coaching GPT call) can run minutes for a long video, and a
+    // single request held open that long risks getting killed by a
+    // reverse-proxy timeout between the browser and this app regardless of
+    // anything this app's own server allows. Each poll is a trivial
+    // in-memory lookup, so none of them can time out that way.
     async function analyzeUploadedScan(path) {
         setProgress(100, 'Processing your interview...', 'Transcribing and scoring - this can take a few minutes for longer videos.');
         const formData = new FormData();
@@ -1566,10 +1577,28 @@ return newId;
         const resume = currentResumeFile();
         if (resume) formData.append('resume', resume);
 
-        const res = await fetch('/resume-jobmatch/video-feedback', { method: 'POST', body: formData });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Something went wrong analyzing your video. Please try again.');
-        return data;
+        const startRes = await fetch('/resume-jobmatch/video-feedback', { method: 'POST', body: formData });
+        const startData = await startRes.json().catch(() => ({}));
+        if (!startRes.ok) throw new Error(startData.error || 'Something went wrong analyzing your video. Please try again.');
+
+        const jobId = startData.job_id;
+        const startTime = Date.now();
+        const maxWaitMs = 20 * 60 * 1000;  // 20 minutes - generous ceiling, not an expected duration
+
+        while (Date.now() - startTime < maxWaitMs) {
+            await sleep(3000);
+            const pollRes = await fetch(`/resume-jobmatch/video-feedback/status/${jobId}`);
+            const job = await pollRes.json().catch(() => ({}));
+
+            if (!pollRes.ok) throw new Error(job.error || 'Lost track of that scan. Please try again.');
+            if (job.status === 'done') return job;
+            if (job.status === 'error') throw new Error(job.error || 'Something went wrong analyzing your video. Please try again.');
+
+            const elapsedMin = Math.floor((Date.now() - startTime) / 60000);
+            const elapsedSec = Math.floor(((Date.now() - startTime) % 60000) / 1000);
+            setProgress(100, 'Processing your interview...', `Still working - ${elapsedMin}m ${elapsedSec}s elapsed. Longer videos take longer to transcribe.`);
+        }
+        throw new Error('This is taking much longer than expected. Please try again with a shorter video.');
     }
 
     async function generatePracticeQuestions() {

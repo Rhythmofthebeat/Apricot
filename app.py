@@ -22,6 +22,7 @@ from PIL import Image
 import pytesseract
 from flask import send_from_directory
 import uuid
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
@@ -223,15 +224,93 @@ def resumemat_video_upload_url():
     })
 
 
+_VIDEO_SCAN_JOBS = {}
+_VIDEO_SCAN_JOBS_MAX = 200
+
+
+def _process_video_scan_job(job_id, path, job_text, resume_text):
+    """Runs the full scan pipeline in a background thread - download,
+    audio extraction, transcription, coaching - so the HTTP request that
+    kicked it off can return immediately instead of staying open for
+    however long this takes. A single long-held request is what risked
+    getting killed by a reverse-proxy timeout somewhere between the
+    browser and this app (Cloudflare, in front of Render, commonly caps a
+    single proxied request around 100 seconds) regardless of anything
+    gunicorn itself is configured to allow."""
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=os.path.splitext(path)[1], delete=False) as tmp:
+        tmp_path = tmp.name
+
+    # Not persisted anywhere - the temp file, any extracted audio, AND the
+    # Supabase Storage object itself are all deleted in `finally` below,
+    # regardless of which path out of this function is taken.
+    audio_path = tmp_path
+    try:
+        try:
+            download_scan_to_file(path, tmp_path)
+        except httpx.TimeoutException:
+            logger.exception("Timed out fetching uploaded video scan from storage")
+            _VIDEO_SCAN_JOBS[job_id] = {"status": "error", "error": "That video took too long to fetch for processing. Please try again."}
+            return
+        except Exception:
+            logger.exception("Failed to fetch uploaded video scan from storage")
+            _VIDEO_SCAN_JOBS[job_id] = {"status": "error", "error": "Couldn't find that upload. Please try uploading the video again."}
+            return
+
+        # Strips the video down to just its audio track first - that's what
+        # actually lets a long recording fit under Whisper's fixed 25MB cap,
+        # since the picture data (not the speech) is almost all of a video
+        # file's size. No-ops back to the original file if ffmpeg isn't
+        # available in this environment.
+        audio_path = extract_audio_for_transcription(tmp_path)
+
+        try:
+            transcript = transcribe_audio(audio_path)
+        except AudioTooLargeError as e:
+            _VIDEO_SCAN_JOBS[job_id] = {"status": "error", "error": str(e)}
+            return
+        except Exception:
+            logger.exception("Video interview transcription failed")
+            _VIDEO_SCAN_JOBS[job_id] = {"status": "error", "error": "Couldn't transcribe that video. Please try again."}
+            return
+
+        if not transcript.strip():
+            _VIDEO_SCAN_JOBS[job_id] = {"status": "error", "error": "Couldn't make out any speech in that video. Try again with clear audio."}
+            return
+
+        try:
+            coaching = generate_interview_coaching(
+                transcript=transcript,
+                job_title="this role",
+                requirements=job_text or "General interview performance.",
+                verdict=None,
+                match_score=None,
+                resume=resume_text,
+            )
+        except Exception:
+            logger.exception("Video interview coaching report failed")
+            _VIDEO_SCAN_JOBS[job_id] = {"status": "error", "error": "Transcribed your video, but couldn't generate the feedback report. Please try again."}
+            return
+
+        _VIDEO_SCAN_JOBS[job_id] = {"status": "done", "transcript": transcript, "coaching": coaching}
+    except Exception:
+        logger.exception(f"Unexpected error processing video scan job {job_id}")
+        _VIDEO_SCAN_JOBS[job_id] = {"status": "error", "error": "Something went wrong analyzing your video. Please try again."}
+    finally:
+        os.unlink(tmp_path)
+        if audio_path != tmp_path and os.path.exists(audio_path):
+            os.unlink(audio_path)
+        delete_scan(path)
+
+
 @app.route('/resume-jobmatch/video-feedback', methods=['POST'])
 @limiter.limit("15 per hour")
 def resumemat_video_feedback():
-    """Scans a video already uploaded straight to Supabase Storage (via the
-    signed URL from resumemat_video_upload_url above) and returns a
-    transcript plus a strict good/bad coaching report - same engine as the
-    logged-in practice hub, just a one-shot standalone version with no
-    session/history. Takes a storage path, not the video itself - this
-    route's own request body is tiny regardless of how long the video is."""
+    """Kicks off scanning a video already uploaded straight to Supabase
+    Storage (via the signed URL from resumemat_video_upload_url above) in a
+    background thread and returns a job id immediately - poll
+    resumemat_video_feedback_status below for the result. Takes a storage
+    path, not the video itself."""
     if not current_user.is_authenticated:
         return jsonify({"error": "Please log in to use this feature.", "login_required": True}), 401
 
@@ -251,64 +330,26 @@ def resumemat_video_feedback():
         except Exception:
             logger.exception("Resume extraction failed for video scan - continuing without it")
 
-    import tempfile
-    with tempfile.NamedTemporaryFile(suffix=os.path.splitext(path)[1], delete=False) as tmp:
-        tmp_path = tmp.name
+    if len(_VIDEO_SCAN_JOBS) >= _VIDEO_SCAN_JOBS_MAX:
+        _VIDEO_SCAN_JOBS.pop(next(iter(_VIDEO_SCAN_JOBS)), None)
+    job_id = uuid.uuid4().hex
+    _VIDEO_SCAN_JOBS[job_id] = {"status": "processing"}
+    threading.Thread(target=_process_video_scan_job, args=(job_id, path, job_text, resume_text), daemon=True).start()
 
-    # Not persisted anywhere - the temp file, any extracted audio, AND the
-    # Supabase Storage object itself are all deleted in `finally` below,
-    # regardless of which code path returns.
-    audio_path = tmp_path
-    try:
-        try:
-            # Streams to disk rather than loading the whole video into
-            # memory first - see download_scan_to_file's docstring for why
-            # that distinction matters on this app's single-worker server.
-            download_scan_to_file(path, tmp_path)
-        except httpx.TimeoutException:
-            logger.exception("Timed out fetching uploaded video scan from storage")
-            return jsonify({"error": "That video took too long to fetch for processing. Please try again."}), 400
-        except Exception:
-            logger.exception("Failed to fetch uploaded video scan from storage")
-            return jsonify({"error": "Couldn't find that upload. Please try uploading the video again."}), 400
+    return jsonify({"job_id": job_id}), 202
 
-        # Strips the video down to just its audio track first - that's what
-        # actually lets a long recording fit under Whisper's fixed 25MB cap,
-        # since the picture data (not the speech) is almost all of a video
-        # file's size. No-ops back to the original file if ffmpeg isn't
-        # available in this environment.
-        audio_path = extract_audio_for_transcription(tmp_path)
 
-        try:
-            transcript = transcribe_audio(audio_path)
-        except AudioTooLargeError as e:
-            return jsonify({"error": str(e)}), 400
-        except Exception:
-            logger.exception("Video interview transcription failed")
-            return jsonify({"error": "Couldn't transcribe that video. Please try again."}), 500
-
-        if not transcript.strip():
-            return jsonify({"error": "Couldn't make out any speech in that video. Try again with clear audio."}), 400
-
-        try:
-            coaching = generate_interview_coaching(
-                transcript=transcript,
-                job_title="this role",
-                requirements=job_text or "General interview performance.",
-                verdict=None,
-                match_score=None,
-                resume=resume_text,
-            )
-        except Exception:
-            logger.exception("Video interview coaching report failed")
-            return jsonify({"error": "Transcribed your video, but couldn't generate the feedback report. Please try again."}), 500
-    finally:
-        os.unlink(tmp_path)
-        if audio_path != tmp_path and os.path.exists(audio_path):
-            os.unlink(audio_path)
-        delete_scan(path)
-
-    return jsonify({"transcript": transcript, "coaching": coaching})
+@app.route('/resume-jobmatch/video-feedback/status/<job_id>')
+def resumemat_video_feedback_status(job_id):
+    """Polled every couple seconds by the browser while a scan is running -
+    each request is a trivial in-memory dict lookup, so none of them can
+    ever time out the way the single long-held request this replaced could."""
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Please log in to use this feature."}), 401
+    job = _VIDEO_SCAN_JOBS.get(job_id)
+    if not job:
+        return jsonify({"error": "Unknown or expired job."}), 404
+    return jsonify(job)
 
 
 @app.route('/resume-jobmatch/video-feedback/questions', methods=['POST'])
