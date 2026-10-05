@@ -643,10 +643,11 @@
                                 </div>
                             </div>
                             <div class="score-ring-lg" id="videoScoreRing">-</div>
-                            <div class="fw-bold mb-1" style="font-size:1rem;">Communication Score</div>
+                            <div class="fw-bold mb-1" style="font-size:1rem;" id="videoScoreLabel">Overall Score</div>
                             <div class="score-ring-fill">
                                 <div class="score-ring-fill-bar" id="videoScoreBar"></div>
                             </div>
+                            <p class="text-muted small mb-1" id="video-communication-score-line" style="display:none;"></p>
                             <p class="text-muted small mb-4">This is private and only visible to you.</p>
                             <div class="coaching-grid" id="videoCoachingGrid"></div>
                         </div>
@@ -1388,7 +1389,7 @@ return newId;
         }
     });
 
-    function showVideoCoachingReport(coaching, jobFit) {
+    function showVideoCoachingReport(coaching, jobFit, overallScore) {
         const fitBox = document.getElementById('video-job-fit');
         if (jobFit && jobFit.verdict) {
             const fitColors = { 'Strong Yes': '#198754', 'Yes': '#4a90e2', 'No': '#ffc107', 'Strong No': '#dc3545' };
@@ -1421,17 +1422,32 @@ return newId;
         }
 
         const cs = coaching.communication_score || 0;
-        const color = cs >= 75 ? 'var(--success)' : (cs >= 50 ? 'var(--warning)' : 'var(--danger)');
+        // Falls back to the communication score alone when there's no
+        // separate overall score (e.g. restoring an older saved scan from
+        // before this existed, or no job description was given at scan time).
+        const headline = (typeof overallScore === 'number') ? overallScore : cs;
+        const color = headline >= 75 ? 'var(--success)' : (headline >= 50 ? 'var(--warning)' : 'var(--danger)');
 
         const ring = document.getElementById('videoScoreRing');
-        ring.textContent = cs;
+        ring.textContent = headline;
         ring.style.borderColor = color;
         ring.style.color = color;
+
+        const label = document.getElementById('videoScoreLabel');
+        const csLine = document.getElementById('video-communication-score-line');
+        if (typeof overallScore === 'number' && overallScore !== cs) {
+            label.textContent = 'Overall Score';
+            csLine.textContent = `Communication Score: ${cs}/100`;
+            csLine.style.display = 'block';
+        } else {
+            label.textContent = 'Communication Score';
+            csLine.style.display = 'none';
+        }
 
         setTimeout(() => {
             const bar = document.getElementById('videoScoreBar');
             bar.style.background = color;
-            bar.style.width = cs + '%';
+            bar.style.width = headline + '%';
         }, 100);
 
         const grid = document.getElementById('videoCoachingGrid');
@@ -1510,7 +1526,7 @@ return newId;
                 </div>
             `;
             div.querySelector('.view-btn').addEventListener('click', () => {
-                showVideoCoachingReport(item.coaching || {}, item.jobFit || null);
+                showVideoCoachingReport(item.coaching || {}, item.jobFit || null, item.overallScore);
                 document.getElementById('video-transcript').textContent = item.transcript || '';
                 resultsBox.style.display = 'block';
                 resultsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1524,12 +1540,14 @@ return newId;
         });
     }
 
-    function saveVideoScan(coaching, transcript, jobFit) {
+    function saveVideoScan(coaching, transcript, jobFit, overallScore) {
         try {
             const history = JSON.parse(localStorage.getItem(VIDEO_HISTORY_KEY)) || [];
+            const headline = (typeof overallScore === 'number') ? overallScore : (coaching.communication_score || 0);
             history.unshift({
                 id: Date.now(),
-                score: coaching.communication_score || 0,
+                score: headline,
+                overallScore: headline,
                 time: new Date().toLocaleString(),
                 coaching,
                 transcript,
@@ -1728,9 +1746,9 @@ return newId;
             const data = await analyzeUploadedScan(path);
 
             const coaching = data.coaching || {};
-            showVideoCoachingReport(coaching, data.job_fit || null);
+            showVideoCoachingReport(coaching, data.job_fit || null, data.overall_score);
             document.getElementById('video-transcript').textContent = data.transcript || '';
-            saveVideoScan(coaching, data.transcript || '', data.job_fit || null);
+            saveVideoScan(coaching, data.transcript || '', data.job_fit || null, data.overall_score);
 
             resultsBox.style.display = 'block';
             resultsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

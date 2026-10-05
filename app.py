@@ -43,6 +43,7 @@ from ai_services import (
     generate_interview_coaching,
     generate_practice_questions,
     generate_job_fit_verdict,
+    JOB_FIT_VERDICT_SCORE,
 )
 from video_storage import create_scan_upload_url, download_scan_to_file, delete_scan
 
@@ -304,7 +305,26 @@ def _process_video_scan_job(job_id, path, job_text, resume_text):
             _VIDEO_SCAN_JOBS[job_id] = {"status": "error", "error": "Transcribed your video, but couldn't generate the feedback report. Please try again."}
             return
 
-        _VIDEO_SCAN_JOBS[job_id] = {"status": "done", "transcript": transcript, "coaching": coaching, "job_fit": job_fit}
+        # The headline number shown to the candidate - weighted mostly
+        # toward whether their answer actually fit the job (70%), with
+        # communication style as a smaller factor (30%). Communication
+        # Score alone is graded harshly by design (most real answers score
+        # well under 75), so leading with it as THE score made a candidate
+        # whose answer was genuinely relevant look bad overall just for not
+        # being maximally polished. Falls back to communication score alone
+        # when there's no job description to judge fit against.
+        if job_fit and job_fit.get("verdict") in JOB_FIT_VERDICT_SCORE:
+            overall_score = round(JOB_FIT_VERDICT_SCORE[job_fit["verdict"]] * 0.7 + coaching["communication_score"] * 0.3)
+        else:
+            overall_score = coaching["communication_score"]
+
+        _VIDEO_SCAN_JOBS[job_id] = {
+            "status": "done",
+            "transcript": transcript,
+            "coaching": coaching,
+            "job_fit": job_fit,
+            "overall_score": overall_score,
+        }
     except Exception:
         logger.exception(f"Unexpected error processing video scan job {job_id}")
         _VIDEO_SCAN_JOBS[job_id] = {"status": "error", "error": "Something went wrong analyzing your video. Please try again."}
