@@ -73,6 +73,21 @@ _RESUME_MATCH_CACHE = {}
 _RESUME_MATCH_CACHE_MAX = 200  # evict oldest if a token is never consumed
 
 
+@app.errorhandler(429)
+def handle_rate_limit_exceeded(e):
+    """Flask-Limiter's own default 429 is a plain HTML/text page, not JSON -
+    every fetch()/XHR-based route in this app (which is most rate-limited
+    ones) would fail to parse that as JSON and fall back to a generic
+    "something went wrong" with no indication it was actually a rate limit,
+    which is exactly what happened debugging the video scan feature: enough
+    retries in an hour hit this silently. A handful of routes are rate-
+    limited but driven by a traditional full-page form POST rather than
+    fetch - those will now render this JSON as plain text on the page
+    instead of Werkzeug's default error page if someone exceeds their
+    limit, which is a pre-existing rough edge either way, not a regression."""
+    return jsonify({"error": "You've made a lot of requests here recently - please wait a bit and try again."}), 429
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Routes
 # ══════════════════════════════════════════════════════════════════════════════
