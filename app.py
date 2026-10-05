@@ -41,7 +41,7 @@ from ai_services import (
     generate_interview_question_preview,
     generate_interview_coaching,
 )
-from video_storage import create_scan_upload_url, download_scan, delete_scan
+from video_storage import create_scan_upload_url, download_scan_to_file, delete_scan
 
 #  Load env & config
 # override=False (the dotenv default) - see website/__init__.py for why this
@@ -226,18 +226,8 @@ def resumemat_video_feedback():
 
     job_text = (body.get('job_req') or '').strip()
 
-    try:
-        video_bytes = download_scan(path)
-    except httpx.TimeoutException:
-        logger.exception("Timed out fetching uploaded video scan from storage")
-        return jsonify({"error": "That video took too long to fetch for processing. Please try again."}), 400
-    except Exception:
-        logger.exception("Failed to fetch uploaded video scan from storage")
-        return jsonify({"error": "Couldn't find that upload. Please try uploading the video again."}), 400
-
     import tempfile
     with tempfile.NamedTemporaryFile(suffix=os.path.splitext(path)[1], delete=False) as tmp:
-        tmp.write(video_bytes)
         tmp_path = tmp.name
 
     # Not persisted anywhere - the temp file, any extracted audio, AND the
@@ -245,6 +235,18 @@ def resumemat_video_feedback():
     # regardless of which code path returns.
     audio_path = tmp_path
     try:
+        try:
+            # Streams to disk rather than loading the whole video into
+            # memory first - see download_scan_to_file's docstring for why
+            # that distinction matters on this app's single-worker server.
+            download_scan_to_file(path, tmp_path)
+        except httpx.TimeoutException:
+            logger.exception("Timed out fetching uploaded video scan from storage")
+            return jsonify({"error": "That video took too long to fetch for processing. Please try again."}), 400
+        except Exception:
+            logger.exception("Failed to fetch uploaded video scan from storage")
+            return jsonify({"error": "Couldn't find that upload. Please try uploading the video again."}), 400
+
         # Strips the video down to just its audio track first - that's what
         # actually lets a long recording fit under Whisper's fixed 25MB cap,
         # since the picture data (not the speech) is almost all of a video

@@ -11,7 +11,9 @@ at playback time rather than stored directly, since signed URLs expire.
 import logging
 import uuid
 
-from website.supabase_client import supabase
+import httpx
+
+from website.supabase_client import supabase, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -97,12 +99,27 @@ def create_scan_upload_url(extension):
     return signed["signed_url"], path
 
 
-def download_scan(path):
-    """Fetches a video scan's bytes server-side for processing - the
+def download_scan_to_file(path, dest_path):
+    """Streams a video scan straight to disk for processing - the
     service-role client makes this an outbound request from our server to
     Supabase, not an inbound one through Render's edge, so it isn't subject
-    to the same body-size limit that direct uploads to our own domain hit."""
-    return supabase.storage.from_(VIDEO_SCAN_BUCKET).download(path)
+    to the same body-size limit that direct uploads to our own domain hit.
+
+    Streams in chunks rather than using the SDK's plain .download(), which
+    loads the entire file into memory as one bytes object first - for a
+    multi-hundred-MB video that risks OOM-killing the single gunicorn worker
+    process this whole site runs on, taking every visitor down with it, not
+    just the one request."""
+    url = f"{SUPABASE_URL}/storage/v1/object/{VIDEO_SCAN_BUCKET}/{path}"
+    headers = {
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+    }
+    with httpx.stream("GET", url, headers=headers, timeout=300) as response:
+        response.raise_for_status()
+        with open(dest_path, "wb") as f:
+            for chunk in response.iter_bytes(chunk_size=1024 * 1024):
+                f.write(chunk)
 
 
 def delete_scan(path):
