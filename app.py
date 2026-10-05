@@ -40,6 +40,7 @@ from ai_services import (
     generate_interview_question_preview,
     generate_interview_coaching,
 )
+from video_storage import create_scan_upload_url, download_scan, delete_scan
 
 #  Load env & config
 # override=False (the dotenv default) - see website/__init__.py for why this
@@ -175,29 +176,68 @@ def resumemat():
     )
 
 
-@app.route('/resume-jobmatch/video-feedback', methods=['POST'])
-@limiter.limit("15 per hour")
-def resumemat_video_feedback():
-    """Upload a video of yourself answering an interview question (right on
-    the resume job-match page) and get back a transcript plus a strict
-    good/bad coaching report - same engine as the logged-in practice hub,
-    just a one-shot standalone version with no session/history."""
+_SCAN_PATH_RE = re.compile(r"^scans/[0-9a-f]{32}\.[a-z0-9]{1,10}$")
+
+
+@app.route('/resume-jobmatch/video-feedback/upload-url', methods=['POST'])
+@limiter.limit("30 per hour")
+def resumemat_video_upload_url():
+    """Hands back a one-time signed URL the browser uploads the raw video
+    to directly in Supabase Storage, instead of sending it to this app's own
+    /video-feedback route. Needed because large uploads to avants.ai itself
+    get rejected at the edge (Render/Cloudflare) well under what a longer
+    interview video needs - a direct-to-storage upload bypasses that
+    entirely since the big transfer never touches this app's domain."""
     if not current_user.is_authenticated:
         return jsonify({"error": "Please log in to use this feature.", "login_required": True}), 401
 
-    video_file = request.files.get('video')
-    if not video_file or not video_file.filename:
-        return jsonify({"error": "Please upload a video of your interview answer."}), 400
+    filename = (request.get_json(silent=True) or {}).get('filename') or ''
+    ext = audio_file_extension(filename)
+    try:
+        upload_url, path = create_scan_upload_url(ext)
+    except Exception:
+        logger.exception("Failed to create a signed video-scan upload URL")
+        return jsonify({"error": "Couldn't prepare the upload. Please try again."}), 500
 
-    job_text = (request.form.get('job_req') or '').strip()
+    return jsonify({
+        "upload_url": upload_url,
+        "path": path,
+        "anon_key": os.environ.get("SUPABASE_ANON_KEY"),
+    })
+
+
+@app.route('/resume-jobmatch/video-feedback', methods=['POST'])
+@limiter.limit("15 per hour")
+def resumemat_video_feedback():
+    """Scans a video already uploaded straight to Supabase Storage (via the
+    signed URL from resumemat_video_upload_url above) and returns a
+    transcript plus a strict good/bad coaching report - same engine as the
+    logged-in practice hub, just a one-shot standalone version with no
+    session/history. Takes a storage path, not the video itself - this
+    route's own request body is tiny regardless of how long the video is."""
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Please log in to use this feature.", "login_required": True}), 401
+
+    body = request.get_json(silent=True) or {}
+    path = body.get('path') or ''
+    if not _SCAN_PATH_RE.match(path):
+        return jsonify({"error": "Missing or invalid upload reference. Please upload the video again."}), 400
+
+    job_text = (body.get('job_req') or '').strip()
+
+    try:
+        video_bytes = download_scan(path)
+    except Exception:
+        logger.exception("Failed to fetch uploaded video scan from storage")
+        return jsonify({"error": "Couldn't find that upload. Please try uploading the video again."}), 400
 
     import tempfile
-    with tempfile.NamedTemporaryFile(suffix=audio_file_extension(video_file.filename), delete=False) as tmp:
-        video_file.save(tmp.name)
+    with tempfile.NamedTemporaryFile(suffix=os.path.splitext(path)[1], delete=False) as tmp:
+        tmp.write(video_bytes)
         tmp_path = tmp.name
 
-    # Not persisted anywhere - both the original upload and any extracted
-    # audio live only in this temp dir and are deleted in `finally` below,
+    # Not persisted anywhere - the temp file, any extracted audio, AND the
+    # Supabase Storage object itself are all deleted in `finally` below,
     # regardless of which code path returns.
     audio_path = tmp_path
     try:
@@ -234,6 +274,7 @@ def resumemat_video_feedback():
         os.unlink(tmp_path)
         if audio_path != tmp_path and os.path.exists(audio_path):
             os.unlink(audio_path)
+        delete_scan(path)
 
     return jsonify({"transcript": transcript, "coaching": coaching})
 

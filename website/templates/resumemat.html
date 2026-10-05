@@ -1473,41 +1473,66 @@ return newId;
         progressSubtext.textContent = subtext;
     }
 
-    // XMLHttpRequest, not fetch - fetch has no reliable, broadly-supported
-    // way to report UPLOAD progress (only download), and a multi-hundred-MB
-    // video with zero feedback for minutes reads as "this is broken" even
-    // when it's working fine.
-    function uploadVideoWithProgress(formData) {
+    // Uploads go DIRECTLY to Supabase Storage via a signed URL, not to this
+    // app's own /resume-jobmatch/video-feedback route - large uploads sent
+    // straight to avants.ai get rejected at the edge well under what a
+    // longer interview video needs, regardless of anything this app's own
+    // server does. A direct-to-storage upload bypasses that since the big
+    // transfer never touches this app's domain at all - our server only
+    // ever sees the small storage path afterward, via the JSON POST below.
+    //
+    // XMLHttpRequest, not fetch, for the PUT itself - fetch has no
+    // reliable, broadly-supported way to report UPLOAD progress (only
+    // download), and a multi-hundred-MB video with zero feedback for
+    // minutes reads as "this is broken" even when it's working fine.
+    function uploadVideoWithProgress(file) {
         return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/resume-jobmatch/video-feedback');
+            fetch('/resume-jobmatch/video-feedback/upload-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: file.name }),
+            })
+                .then(res => res.json().then(data => ({ ok: res.ok, data })))
+                .then(({ ok, data }) => {
+                    if (!ok) { reject(new Error(data.error || 'Could not prepare the upload.')); return; }
 
-            xhr.upload.addEventListener('progress', (e) => {
-                if (!e.lengthComputable) return;
-                const pct = Math.round((e.loaded / e.total) * 100);
-                setProgress(pct, 'Uploading your video...', pct + '% (' + formatMB(e.loaded) + ' / ' + formatMB(e.total) + ')');
-            });
-            xhr.upload.addEventListener('load', () => {
-                // Upload is done - the server now has to extract audio,
-                // transcribe, and generate the report, which has no
-                // progress signal of its own, hence the indeterminate copy.
-                setProgress(100, 'Processing your interview...', 'Transcribing and scoring - this can take a few minutes for longer videos.');
-            });
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('PUT', data.upload_url);
+                    xhr.setRequestHeader('apikey', data.anon_key);
+                    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+                    xhr.setRequestHeader('x-upsert', 'true');
 
-            xhr.addEventListener('load', () => {
-                let data = {};
-                try { data = JSON.parse(xhr.responseText); } catch (e) { /* non-JSON error page */ }
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    resolve(data);
-                } else {
-                    reject(new Error(data.error || `Request failed (HTTP ${xhr.status}).`));
-                }
-            });
-            xhr.addEventListener('error', () => reject(new Error('The connection was lost while uploading. This usually means the video was too large for the connection, or the network dropped mid-upload.')));
-            xhr.addEventListener('abort', () => reject(new Error('Upload was cancelled.')));
-
-            xhr.send(formData);
+                    xhr.upload.addEventListener('progress', (e) => {
+                        if (!e.lengthComputable) return;
+                        const pct = Math.round((e.loaded / e.total) * 100);
+                        setProgress(pct, 'Uploading your video...', pct + '% (' + formatMB(e.loaded) + ' / ' + formatMB(e.total) + ')');
+                    });
+                    xhr.addEventListener('load', () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            resolve(data.path);
+                        } else {
+                            reject(new Error(`Upload failed (HTTP ${xhr.status}). Please try again.`));
+                        }
+                    });
+                    xhr.addEventListener('error', () => reject(new Error('The connection was lost while uploading. Please check your network and try again.')));
+                    xhr.addEventListener('abort', () => reject(new Error('Upload was cancelled.')));
+                    xhr.send(file);
+                })
+                .catch(() => reject(new Error('Could not prepare the upload. Please try again.')));
         });
+    }
+
+    async function analyzeUploadedScan(path) {
+        setProgress(100, 'Processing your interview...', 'Transcribing and scoring - this can take a few minutes for longer videos.');
+        const jobTextarea = document.querySelector('textarea[name="job_req"]');
+        const res = await fetch('/resume-jobmatch/video-feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path, job_req: jobTextarea ? jobTextarea.value : '' }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Something went wrong analyzing your video. Please try again.');
+        return data;
     }
 
     analyzeBtn.addEventListener('click', async () => {
@@ -1519,12 +1544,8 @@ return newId;
         analyzeBtn.disabled = true;
 
         try {
-            const formData = new FormData();
-            formData.append('video', fileInput.files[0]);
-            const jobTextarea = document.querySelector('textarea[name="job_req"]');
-            formData.append('job_req', jobTextarea ? jobTextarea.value : '');
-
-            const data = await uploadVideoWithProgress(formData);
+            const path = await uploadVideoWithProgress(fileInput.files[0]);
+            const data = await analyzeUploadedScan(path);
 
             const coaching = data.coaching || {};
             showVideoCoachingReport(coaching);

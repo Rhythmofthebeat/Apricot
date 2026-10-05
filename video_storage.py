@@ -9,6 +9,7 @@ Storage bucket instead, accessed via short-lived signed URLs generated
 at playback time rather than stored directly, since signed URLs expire.
 """
 import logging
+import uuid
 
 from website.supabase_client import supabase
 
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 INTERVIEW_VIDEO_BUCKET = "interview-videos"
 MEETING_RECORDING_BUCKET = "meeting-recordings"
+VIDEO_SCAN_BUCKET = "video-scan-uploads"
 
 _EXT_BY_CONTENT_TYPE = {
     "video/webm": "webm", "audio/webm": "webm",
@@ -77,3 +79,36 @@ def delete_interview_videos(application_id):
             supabase.storage.from_(INTERVIEW_VIDEO_BUCKET).remove(paths)
     except Exception:
         logger.exception(f"Failed to clean up interview videos for application {application_id}")
+
+
+def create_scan_upload_url(extension):
+    """One-time signed upload URL for the standalone resume job-match page's
+    video scan (app.py's /resume-jobmatch/video-feedback) - the browser PUTs
+    the raw video straight to Supabase Storage with this URL, using only the
+    public anon key, which bypasses our own app's request path for the large
+    transfer entirely. That matters because Render's edge rejects large
+    request bodies sent to this app's own domain well before reaching
+    gunicorn - a signed upload URL sidesteps that since the upload never
+    touches avants.ai at all, only Supabase's own endpoint. Returns
+    (upload_url, path) - path is what the browser reports back afterward so
+    the server can fetch and then delete the same object."""
+    path = f"scans/{uuid.uuid4().hex}{extension}"
+    signed = supabase.storage.from_(VIDEO_SCAN_BUCKET).create_signed_upload_url(path)
+    return signed["signed_url"], path
+
+
+def download_scan(path):
+    """Fetches a video scan's bytes server-side for processing - the
+    service-role client makes this an outbound request from our server to
+    Supabase, not an inbound one through Render's edge, so it isn't subject
+    to the same body-size limit that direct uploads to our own domain hit."""
+    return supabase.storage.from_(VIDEO_SCAN_BUCKET).download(path)
+
+
+def delete_scan(path):
+    """Best-effort cleanup - a scan's video is never meant to be retained
+    once it's been transcribed, only the transcript/coaching report are."""
+    try:
+        supabase.storage.from_(VIDEO_SCAN_BUCKET).remove([path])
+    except Exception:
+        logger.exception(f"Failed to delete video scan upload at {path}")
