@@ -22,5 +22,13 @@ supabase = create_client(
     options=SyncClientOptions(
         auto_refresh_token=False,
         persist_session=False,
+        # supabase-py's own default here is 20 seconds, which a server-to-
+        # server download/upload of anything beyond a small file can easily
+        # exceed - when it does, the client raises a plain timeout exception
+        # that looks identical to any other failure to a broad except block,
+        # so a slow transfer reads as "file not found" instead of what it
+        # actually is. Affects every storage call this client makes
+        # (interview videos, meeting recordings, video-scan uploads).
+        storage_client_timeout=300,
     ),
 )

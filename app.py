@@ -5,6 +5,7 @@ from flask_mail import Message
 from flask import Flask, render_template, request, jsonify, current_app, Response, flash, redirect, url_for
 from flask_login import login_required, current_user
 import openai
+import httpx
 import io
 import json
 import re
@@ -227,6 +228,9 @@ def resumemat_video_feedback():
 
     try:
         video_bytes = download_scan(path)
+    except httpx.TimeoutException:
+        logger.exception("Timed out fetching uploaded video scan from storage")
+        return jsonify({"error": "That video took too long to fetch for processing. Please try again."}), 400
     except Exception:
         logger.exception("Failed to fetch uploaded video scan from storage")
         return jsonify({"error": "Couldn't find that upload. Please try uploading the video again."}), 400
