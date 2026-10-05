@@ -1437,6 +1437,13 @@ return newId;
         const grid = document.getElementById('videoCoachingGrid');
         let html = '';
 
+        if (coaching.detailed_analysis) {
+            html += `<div class="coaching-block">
+                <div class="coaching-block-title"><i class="fas fa-magnifying-glass me-1" style="color:var(--primary);"></i>Detailed Analysis</div>
+                <p class="mb-0" style="font-size:0.84rem; line-height:1.5;">${coaching.detailed_analysis}</p>
+            </div>`;
+        }
+
         if (coaching.strengths?.length) {
             html += `<div class="coaching-block">
                 <div class="coaching-block-title"><i class="fas fa-check-circle me-1" style="color:var(--success);"></i>What you did well</div>`;

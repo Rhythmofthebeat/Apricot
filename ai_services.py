@@ -504,7 +504,7 @@ def generate_interview_coaching(transcript, job_title, requirements, verdict, ma
         f"{resume[:2000]}\n"
     ) if resume else ""
 
-    prompt = f"""You are a strict, critical communication coach analyzing a job interview. Your report is private — the candidate will use it to improve. Grade rigorously: most real candidates should NOT score above 75. Do not be encouraging or generous — an unspecific, rambling, or filler-heavy answer is a weak answer regardless of confidence or tone.
+    prompt = f"""You are a strict, critical communication coach analyzing a job interview. Your report is private and shown only to the candidate who gave this interview - address THEM directly throughout as "you"/"your", never in the third person as "the candidate" or "they". Grade rigorously: most real candidates should NOT score above 75. Do not be encouraging or generous — an unspecific, rambling, or filler-heavy answer is a weak answer regardless of confidence or tone.
 
 Job: {job_title}
 Requirements: {(requirements or '')[:400]}
@@ -520,15 +520,17 @@ Produce a coaching report with:
    - 70-89: solid — mostly specific with concrete examples, a few vague moments.
    - 50-69: mixed — some substance but noticeably vague, generic, or unfocused answers.
    - Below 50: weak — mostly vague, evasive, filler-heavy, or off-topic answers.
-2. Exactly 2-3 Strengths — each MUST quote or closely paraphrase a specific moment from the transcript. Do not invent generic strengths ("good communicator") with no textual basis.
-3. Exactly 2-3 Improvements — concrete, specific gaps tied to actual answers given, not generic advice like "be more confident."{" At least one Improvement MUST address any claim in the transcript that the resume doesn't support or contradicts, if one exists." if resume else ""}
-4. Exactly 2-3 actionable Tips for their next interview, specific to the gaps you identified above.
+2. A Detailed Analysis - 4-6 sentences of real prose (not bullets), written directly to the candidate as "you", giving a fuller narrative assessment: what your answer(s) actually covered, how specific vs. generic you were, and how that lines up with what this role needs.
+3. Exactly 2-3 Strengths — each MUST quote or closely paraphrase a specific moment from the transcript, addressed to "you" (e.g. "You gave a concrete example when you described..."). Do not invent generic strengths ("good communicator") with no textual basis.
+4. Exactly 2-3 Improvements — concrete, specific gaps tied to your actual answers, addressed to "you", not generic advice like "be more confident."{" At least one Improvement MUST address any claim in the transcript that your resume doesn't support or contradicts, if one exists." if resume else ""}
+5. Exactly 2-3 actionable Tips for your next interview, addressed to "you", specific to the gaps identified above.
 
-If the transcript is too short or low-effort to support a real assessment, say so honestly with a low score rather than padding the report.
+If the transcript is too short or low-effort to support a real assessment, say so honestly to the candidate with a low score rather than padding the report.
 
 Respond EXACTLY in this format, with no extra commentary:
 CommunicationScore: <number>
-Strength: <1 sentence referencing something specific they said>
+DetailedAnalysis: <4-6 sentences of prose, addressed to "you">
+Strength: <1 sentence referencing something specific you said>
 Strength: <1 sentence>
 Improvement: <1 sentence identifying a specific gap>
 Improvement: <1 sentence>
@@ -539,13 +541,14 @@ Tip: <1 sentence>"""
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=600,
+        max_tokens=800,
         temperature=0.2,
     )
     content = response.choices[0].message.content.strip()
 
     result = {
         "communication_score": None,
+        "detailed_analysis": None,
         "strengths": [],
         "improvements": [],
         "tips": [],
@@ -556,6 +559,8 @@ Tip: <1 sentence>"""
             match = re.search(r"\d+", line)
             if match:
                 result["communication_score"] = max(0, min(100, int(match.group())))
+        elif line.startswith("DetailedAnalysis:"):
+            result["detailed_analysis"] = line[18:].strip()
         elif line.startswith("Strength:"):
             result["strengths"].append(line[9:].strip())
         elif line.startswith("Improvement:"):
@@ -614,7 +619,7 @@ def generate_job_fit_verdict(transcript, job_description):
     all (as opposed to reasoning, which explains the overall verdict).
     Raises ValueError if the model's output doesn't parse - same
     treat-as-unavailable contract as generate_interview_coaching."""
-    prompt = f"""You are assessing whether a candidate's interview answer demonstrates they'd be a good fit for this specific job, based only on what they actually said - not how well or confidently they said it.
+    prompt = f"""You are assessing whether a candidate's interview answer demonstrates they'd be a good fit for this specific job, based only on what they actually said - not how well or confidently they said it. This assessment is shown directly to the candidate themselves - address THEM as "you"/"your" throughout, never in the third person as "the candidate" or "they".
 
 Job Description:
 {(job_description or '')[:2000]}
@@ -622,20 +627,20 @@ Job Description:
 Candidate's interview answer(s):
 {transcript[:3000]}
 
-Judge strictly: does the SUBSTANCE of what they said show relevant experience, skills, or understanding that matches this job's requirements? A well-spoken but generic or irrelevant answer should NOT score well here. A specific, relevant answer that directly addresses the role should score well even if communication style is plain.
+Judge strictly: does the SUBSTANCE of what you said show relevant experience, skills, or understanding that matches this job's requirements? A well-spoken but generic or irrelevant answer should NOT score well here. A specific, relevant answer that directly addresses the role should score well even if communication style is plain.
 
-Also identify specific requirements, skills, or responsibilities named in the job description that this answer never addressed at all - not weaknesses in how they answered, but concrete things the JD asks for that simply never came up. List 1-3; if the answer genuinely covers everything the JD calls for, say so with zero items rather than inventing gaps.
+Also identify specific requirements, skills, or responsibilities named in the job description that this answer never addressed at all - not weaknesses in how you answered, but concrete things the JD asks for that simply never came up. List 1-3; if the answer genuinely covers everything the JD calls for, say so with zero items rather than inventing gaps.
 
 Respond EXACTLY in this format, no extra commentary:
 Verdict: <Strong Yes|Yes|No|Strong No>
-Reasoning: <1-2 sentences explaining why, referencing specifics from both the job description and what they said>
+Reasoning: <3-5 sentences, addressed to "you", going into specific detail - what in your answer worked for this role, what specifically fell short, and why, citing concrete phrases from both the job description and what you said>
 Missed: <a specific JD requirement/skill never addressed, or omit this line entirely if there are none>
 Missed: <another, if applicable>"""
 
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=300,
+        max_tokens=450,
         temperature=0.2,
     )
     content = response.choices[0].message.content.strip()
