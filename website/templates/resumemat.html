@@ -628,10 +628,16 @@
                     <div id="video-results" style="display:none;" class="mt-2">
                         <hr>
                         <div class="coaching-wrap">
-                            <div id="video-job-fit" style="display:none;" class="mb-4">
-                                <div class="small fw-bold text-muted text-uppercase mb-1" style="letter-spacing:0.05em; font-size:0.68rem;">Fit for this role (based on what you said)</div>
-                                <span class="badge" id="video-job-fit-badge" style="font-size:0.85rem; padding:6px 14px;">-</span>
-                                <p class="text-muted small mt-2 mb-0" id="video-job-fit-reasoning"></p>
+                            <div id="video-job-fit" style="display:none;" class="mb-4 text-start">
+                                <div class="small fw-bold text-muted text-uppercase mb-1 text-center" style="letter-spacing:0.05em; font-size:0.68rem;">Fit for this role (based on what you said)</div>
+                                <div class="text-center">
+                                    <span class="badge" id="video-job-fit-badge" style="font-size:0.85rem; padding:6px 14px;">-</span>
+                                </div>
+                                <p class="text-muted small mt-2 mb-0 text-center" id="video-job-fit-reasoning"></p>
+                                <div id="video-job-fit-missed-wrap" style="display:none;" class="coaching-block mt-3">
+                                    <div class="coaching-block-title"><i class="fas fa-circle-exclamation me-1" style="color:var(--warning);"></i>From the JD, never addressed</div>
+                                    <div id="video-job-fit-missed"></div>
+                                </div>
                             </div>
                             <div class="score-ring-lg" id="videoScoreRing">-</div>
                             <div class="fw-bold mb-1" style="font-size:1rem;">Communication Score</div>
@@ -1389,6 +1395,23 @@ return newId;
             badge.style.backgroundColor = fitColors[jobFit.verdict] || '#6c757d';
             badge.style.color = '#fff';
             document.getElementById('video-job-fit-reasoning').textContent = jobFit.reasoning || '';
+
+            const missedWrap = document.getElementById('video-job-fit-missed-wrap');
+            const missedList = document.getElementById('video-job-fit-missed');
+            const missed = jobFit.missed_requirements || [];
+            if (missed.length) {
+                missedList.innerHTML = '';
+                missed.forEach(m => {
+                    const row = document.createElement('div');
+                    row.className = 'coaching-item';
+                    row.innerHTML = `<div class="ci-dot ci-i"><i class="fas fa-triangle-exclamation"></i></div><span>${m}</span>`;
+                    missedList.appendChild(row);
+                });
+                missedWrap.style.display = 'block';
+            } else {
+                missedWrap.style.display = 'none';
+            }
+
             fitBox.style.display = 'block';
         } else {
             fitBox.style.display = 'none';

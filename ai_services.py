@@ -608,7 +608,10 @@ def generate_job_fit_verdict(transcript, job_description):
     interview answer demonstrates fit for a job description - distinct from
     generate_interview_coaching's communication-style score, this judges the
     content/substance against the role's requirements, not how well they
-    spoke. Returns {"verdict": one of JOB_FIT_VERDICTS, "reasoning": str}.
+    spoke. Returns {"verdict": one of JOB_FIT_VERDICTS, "reasoning": str,
+    "missed_requirements": list[str]} - missed_requirements names specific
+    things the job description asks for that the answer never addressed at
+    all (as opposed to reasoning, which explains the overall verdict).
     Raises ValueError if the model's output doesn't parse - same
     treat-as-unavailable contract as generate_interview_coaching."""
     prompt = f"""You are assessing whether a candidate's interview answer demonstrates they'd be a good fit for this specific job, based only on what they actually said - not how well or confidently they said it.
@@ -621,19 +624,24 @@ Candidate's interview answer(s):
 
 Judge strictly: does the SUBSTANCE of what they said show relevant experience, skills, or understanding that matches this job's requirements? A well-spoken but generic or irrelevant answer should NOT score well here. A specific, relevant answer that directly addresses the role should score well even if communication style is plain.
 
+Also identify specific requirements, skills, or responsibilities named in the job description that this answer never addressed at all - not weaknesses in how they answered, but concrete things the JD asks for that simply never came up. List 1-3; if the answer genuinely covers everything the JD calls for, say so with zero items rather than inventing gaps.
+
 Respond EXACTLY in this format, no extra commentary:
 Verdict: <Strong Yes|Yes|No|Strong No>
-Reasoning: <1-2 sentences explaining why, referencing specifics from both the job description and what they said>"""
+Reasoning: <1-2 sentences explaining why, referencing specifics from both the job description and what they said>
+Missed: <a specific JD requirement/skill never addressed, or omit this line entirely if there are none>
+Missed: <another, if applicable>"""
 
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=200,
+        max_tokens=300,
         temperature=0.2,
     )
     content = response.choices[0].message.content.strip()
 
     verdict, reasoning = None, None
+    missed_requirements = []
     for line in content.splitlines():
         line = line.strip()
         if line.startswith("Verdict:"):
@@ -642,11 +650,15 @@ Reasoning: <1-2 sentences explaining why, referencing specifics from both the jo
                 verdict = candidate
         elif line.startswith("Reasoning:"):
             reasoning = line[10:].strip()
+        elif line.startswith("Missed:"):
+            item = line[7:].strip()
+            if item:
+                missed_requirements.append(item)
 
     if not verdict or not reasoning:
         raise ValueError(f"Job fit verdict did not parse into a complete result: {content[:200]!r}")
 
-    return {"verdict": verdict, "reasoning": reasoning}
+    return {"verdict": verdict, "reasoning": reasoning, "missed_requirements": missed_requirements}
 
 
 def generate_skills_roadmap(job_title, match_explanation, match_score, requirements):
