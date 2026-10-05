@@ -581,9 +581,12 @@
                 </div>
                 <div class="card-body position-relative">
                     <div id="video-loading-overlay" class="spinner-overlay" style="display: none;">
-                        <div class="spinner"></div>
-                        <p class="fw-bold text-primary">Scanning your interview - please wait...</p>
-                        <p class="text-muted fst-italic">Transcribing and scoring - this can take up to 30 seconds...</p>
+                        <div class="spinner" id="video-progress-spinner"></div>
+                        <p class="fw-bold text-primary" id="video-progress-label">Uploading your video...</p>
+                        <div class="progress" style="width:280px; height:10px; margin:0 auto 8px;">
+                            <div class="progress-bar" id="video-upload-progress-bar" role="progressbar" style="width:0%;"></div>
+                        </div>
+                        <p class="text-muted fst-italic small" id="video-progress-subtext">0%</p>
                     </div>
 
                     <div id="video-error-message" class="error-message"></div>
@@ -1460,10 +1463,58 @@ return newId;
 
     try { loadVideoHistory(); } catch (e) { /* ignore */ }
 
+    const progressBar = document.getElementById('video-upload-progress-bar');
+    const progressLabel = document.getElementById('video-progress-label');
+    const progressSubtext = document.getElementById('video-progress-subtext');
+
+    function setProgress(pct, label, subtext) {
+        progressBar.style.width = pct + '%';
+        progressLabel.textContent = label;
+        progressSubtext.textContent = subtext;
+    }
+
+    // XMLHttpRequest, not fetch - fetch has no reliable, broadly-supported
+    // way to report UPLOAD progress (only download), and a multi-hundred-MB
+    // video with zero feedback for minutes reads as "this is broken" even
+    // when it's working fine.
+    function uploadVideoWithProgress(formData) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/resume-jobmatch/video-feedback');
+
+            xhr.upload.addEventListener('progress', (e) => {
+                if (!e.lengthComputable) return;
+                const pct = Math.round((e.loaded / e.total) * 100);
+                setProgress(pct, 'Uploading your video...', pct + '% (' + formatMB(e.loaded) + ' / ' + formatMB(e.total) + ')');
+            });
+            xhr.upload.addEventListener('load', () => {
+                // Upload is done - the server now has to extract audio,
+                // transcribe, and generate the report, which has no
+                // progress signal of its own, hence the indeterminate copy.
+                setProgress(100, 'Processing your interview...', 'Transcribing and scoring - this can take a few minutes for longer videos.');
+            });
+
+            xhr.addEventListener('load', () => {
+                let data = {};
+                try { data = JSON.parse(xhr.responseText); } catch (e) { /* non-JSON error page */ }
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(data);
+                } else {
+                    reject(new Error(data.error || `Request failed (HTTP ${xhr.status}).`));
+                }
+            });
+            xhr.addEventListener('error', () => reject(new Error('The connection was lost while uploading. This usually means the video was too large for the connection, or the network dropped mid-upload.')));
+            xhr.addEventListener('abort', () => reject(new Error('Upload was cancelled.')));
+
+            xhr.send(formData);
+        });
+    }
+
     analyzeBtn.addEventListener('click', async () => {
         if (!fileInput.files.length) return;
 
         errorMessage.style.display = 'none';
+        setProgress(0, 'Uploading your video...', '0%');
         overlay.style.display = 'flex';
         analyzeBtn.disabled = true;
 
@@ -1473,13 +1524,7 @@ return newId;
             const jobTextarea = document.querySelector('textarea[name="job_req"]');
             formData.append('job_req', jobTextarea ? jobTextarea.value : '');
 
-            const res = await fetch('/resume-jobmatch/video-feedback', { method: 'POST', body: formData });
-            const data = await res.json().catch(() => ({}));
-
-            if (!res.ok) {
-                showError(data.error || 'Something went wrong analyzing your video. Please try again.');
-                return;
-            }
+            const data = await uploadVideoWithProgress(formData);
 
             const coaching = data.coaching || {};
             showVideoCoachingReport(coaching);
@@ -1489,7 +1534,7 @@ return newId;
             resultsBox.style.display = 'block';
             resultsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } catch (e) {
-            showError('Something went wrong analyzing your video. Please try again.');
+            showError(e.message || 'Something went wrong analyzing your video. Please try again.');
         } finally {
             overlay.style.display = 'none';
             analyzeBtn.disabled = false;
