@@ -25,6 +25,7 @@ from ai_services import (
     compare_resume_to_job,
     run_interview_turn,
     transcribe_audio,
+    extract_audio_for_transcription,
     audio_file_extension,
     AudioTooLargeError,
     synthesize_speech,
@@ -493,15 +494,29 @@ def interview_chat(job_id, application_id):
         tmp_path = os.path.join(audio_dir, f"_tmp_{uuid.uuid4().hex}{ext}")
         with open(tmp_path, "wb") as f:
             f.write(media_bytes)
+        # Strips the video down to just its audio track before Whisper -
+        # the picture data (not the speech) is almost all of a video
+        # answer's size, so this is what actually lets a long recording fit
+        # under Whisper's fixed 25MB cap instead of the roughly-a-minute
+        # ceiling raw video hit before. No-ops back to tmp_path if ffmpeg
+        # isn't available. The original media_bytes (not this extracted
+        # audio) is still what gets uploaded for playback below.
+        audio_path = extract_audio_for_transcription(tmp_path)
         try:
-            user_message = transcribe_audio(tmp_path)
+            user_message = transcribe_audio(audio_path)
         except AudioTooLargeError as e:
             os.remove(tmp_path)
+            if audio_path != tmp_path and os.path.exists(audio_path):
+                os.remove(audio_path)
             return jsonify({"error": str(e)}), 400
         except Exception:
             os.remove(tmp_path)
+            if audio_path != tmp_path and os.path.exists(audio_path):
+                os.remove(audio_path)
             return jsonify({"error": "Couldn't transcribe your answer. Please try again."}), 500
         os.remove(tmp_path)
+        if audio_path != tmp_path and os.path.exists(audio_path):
+            os.remove(audio_path)
 
         turn_number = len(audio_log) + 1
         try:
@@ -1183,14 +1198,20 @@ def practice_interview_chat(job_id):
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
             tmp.write(answer_audio.read())
             tmp_path = tmp.name
+        # See interview_chat() above for why this runs before transcribing -
+        # strips video down to just audio so long answers fit under
+        # Whisper's 25MB cap instead of the much smaller ceiling raw video hits.
+        audio_path = extract_audio_for_transcription(tmp_path)
         try:
-            user_message = transcribe_audio(tmp_path)
+            user_message = transcribe_audio(audio_path)
         except AudioTooLargeError as e:
             return jsonify({"error": str(e)}), 400
         except Exception:
             return jsonify({"error": "Couldn't transcribe your answer. Please try again."}), 500
         finally:
             _os.unlink(tmp_path)
+            if audio_path != tmp_path and _os.path.exists(audio_path):
+                _os.unlink(audio_path)
 
     secs = job.description_sections or {}
     coaching = None

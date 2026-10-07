@@ -457,14 +457,20 @@ def practice_hub_chat():
         with tempfile.NamedTemporaryFile(suffix=audio_file_extension(answer_audio.filename), delete=False) as tmp:
             tmp.write(answer_audio.read())
             tmp_path = tmp.name
+        # Strips video down to just audio before Whisper - lets a long
+        # answer fit under its 25MB cap instead of the much smaller ceiling
+        # raw video hits. No-ops back to tmp_path if ffmpeg isn't available.
+        audio_path = extract_audio_for_transcription(tmp_path)
         try:
-            user_message = transcribe_audio(tmp_path)
+            user_message = transcribe_audio(audio_path)
         except AudioTooLargeError as e:
             return jsonify({"error": str(e)}), 400
         except Exception:
             return jsonify({"error": "Couldn't transcribe your answer. Please try again."}), 500
         finally:
             os.unlink(tmp_path)
+            if audio_path != tmp_path and os.path.exists(audio_path):
+                os.unlink(audio_path)
 
     coaching = None
     if wrap_up:

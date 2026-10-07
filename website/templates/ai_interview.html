@@ -301,7 +301,14 @@ let concluded       = false;
 let mediaRecorder   = null;
 let audioChunks     = [];
 let recordedBytes   = 0;
-const MAX_RECORDING_BYTES = 23 * 1024 * 1024; // stay under Whisper's 25MB cap with margin
+// The server now extracts just the audio track before sending it to
+// Whisper (see candidate.py's interview_chat), so this no longer has to
+// stay under Whisper's 25MB cap - raw video can be far bigger than that
+// and still transcribe fine. The real remaining ceiling is the upload to
+// this app's own server (this route isn't a direct-to-storage upload),
+// so this stays well under typical reverse-proxy body-size limits rather
+// than being removed outright.
+const MAX_RECORDING_BYTES = 80 * 1024 * 1024;
 let isRecording     = false;
 let questionNum     = 0;
 let cameraStream    = null;
@@ -442,7 +449,10 @@ function startTalkingAnimation(audioEl) {
 function setQuestion(text, audioUrl) {
     questionNum++;
     currentQuestion = text;
-    progressLabel.textContent = `Question ${questionNum}`;
+    // progressLabel's job was just the initial "Connecting..." status -
+    // once a question is showing, progress lives entirely in the sidebar's
+    // percentage, not a "Question N" count here too.
+    progressLabel.style.display = "none";
     questionText.textContent = text;
     updateProgress(questionNum);
 
@@ -643,11 +653,6 @@ async function setupRecorder() {
         mediaRecorder.addEventListener("dataavailable", (e) => {
             audioChunks.push(e.data);
             recordedBytes += e.data.size;
-            // Whisper's transcription API hard-caps uploads at 25MB - video
-            // answers (camera on) can hit that in roughly a minute or two
-            // depending on quality. Auto-stop with margin to spare rather
-            // than let them keep talking into a recording that's guaranteed
-            // to fail to transcribe.
             if (recordedBytes > MAX_RECORDING_BYTES && isRecording) {
                 recordStatus.textContent = "Answer reached the maximum length - stopping and transcribing now.";
                 recordBtn.click();
