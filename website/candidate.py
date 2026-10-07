@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import httpx
 from concurrent.futures import ThreadPoolExecutor
 import uuid
 
@@ -18,7 +19,10 @@ from . import db, limiter
 from .models import Job, Application, CandidateProfile, Company, CompanyMember, Notification, SavedJob, Message, MeetingRoom, MeetingProposal, User, Feedback, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
 from .matching import keyword_set, overlap_score, NOTIFY_SCORE_THRESHOLD, NOTIFY_MAX_RECIPIENTS
 from email_utils import send_branded_email, external_url
-from video_storage import upload_interview_video, get_signed_video_url, delete_interview_videos
+from video_storage import (
+    get_signed_video_url, delete_interview_videos,
+    create_interview_answer_upload_url, download_interview_answer_to_file,
+)
 
 from ai_services import (
     extract_text_from_file,
@@ -466,6 +470,37 @@ def save_interview_session(job_id, application_id):
     return jsonify({'status': 'saved'})
 
 
+@candidate.route('/jobs/<int:job_id>/apply/<int:application_id>/interview-answer-upload-url', methods=['POST'])
+@login_required
+@limiter.limit("120 per hour")
+def interview_answer_upload_url(job_id, application_id):
+    """Hands back a one-time signed URL the browser uploads a recorded
+    answer to directly in Supabase Storage, instead of sending it through
+    this app's own /interview-chat route. Needed because large uploads to
+    avants.ai itself get rejected at the edge well under what a longer
+    answer needs - a direct-to-storage upload bypasses that entirely since
+    the big transfer never touches this app's domain."""
+    application = Application.query.get_or_404(application_id)
+    if application.candidate_user_id != current_user.id:
+        abort(403)
+
+    audio_log = json.loads(application.interview_audio_log) if application.interview_audio_log else []
+    turn_number = len(audio_log) + 1
+    content_type = (request.get_json(silent=True) or {}).get('content_type') or 'video/webm'
+
+    try:
+        upload_url, path = create_interview_answer_upload_url(application_id, turn_number, content_type)
+    except Exception:
+        logger.exception(f"Failed to create a signed interview-answer upload URL for application {application_id}")
+        return jsonify({"error": "Couldn't prepare the upload. Please try again."}), 500
+
+    return jsonify({
+        "upload_url": upload_url,
+        "path": path,
+        "anon_key": os.environ.get("SUPABASE_ANON_KEY"),
+    })
+
+
 @candidate.route('/jobs/<int:job_id>/apply/<int:application_id>/interview-chat', methods=['POST'])
 @login_required
 @limiter.limit("60 per hour")
@@ -477,30 +512,37 @@ def interview_chat(job_id, application_id):
 
     history = json.loads(request.form.get("history", "[]"))
     wrap_up = request.form.get("wrap_up", "false").lower() == "true"
-    answer_media = request.files.get("answer_media")
+    video_path_uploaded = request.form.get("video_path") or None
     has_video = request.form.get("has_video", "false").lower() == "true"
 
     audio_log = json.loads(application.interview_audio_log) if application.interview_audio_log else []
     audio_dir = _audio_dir_for_application(application_id)
 
     user_message = ""
-    if answer_media and answer_media.filename:
-        media_bytes = answer_media.read()
-        # Safari sends mp4, not webm - OpenAI's transcription API picks a
-        # decoder from this suffix, so a mismatched one (e.g. always ".webm"
-        # regardless of what the browser actually recorded) breaks
-        # transcription for any browser that isn't webm-native.
-        ext = audio_file_extension(answer_media.filename)
+    if video_path_uploaded:
+        # The browser already uploaded the recording directly to Supabase
+        # Storage (see interview_answer_upload_url above) - this is just a
+        # throwaway local copy of that same file for transcription. The
+        # permanent recording candidates/employers play back later is the
+        # direct-to-storage upload itself, never touched by anything below.
+        ext = os.path.splitext(video_path_uploaded)[1] or ".webm"
         tmp_path = os.path.join(audio_dir, f"_tmp_{uuid.uuid4().hex}{ext}")
-        with open(tmp_path, "wb") as f:
-            f.write(media_bytes)
+
+        try:
+            download_interview_answer_to_file(video_path_uploaded, tmp_path)
+        except httpx.TimeoutException:
+            logger.exception(f"Timed out fetching uploaded interview answer for application {application_id}")
+            return jsonify({"error": "That answer took too long to fetch for processing. Please try again."}), 400
+        except Exception:
+            logger.exception(f"Failed to fetch uploaded interview answer for application {application_id}")
+            return jsonify({"error": "Couldn't find your uploaded answer. Please try again."}), 400
+
         # Strips the video down to just its audio track before Whisper -
         # the picture data (not the speech) is almost all of a video
         # answer's size, so this is what actually lets a long recording fit
         # under Whisper's fixed 25MB cap instead of the roughly-a-minute
         # ceiling raw video hit before. No-ops back to tmp_path if ffmpeg
-        # isn't available. The original media_bytes (not this extracted
-        # audio) is still what gets uploaded for playback below.
+        # isn't available.
         audio_path = extract_audio_for_transcription(tmp_path)
         try:
             user_message = transcribe_audio(audio_path)
@@ -518,18 +560,9 @@ def interview_chat(job_id, application_id):
         if audio_path != tmp_path and os.path.exists(audio_path):
             os.remove(audio_path)
 
-        turn_number = len(audio_log) + 1
-        try:
-            video_path = upload_interview_video(
-                application_id, turn_number, media_bytes,
-                content_type=answer_media.content_type or "video/webm",
-            )
-        except Exception:
-            logger.exception(f"Failed to upload interview recording for application {application_id}")
-            video_path = None
         audio_log.append({
             "role": "user", "text": user_message,
-            "video_path": video_path, "has_video": has_video,
+            "video_path": video_path_uploaded, "has_video": has_video,
         })
 
     try:

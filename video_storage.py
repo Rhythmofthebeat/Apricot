@@ -48,6 +48,21 @@ def upload_interview_video(application_id, turn_number, video_bytes, content_typ
     return path
 
 
+def create_interview_answer_upload_url(application_id, turn_number, content_type="video/webm"):
+    """One-time signed upload URL the candidate's browser uploads a recorded
+    interview answer to directly, bypassing this app's own server entirely
+    for the transfer - same reasoning as the resume job-match page's video
+    scan: a long answer sent through avants.ai's own domain risks rejection
+    at the edge well under what a multi-minute recording needs, regardless
+    of anything this app's own server allows. Returns (upload_url, path) -
+    path is exactly what upload_interview_video() would have used, so the
+    direct upload IS the final file; no second server-side re-upload is
+    needed afterward, unlike the old flow."""
+    path = f"{application_id}/{turn_number}.{_ext_for(content_type)}"
+    signed = supabase.storage.from_(INTERVIEW_VIDEO_BUCKET).create_signed_upload_url(path)
+    return signed["signed_url"], path
+
+
 def get_signed_video_url(path, expires_in=300, bucket=INTERVIEW_VIDEO_BUCKET):
     """Short-lived signed URL for playback - regenerated on every request
     rather than cached, so it's never exposed for longer than needed."""
@@ -99,18 +114,18 @@ def create_scan_upload_url(extension):
     return signed["signed_url"], path
 
 
-def download_scan_to_file(path, dest_path):
-    """Streams a video scan straight to disk for processing - the
-    service-role client makes this an outbound request from our server to
-    Supabase, not an inbound one through Render's edge, so it isn't subject
-    to the same body-size limit that direct uploads to our own domain hit.
+def _download_to_file(bucket, path, dest_path):
+    """Streams a storage object straight to disk - the service-role client
+    makes this an outbound request from our server to Supabase, not an
+    inbound one through Render's edge, so it isn't subject to the same
+    body-size limit that direct uploads to our own domain hit.
 
     Streams in chunks rather than using the SDK's plain .download(), which
     loads the entire file into memory as one bytes object first - for a
     multi-hundred-MB video that risks OOM-killing the single gunicorn worker
     process this whole site runs on, taking every visitor down with it, not
     just the one request."""
-    url = f"{SUPABASE_URL}/storage/v1/object/{VIDEO_SCAN_BUCKET}/{path}"
+    url = f"{SUPABASE_URL}/storage/v1/object/{bucket}/{path}"
     headers = {
         "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
         "apikey": SUPABASE_SERVICE_ROLE_KEY,
@@ -120,6 +135,18 @@ def download_scan_to_file(path, dest_path):
         with open(dest_path, "wb") as f:
             for chunk in response.iter_bytes(chunk_size=1024 * 1024):
                 f.write(chunk)
+
+
+def download_scan_to_file(path, dest_path):
+    _download_to_file(VIDEO_SCAN_BUCKET, path, dest_path)
+
+
+def download_interview_answer_to_file(path, dest_path):
+    """Streams a just-uploaded interview answer to local disk for
+    transcription only - the permanent copy stays in Supabase Storage at
+    `path` for employer playback; this is a throwaway local copy for
+    ffmpeg/Whisper to read, deleted by the caller once transcription is done."""
+    _download_to_file(INTERVIEW_VIDEO_BUCKET, path, dest_path)
 
 
 def delete_scan(path):

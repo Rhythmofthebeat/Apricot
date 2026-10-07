@@ -291,6 +291,7 @@
 {% block scripts %}
 <script>
 const chatUrl = "{{ url_for('candidate.interview_chat', job_id=job.id, application_id=application.id) }}";
+const answerUploadUrlEndpoint = "{{ url_for('candidate.interview_answer_upload_url', job_id=job.id, application_id=application.id) }}";
 const dashboardUrl = "{{ url_for('candidate.dashboard') }}";
 const saveSessionUrl = "{{ url_for('candidate.save_interview_session', job_id=job.id, application_id=application.id) }}";
 const feedbackUrl = "{{ url_for('candidate.submit_platform_feedback', application_id=application.id) }}";
@@ -300,27 +301,12 @@ let currentQuestion = null;
 let concluded       = false;
 let mediaRecorder   = null;
 let audioChunks     = [];
-let recordedBytes   = 0;
-// The server now extracts just the audio track before sending it to
-// Whisper (see candidate.py's interview_chat), so this no longer has to
-// stay under Whisper's 25MB cap - raw video can be far bigger than that
-// and still transcribe fine. The real remaining ceiling is the upload to
-// this app's own server (this route isn't a direct-to-storage upload),
-// so this stays well under typical reverse-proxy body-size limits rather
-// than being removed outright.
-const MAX_RECORDING_BYTES = 80 * 1024 * 1024;
 let isRecording     = false;
 let questionNum     = 0;
 let cameraStream    = null;
 let interviewStarted = false;
 let savingAndExiting = false;
 let recordingMimeType = "";
-
-function extFromMimeType(type) {
-    if (type.includes("mp4")) return "mp4";
-    if (type.includes("ogg")) return "ogg";
-    return "webm";
-}
 
 // getUserMedia failures get lumped into one generic "access denied" message
 // by default, but the actual cause matters - "you clicked deny" needs a
@@ -543,12 +529,47 @@ async function submitInterviewFeedback() {
     document.getElementById('interviewFeedbackThanks').style.display = 'block';
 }
 
+// Uploads the recorded answer straight to Supabase Storage via a signed
+// URL, bypassing this app's own server for the transfer entirely - a long
+// answer sent through avants.ai's own domain risks rejection at the edge
+// well under what a multi-minute recording needs, regardless of anything
+// this app's own server allows. Only the resulting storage path (a few
+// bytes) goes to /interview-chat afterward, not the recording itself.
+async function uploadAnswerDirectly(mediaBlob) {
+    const res = await fetch(answerUploadUrlEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content_type: mediaBlob.type || "video/webm" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Could not prepare the upload. Please try again.");
+
+    const putRes = await fetch(data.upload_url, {
+        method: "PUT",
+        headers: {
+            "apikey": data.anon_key,
+            "Content-Type": mediaBlob.type || "application/octet-stream",
+            "x-upsert": "true",
+        },
+        body: mediaBlob,
+    });
+    if (!putRes.ok) throw new Error(`Upload failed (HTTP ${putRes.status}). Please try again.`);
+    return data.path;
+}
+
 async function sendTurn(mediaBlob, hasVideo) {
+    let videoPath = null;
+    if (mediaBlob) {
+        if (recordStatus) recordStatus.textContent = "Uploading your answer...";
+        videoPath = await uploadAnswerDirectly(mediaBlob);
+        if (recordStatus) recordStatus.textContent = "Transcribing your answer...";
+    }
+
     const formData = new FormData();
     formData.append("history", JSON.stringify(history));
     formData.append("wrap_up", "false");
     formData.append("has_video", hasVideo ? "true" : "false");
-    if (mediaBlob) formData.append("answer_media", mediaBlob, `answer.${extFromMimeType(mediaBlob.type)}`);
+    if (videoPath) formData.append("video_path", videoPath);
 
     const response = await fetch(chatUrl, { method: "POST", body: formData });
     const result = await response.json();
@@ -652,11 +673,6 @@ async function setupRecorder() {
 
         mediaRecorder.addEventListener("dataavailable", (e) => {
             audioChunks.push(e.data);
-            recordedBytes += e.data.size;
-            if (recordedBytes > MAX_RECORDING_BYTES && isRecording) {
-                recordStatus.textContent = "Answer reached the maximum length - stopping and transcribing now.";
-                recordBtn.click();
-            }
         });
         mediaRecorder.addEventListener("stop", onRecordingStop);
         return true;
@@ -715,8 +731,7 @@ recordBtn.addEventListener("click", async () => {
             if (!ok) return;
         }
         audioChunks = [];
-        recordedBytes = 0;
-        mediaRecorder.start(1000); // periodic chunks so recordedBytes can be checked while still recording
+        mediaRecorder.start(1000);
         isRecording = true;
         recordBtn.classList.add("recording");
         recordBtn.innerHTML = '<i class="fas fa-stop"></i>';
