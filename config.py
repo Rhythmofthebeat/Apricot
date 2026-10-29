@@ -16,6 +16,16 @@ class Config:
     # separate price/webhook from the placement-fee flow above.
     STRIPE_DATA_PRICE_ID = os.getenv("STRIPE_DATA_PRICE_ID")
     STRIPE_DATA_WEBHOOK_SECRET = os.getenv("STRIPE_DATA_WEBHOOK_SECRET")
+    # Employer data products (applicant export, score calibration, benchmarks)
+    # are open to everyone until this is "true". Don't enable it before a
+    # checkout flow that creates EmployerSubscription rows exists.
+    DATA_PRODUCTS_PAID = os.getenv("DATA_PRODUCTS_PAID", "false").lower() == "true"
+    # Live voice interviewer (OpenAI Realtime over WebRTC). Off by default - it
+    # bills per minute of audio, unlike the record-then-reply interview.
+    LIVE_INTERVIEW_ENABLED = os.getenv("LIVE_INTERVIEW_ENABLED", "false").lower() == "true"
+    OPENAI_REALTIME_MODEL = os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
+    OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "marin")
+    LIVE_INTERVIEW_MAX_SECONDS = int(os.getenv("LIVE_INTERVIEW_MAX_SECONDS", "1200"))
     MAIL_SERVER = os.getenv("MAIL_SERVER", "smtp.gmail.com")
     MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))
     MAIL_USE_TLS = True

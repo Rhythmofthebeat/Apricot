@@ -310,12 +310,49 @@
                     <h2 class="mb-3">Work authorization</h2>
                     <p class="text-muted">Please ensure you meet local employment requirements for work authorization. Accurate information helps {{ job.company.name }} process your application smoothly.</p>
 
+                    {% if saved_work_auth and not saved_work_auth.different_country and not saved_work_auth.invalid %}
+                    <div id="savedAuthCard" class="mb-3">
+                        <div class="p-3 mb-3" style="border:1px solid var(--border); border-radius:var(--radius); background:var(--primary-soft);">
+                            <div class="fw-bold mb-1"><i class="fas fa-circle-check text-success me-1"></i> Use your saved work authorization</div>
+                            <div class="small text-muted">
+                                Based in {{ saved_work_auth.city }}, {{ saved_work_auth.state }}, {{ saved_work_auth.country }} &middot;
+                                signed as {{ saved_work_auth.signature_full_name }}
+                            </div>
+                        </div>
+                        <p class="small mb-2">
+                            By confirming, you represent that you are legally authorized to work from {{ saved_work_auth.country }}, and agree to
+                            remain working from {{ saved_work_auth.country }} and notify {{ job.company.name }} in writing before any change.
+                            Your signature is dated today.
+                        </p>
+                        <details class="small text-muted mb-3">
+                            <summary>Read the full terms for {{ job.company.name }}</summary>
+                            <div class="disclaimer-box mt-2">
+                                1. You have all necessary visas, permits, and/or legal rights to work from the country you have indicated.<br>
+                                2. You will defend, indemnify, and hold harmless {{ job.company.name }} from any claims, losses, or liabilities arising from your failure to maintain proper work authorization.<br>
+                                3. You will continue working only from the country specified above unless you have provided {{ job.company.name }} with prior written notice of your intended change of work location.<br>
+                                4. You will obtain and maintain proper work authorization for any future country from which you intend to work before beginning work from that country.
+                            </div>
+                        </details>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="button" id="backTo1BtnSaved" class="btn btn-outline-secondary">Back</button>
+                            <button type="button" id="confirmSavedAuthBtn" class="btn btn-primary flex-grow-1">Confirm &amp; agree for {{ job.company.name }}</button>
+                        </div>
+                        <button type="button" id="editSavedAuthBtn" class="btn btn-link btn-sm mt-2 p-0">Edit my details instead</button>
+                    </div>
+                    {% endif %}
+
+                    <div id="authFormWrap" {% if saved_work_auth and not saved_work_auth.different_country and not saved_work_auth.invalid %}style="display:none;"{% endif %}>
+                    {% if saved_work_auth and saved_work_auth.invalid %}
+                    <div class="small text-muted mb-3" style="padding:10px 12px; background:var(--primary-soft); border-radius:var(--radius);">
+                        We pre-filled your last details, but part of your location needs a quick fix before we can reuse it.
+                    </div>
+                    {% endif %}
                     <h6 class="fw-bold">Location of Residence</h6>
                     <p class="text-muted small">Where you're based for most of the year. This might be different from your citizenship.</p>
 
                     <div class="row g-3 mb-2">
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Country</label>
+                            <label class="form-label fw-bold" for="residenceCountry">Country</label>
                             <select class="form-control" id="residenceCountry">
                                 {% for c in countries %}
                                     <option value="{{ c }}" {{ 'selected' if c == 'United States' }}>{{ c }}</option>
@@ -323,16 +360,18 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">State / Province / Region</label>
-                            <input type="text" class="form-control" id="residenceState" placeholder="Select state/province">
+                            <label class="form-label fw-bold" for="residenceStateSelect" id="regionLabel">State</label>
+                            <select class="form-control" id="residenceStateSelect"></select>
+                            <input type="text" class="form-control" id="residenceState" placeholder="State / province / region" style="display:none;">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">City</label>
-                            <input type="text" class="form-control" id="residenceCity">
+                            <label class="form-label fw-bold" for="residenceCity">City</label>
+                            <input type="text" class="form-control" id="residenceCity" placeholder="e.g. San Francisco" autocomplete="address-level2">
+                            <div class="form-text">Your city or town - not your country.</div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Postal Code</label>
-                            <input type="text" class="form-control" id="residencePostal" placeholder="Enter postal code">
+                            <label class="form-label fw-bold" for="residencePostal" id="postalLabel">ZIP code</label>
+                            <input type="text" class="form-control" id="residencePostal" placeholder="94105" autocomplete="postal-code">
                         </div>
                     </div>
 
@@ -391,6 +430,7 @@
                         <button type="button" id="backTo1Btn" class="btn btn-outline-secondary">Back</button>
                         <button type="button" id="saveWorkAuthBtn" class="btn btn-primary flex-grow-1">Save Work Authorization</button>
                     </div>
+                    </div><!-- /authFormWrap -->
                 </div>
 
                 <!-- Step 3: Check Match & Revise -->
@@ -453,10 +493,10 @@
                         </div>
                     </div>
 
-                    <p class="text-muted small mt-2"><i class="fas fa-circle-info me-1"></i> This doesn't submit anything yet - it just takes you to the final review step.</p>
+                    <p class="text-muted small mt-2"><i class="fas fa-circle-info me-1"></i> Checking your score is optional - your application is scored when you submit either way. Nothing is submitted until the final step.</p>
                     <div class="d-flex gap-2 mt-2">
                         <button type="button" id="backTo2Btn" class="btn btn-outline-secondary">Back</button>
-                        <button type="button" id="toStep4Btn" class="btn btn-primary flex-grow-1" disabled>Review Before Submitting</button>
+                        <button type="button" id="toStep4Btn" class="btn btn-primary flex-grow-1">Review Before Submitting</button>
                     </div>
                 </div>
 
@@ -464,7 +504,7 @@
                 <div class="wizard-panel" id="panel4" style="display:none;">
                     <div class="step-header"><span class="step-pill">Step 4 of 4</span></div>
                     <h2 class="mb-3">Review &amp; submit</h2>
-                    <p class="text-muted">Your latest checked score: <span id="finalScorePreview" class="score-pill"></span></p>
+                    <p class="text-muted">Your match score: <span id="finalScorePreview" class="score-pill"></span></p>
                     <p class="text-muted small"><strong>This is the final step</strong> - clicking "Submit Application" below will lock in your resume and work authorization for this application. You can still take the AI interview afterward to strengthen your case.</p>
 
                     <div id="step4Error"></div>
@@ -492,6 +532,9 @@ let lastCheckedScore = null;
 let lastExplanation = "";
 let chatHistory = [];
 let unlockedStep = 1;
+const savedWorkAuth = {{ saved_work_auth|tojson if saved_work_auth else 'null' }};
+const LOC = {{ location_rules|tojson }};
+let usedSavedAuth = false;
 
 const modeSaved = document.getElementById("modeSaved");
 const modeUpload = document.getElementById("modeUpload");
@@ -613,14 +656,80 @@ document.getElementById("toStep2Btn").addEventListener("click", async () => {
 const residenceCountry = document.getElementById("residenceCountry");
 const signatureDate = document.getElementById("signatureDate");
 
+const stateSelect = document.getElementById("residenceState" + "Select");
+const stateText = document.getElementById("residenceState");
+
+// Country -> region picker (a dropdown where the country has a fixed list,
+// free text elsewhere), postal-code label/example for that country.
+function syncRegionAndPostal() {
+    const country = residenceCountry.value;
+    const options = LOC.regions[country];
+    if (options) {
+        stateSelect.innerHTML = '<option value="">Select…</option>' +
+            options.map(o => `<option value="${o.code}">${o.name}</option>`).join("");
+        stateSelect.style.display = "";
+        stateText.style.display = "none";
+    } else {
+        stateSelect.style.display = "none";
+        stateText.style.display = "";
+    }
+    document.getElementById("regionLabel").textContent = LOC.region_labels[country] || "State / Province / Region";
+    document.getElementById("regionLabel").setAttribute("for", options ? "residenceStateSelect" : "residenceState");
+    document.getElementById("postalLabel").textContent = country === "United States" ? "ZIP code" : "Postal code";
+    document.getElementById("residencePostal").placeholder = LOC.postal_examples[country] || "";
+}
+function getRegion() {
+    return (LOC.regions[residenceCountry.value] ? stateSelect.value : stateText.value).trim();
+}
+function setRegion(value) {
+    const options = LOC.regions[residenceCountry.value];
+    if (!options) { stateText.value = value; return; }
+    // Older saved details may hold the full name ("California") rather than the code ("CA").
+    const match = options.find(o => o.code === value || o.name === value);
+    stateSelect.value = match ? match.code : "";
+}
+
+// Mirrors website/locations.py - the server re-checks all of this on submit.
+function locationProblem(country, region, city, postal) {
+    if (!region) return `Select your ${(LOC.region_labels[country] || "state / province / region").toLowerCase()}.`;
+    const c = city.trim();
+    if (!c) return "Enter your city.";
+    if (/[@<>{}\\/]|https?:|www\./i.test(c) || /\d/.test(c)) return "A city name can't contain numbers or web addresses.";
+    const low = c.toLowerCase().replace(/^\.+|\.+$/g, "");
+    if (LOC.country_terms.includes(low)) return `"${c}" is a country, not a city - pick the country above and enter your city, e.g. Austin.`;
+    if (LOC.generic_terms.includes(low)) return `"${c}" isn't a city - enter the town or city you're in, e.g. Austin.`;
+    const p = postal.trim();
+    if (!p) return LOC.postal_optional.includes(country) ? null : "Enter your postal code.";
+    const pattern = LOC.postal_patterns[country] || LOC.postal_loose;
+    if (!new RegExp("^(?:" + pattern + ")$").test(p)) {
+        const ex = LOC.postal_examples[country];
+        return `That doesn't look like a valid ${country} ${country === "United States" ? "ZIP code" : "postal code"}` + (ex ? ` (e.g. ${ex}).` : ".");
+    }
+    return null;
+}
+
 function syncCountryLabels() {
     const country = residenceCountry.value;
     document.getElementById("countryLabel1").textContent = country;
     document.getElementById("countryLabel2").textContent = country;
     document.getElementById("countryLabel3").textContent = country;
 }
-residenceCountry.addEventListener("change", syncCountryLabels);
+residenceCountry.addEventListener("change", () => { syncCountryLabels(); syncRegionAndPostal(); });
 syncCountryLabels();
+syncRegionAndPostal();
+
+// Pre-fill the manual form from the last application's details. Attestation
+// checkboxes are deliberately left unchecked - those are re-given each time.
+if (savedWorkAuth) {
+    residenceCountry.value = savedWorkAuth.country;
+    syncRegionAndPostal();
+    setRegion(savedWorkAuth.state);
+    document.getElementById("residenceCity").value = savedWorkAuth.city;
+    document.getElementById("residencePostal").value = savedWorkAuth.postal_code;
+    document.getElementById("signatureFullName").value = savedWorkAuth.signature_full_name;
+    document.getElementById("signatureText").value = savedWorkAuth.signature_text;
+    syncCountryLabels();
+}
 
 (function setToday() {
     const d = new Date();
@@ -632,7 +741,7 @@ syncCountryLabels();
 document.getElementById("saveWorkAuthBtn").addEventListener("click", () => {
     showError("step2Error", null);
 
-    const state = document.getElementById("residenceState").value.trim();
+    const state = getRegion();
     const city = document.getElementById("residenceCity").value.trim();
     const postal = document.getElementById("residencePostal").value.trim();
     const authConfirm = document.getElementById("authConfirmCheck").checked;
@@ -640,8 +749,9 @@ document.getElementById("saveWorkAuthBtn").addEventListener("click", () => {
     const fullName = document.getElementById("signatureFullName").value.trim();
     const signature = document.getElementById("signatureText").value.trim();
 
-    if (!state || !city || !postal) {
-        showError("step2Error", "Fill in your full residence address first.");
+    const problem = locationProblem(residenceCountry.value, state, city, postal);
+    if (problem) {
+        showError("step2Error", problem);
         return;
     }
     if (!authConfirm || !remainWorking) {
@@ -664,10 +774,49 @@ document.getElementById("saveWorkAuthBtn").addEventListener("click", () => {
         signature_date: signatureDate.value,
     };
 
+    usedSavedAuth = false;
+    afterWorkAuth();
+});
+
+// With a saved resume and a re-affirmed authorization there is nothing left
+// to revise - go straight to review. The score check stays reachable via the
+// step nav / Back, it just doesn't block anyone.
+function afterWorkAuth() {
     document.getElementById("resumeTextArea").value = resumeText;
+    if (usedSavedAuth && modeSaved && modeSaved.checked) {
+        showReview();
+        return;
+    }
     unlockedStep = Math.max(unlockedStep, 3);
     goToStep(3);
-});
+}
+
+const confirmSavedAuthBtn = document.getElementById("confirmSavedAuthBtn");
+if (confirmSavedAuthBtn) {
+    confirmSavedAuthBtn.addEventListener("click", () => {
+        workAuthorization = {
+            country: savedWorkAuth.country,
+            state: savedWorkAuth.state,
+            city: savedWorkAuth.city,
+            postal_code: savedWorkAuth.postal_code,
+            working_from_different_country: false,
+            work_authorization_confirmed: true,
+            remain_working_confirmed: true,
+            signature_full_name: savedWorkAuth.signature_full_name,
+            signature_text: savedWorkAuth.signature_text,
+            signature_date: signatureDate.value,
+            reused_saved_authorization: true,
+        };
+        usedSavedAuth = true;
+        unlockedStep = Math.max(unlockedStep, 3);
+        afterWorkAuth();
+    });
+    document.getElementById("editSavedAuthBtn").addEventListener("click", () => {
+        document.getElementById("savedAuthCard").style.display = "none";
+        document.getElementById("authFormWrap").style.display = "block";
+    });
+    document.getElementById("backTo1BtnSaved").addEventListener("click", () => goToStep(1));
+}
 
 document.getElementById("backTo1Btn").addEventListener("click", () => goToStep(1));
 
@@ -749,7 +898,6 @@ document.getElementById("checkScoreBtn").addEventListener("click", async () => {
         document.getElementById("scoreResult").style.display = "block";
         document.getElementById("scorePlaceholder").style.display = "none";
         document.getElementById("chatBoxWrap").style.display = "block";
-        document.getElementById("toStep4Btn").disabled = false;
     } catch (e) {
         showError("step3Error", e.message);
     } finally {
@@ -810,13 +958,20 @@ document.getElementById("chatInput").addEventListener("keydown", (e) => {
 document.getElementById("backTo2Btn").addEventListener("click", () => goToStep(2));
 document.getElementById("backTo3Btn").addEventListener("click", () => goToStep(3));
 
-document.getElementById("toStep4Btn").addEventListener("click", () => {
+function showReview() {
     const pill = document.getElementById("finalScorePreview");
-    pill.textContent = lastCheckedScore;
-    pill.className = "score-pill " + (lastCheckedScore >= 70 ? "high" : (lastCheckedScore >= 40 ? "mid" : "low"));
+    if (lastCheckedScore === null) {
+        pill.textContent = "calculated when you submit";
+        pill.className = "score-pill";
+    } else {
+        pill.textContent = lastCheckedScore;
+        pill.className = "score-pill " + (lastCheckedScore >= 70 ? "high" : (lastCheckedScore >= 40 ? "mid" : "low"));
+    }
     unlockedStep = Math.max(unlockedStep, 4);
     goToStep(4);
-});
+}
+
+document.getElementById("toStep4Btn").addEventListener("click", showReview);
 
 document.getElementById("submitBtn").addEventListener("click", async () => {
     const btn = document.getElementById("submitBtn");

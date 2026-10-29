@@ -97,6 +97,14 @@
             </div>
         </div>
 
+        <!-- Detailed analysis -->
+        {% if coaching.detailed_analysis %}
+        <div class="coaching-card">
+            <div class="coaching-card-title"><i class="fas fa-file-lines me-1" style="color:var(--primary);"></i>Detailed analysis</div>
+            <p class="mb-0" style="font-size:0.9rem; line-height:1.6;">{{ coaching.detailed_analysis }}</p>
+        </div>
+        {% endif %}
+
         <!-- Strengths -->
         {% if coaching.strengths %}
         <div class="coaching-card">

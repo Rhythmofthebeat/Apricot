@@ -133,8 +133,9 @@
                     <div class="mb-3">
                         <label class="form-label">Based in <span class="text-muted fw-normal">(optional)</span></label>
                         <input type="text" class="form-control" id="location"
-                               placeholder="e.g. Austin, TX or London, UK"
+                               placeholder="City, State or Country - e.g. Austin, TX or London, UK"
                                value="{{ profile.location if profile else '' }}">
+                        <div class="form-text">Your city, not just your country. Helps employers find you for local roles.</div>
                     </div>
                 </div>
             </div>
@@ -361,12 +362,17 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
                 years_experience: document.getElementById("yearsExperience")?.value || '',
             })
         });
-        if (!r.ok) throw new Error();
+        if (!r.ok) {
+            // The server explains validation problems (e.g. a country typed as a city) - show that, not a generic failure.
+            let detail = '';
+            try { detail = (await r.json()).error || ''; } catch (_) {}
+            throw new Error(detail);
+        }
         status.textContent = 'Saved!';
         status.className = 'small text-success';
         setTimeout(() => { status.textContent = ''; }, 3000);
-    } catch (_) {
-        status.textContent = 'Save failed. Please try again.';
+    } catch (err) {
+        status.textContent = (err && err.message) || 'Save failed. Please try again.';
         status.className = 'small text-danger';
     } finally {
         btn.disabled = false;

@@ -11,8 +11,10 @@
         margin-top: 10px;
     }
     .preview-note { font-size: 0.78rem; color: var(--text-muted); }
-    .question-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-    .question-row input { flex: 1; }
+    .question-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 12px; }
+    .question-row .question-fields { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    .question-row .question-note { font-size: 0.8rem; background: var(--bg); }
+    .question-row .remove-question-btn { margin-top: 6px; }
     .question-row .remove-question-btn { color: var(--text-muted); background: none; border: none; cursor: pointer; }
     .question-row .remove-question-btn:hover { color: var(--danger); }
     .section-label {
@@ -273,7 +275,7 @@
                     </button>
                     <div id="previewError"></div>
                     <div class="preview-questions" id="previewQuestionsBox" style="display:{{ 'block' if job and job.interview_questions else 'none' }};">
-                        <p class="preview-note mb-2"><i class="fas fa-circle-info me-1"></i> Edit, remove, or add questions as needed. The AI will make sure to ask these, plus natural follow-ups.</p>
+                        <p class="preview-note mb-2"><i class="fas fa-circle-info me-1"></i> Edit, remove, or add questions as needed. The AI will make sure to ask these, plus natural follow-ups. Use the comment under a question to tell the AI what to listen for or how to follow up - candidates never see your comments.</p>
                         <div id="questionsList"></div>
                         <div class="d-flex gap-2 align-items-center flex-wrap">
                             <button type="button" class="btn btn-outline-secondary btn-sm" id="addQuestionBtn"><i class="fas fa-plus"></i> Add Question</button>
@@ -324,15 +326,30 @@ function buildDescriptionText() {
     return sections.filter(([_, v]) => v).map(([label, v]) => `${label}:\n${v}`).join("\n\n");
 }
 
-function addQuestionRow(text) {
+function addQuestionRow(item) {
+    // item is a plain string (generated/recorded/legacy questions) or
+    // {q, note} where note is the employer's private comment on the question.
+    const text = typeof item === "string" ? item : ((item && item.q) || "");
+    const note = (item && typeof item === "object") ? (item.note || "") : "";
+
     const row = document.createElement("div");
     row.className = "question-row";
+
+    const fields = document.createElement("div");
+    fields.className = "question-fields";
 
     const input = document.createElement("input");
     input.type = "text";
     input.className = "form-control question-input";
     input.placeholder = "Interview question";
     input.value = text;
+
+    const noteInput = document.createElement("input");
+    noteInput.type = "text";
+    noteInput.className = "form-control question-note";
+    noteInput.maxLength = 500;
+    noteInput.placeholder = "Comment for the AI (optional) - what to listen for, or how to follow up";
+    noteInput.value = note;
 
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
@@ -341,10 +358,21 @@ function addQuestionRow(text) {
     removeBtn.innerHTML = '<i class="fas fa-times"></i>';
     removeBtn.addEventListener("click", () => { row.remove(); scheduleDraftSave(); });
 
-    row.appendChild(input);
+    fields.appendChild(input);
+    fields.appendChild(noteInput);
+    row.appendChild(fields);
     row.appendChild(removeBtn);
     questionsList.appendChild(row);
     scheduleDraftSave();
+}
+
+function collectQuestions() {
+    return Array.from(document.querySelectorAll(".question-row"))
+        .map(row => ({
+            q: row.querySelector(".question-input").value.trim(),
+            note: row.querySelector(".question-note").value.trim(),
+        }))
+        .filter(item => item.q);
 }
 
 // ── Auto-save/restore so a reload doesn't lose unsaved work ─────────────
@@ -381,7 +409,10 @@ function collectDraft() {
         interview_length: document.getElementById('interviewLength')?.value ?? '',
         camera_required: document.getElementById('cameraRequired')?.checked ?? false,
         interview_focus: document.getElementById('interviewFocus')?.value ?? '',
-        questions: Array.from(document.querySelectorAll('.question-input')).map(i => i.value),
+        questions: Array.from(document.querySelectorAll('.question-row')).map(row => ({
+            q: row.querySelector('.question-input').value,
+            note: row.querySelector('.question-note').value,
+        })),
         savedAt: Date.now(),
     };
 }
@@ -648,10 +679,7 @@ async function analyzeJD() {
 
 document.getElementById("postJobForm").addEventListener("submit", () => {
     document.getElementById("descriptionField").value = buildDescriptionJSON();
-    const questions = Array.from(document.querySelectorAll(".question-input"))
-        .map(input => input.value.trim())
-        .filter(text => text);
-    document.getElementById("interviewQuestionsField").value = JSON.stringify(questions);
+    document.getElementById("interviewQuestionsField").value = JSON.stringify(collectQuestions());
 
     // Deliberately NOT clearing the draft here: this fires the instant the
     // button is clicked, before the server has validated anything. If a

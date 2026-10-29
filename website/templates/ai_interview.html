@@ -152,11 +152,11 @@
                 <div class="section-label mb-3" style="font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-muted);">Your Progress</div>
 
                 <!-- Bar -->
-                <div id="progressPct" style="font-size:1.8rem; font-weight:800; color:var(--primary); margin-bottom:8px;">0%</div>
+                <div id="progressPct" style="font-size:1.15rem; font-weight:800; color:var(--primary); margin-bottom:8px; line-height:1.25;">Getting started</div>
                 <div style="background:var(--bg); border-radius:999px; height:8px; margin-bottom:4px; overflow:hidden;">
                     <div id="progressBar" style="height:100%; width:0%; background:var(--primary); border-radius:999px; transition:width 0.5s ease;"></div>
                 </div>
-                <div class="mb-4" style="font-size:0.75rem; color:var(--text-muted);">through the interview</div>
+                <div class="mb-4" style="font-size:0.75rem; color:var(--text-muted);">an estimate - follow-up questions can change it</div>
 
                 <div class="mt-4 pt-3" style="border-top:1px solid var(--border); font-size:0.78rem; color:var(--text-muted); line-height:1.5;">
                     <i class="fas fa-circle-info me-1"></i>
@@ -333,7 +333,7 @@ function describeMediaError(e, deviceLabel) {
 let recordingHasVideo = false;
 
 // Estimated total questions by interview length
-const ESTIMATED_TOTAL = { short: 4, standard: 7, thorough: 10 }["{{ job.interview_length }}"] || 7;
+const ESTIMATED_TOTAL = {{ estimated_total|default(7) }};
 
 const avatar = document.getElementById("avatar");
 const avatarPhoto = document.getElementById("avatarPhoto");
@@ -348,16 +348,24 @@ const recordStatus = document.getElementById("recordStatus");
 const progressBar = document.getElementById("progressBar");
 const progressPct = document.getElementById("progressPct");
 
+// The interview is open-ended - the AI ends it when it has enough to assess
+// you - so progress is an estimate of questions left, never an exact figure.
+function estimateLeftText(current, total) {
+    const left = total - current;
+    if (left <= 0) return "Almost done";
+    return left === 1 ? "About 1 question left" : `About ${left} questions left`;
+}
+
 function updateProgress(current) {
-    const pct = Math.min(Math.round(((current - 1) / ESTIMATED_TOTAL) * 100), 95);
-    progressBar.style.width = pct + "%";
-    progressPct.textContent = pct + "%";
+    const fill = Math.min(current / ESTIMATED_TOTAL, 0.95);
+    progressBar.style.width = Math.round(fill * 100) + "%";
+    progressPct.textContent = estimateLeftText(current, ESTIMATED_TOTAL);
 }
 
 function markComplete() {
     progressBar.style.width = "100%";
     progressBar.style.background = "var(--success)";
-    progressPct.textContent = "100%";
+    progressPct.textContent = "Interview complete";
     progressPct.style.color = "var(--success)";
 }
 

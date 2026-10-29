@@ -9,7 +9,7 @@ from sqlalchemy.sql import func
 logger = logging.getLogger(__name__)
 
 import stripe
-from flask import Blueprint, render_template, request, flash, redirect, url_for, abort, jsonify, current_app, send_from_directory
+from flask import Blueprint, render_template, request, flash, redirect, url_for, abort, jsonify, current_app, send_from_directory, Response
 from flask_login import login_required, current_user
 from functools import wraps
 from PIL import Image
@@ -31,6 +31,7 @@ from ai_services import generate_interview_question_preview, generate_rejection_
 from .candidate import _extract_score
 from .matching import keyword_set, overlap_score, NOTIFY_SCORE_THRESHOLD, NOTIFY_MAX_RECIPIENTS
 from email_utils import send_branded_email, external_url
+from . import outcomes, locations
 
 employer = Blueprint('employer', __name__)
 
@@ -495,6 +496,38 @@ def _extract_description_text(raw):
     return raw or ''
 
 
+def _job_location_error(work_type, city):
+    """On-site and hybrid roles need a real place; remote ones don't take one."""
+    if work_type not in ('Hybrid', 'On-site'):
+        return None
+    if not city:
+        return f"A {work_type.lower()} job needs a city - enter where the role is based, e.g. Austin, TX."
+    return locations.place_error(city)
+
+
+MAX_QUESTION_NOTE_LENGTH = 500
+
+
+def normalize_interview_questions(items):
+    """Coerce stored/submitted questions into [{"q": str, "note": str}].
+    Older jobs store a plain list of strings; newer ones carry the employer's
+    private comment on each question. Accepts both, drops blanks."""
+    out = []
+    if not isinstance(items, list):
+        return out
+    for item in items:
+        if isinstance(item, str):
+            q, note = item.strip(), ""
+        elif isinstance(item, dict):
+            q = str(item.get("q") or "").strip()
+            note = str(item.get("note") or "").strip()[:MAX_QUESTION_NOTE_LENGTH]
+        else:
+            continue
+        if q:
+            out.append({"q": q, "note": note})
+    return out
+
+
 def _parse_interview_questions(raw):
     if not raw:
         return None
@@ -502,17 +535,15 @@ def _parse_interview_questions(raw):
         questions = json.loads(raw)
     except (ValueError, TypeError):
         return None
-    if not isinstance(questions, list):
-        return None
-    cleaned = [q.strip() for q in questions if isinstance(q, str) and q.strip()]
-    return json.dumps(cleaned[:MAX_INTERVIEW_QUESTIONS]) if cleaned else None
+    cleaned = normalize_interview_questions(questions)[:MAX_INTERVIEW_QUESTIONS]
+    return json.dumps(cleaned) if cleaned else None
 
 
 def _existing_interview_questions(job):
     if not job or not job.interview_questions:
         return []
     try:
-        return json.loads(job.interview_questions)
+        return normalize_interview_questions(json.loads(job.interview_questions))
     except (ValueError, TypeError):
         return []
 
@@ -597,6 +628,7 @@ def post_job():
         description = request.form.get('description', '').strip()
         work_type = request.form.get('work_type', 'Remote (Worldwide)').strip()
         city = request.form.get('location_city', '').strip()
+        location_problem = _job_location_error(work_type, city)
         if work_type in ('Hybrid', 'On-site') and city:
             location = f"{work_type} - {city}"
         else:
@@ -614,6 +646,14 @@ def post_job():
 
         if not title or not description:
             flash("Title and description are required.", "error")
+            return render_template(
+                "post_job.html", categories=JOB_CATEGORIES, locations=JOB_LOCATIONS,
+                interview_lengths=INTERVIEW_LENGTH_OPTIONS, currencies=SUPPORTED_CURRENCIES,
+                interview_questions=json.loads(interview_questions) if interview_questions else [],
+            )
+
+        if location_problem and request.form.get('save_as_draft') != '1':
+            flash(location_problem, "error")
             return render_template(
                 "post_job.html", categories=JOB_CATEGORIES, locations=JOB_LOCATIONS,
                 interview_lengths=INTERVIEW_LENGTH_OPTIONS, currencies=SUPPORTED_CURRENCIES,
@@ -725,6 +765,14 @@ def edit_job(job_id):
         was_open = job.status == 'open'
         _edit_work_type = request.form.get('work_type', 'Remote (Worldwide)').strip()
         _edit_city = request.form.get('location_city', '').strip()
+        _edit_location_problem = _job_location_error(_edit_work_type, _edit_city)
+        if _edit_location_problem and request.form.get('save_as_draft') != '1':
+            flash(_edit_location_problem, "error")
+            return render_template(
+                "post_job.html", job=job, categories=JOB_CATEGORIES, locations=JOB_LOCATIONS,
+                interview_lengths=INTERVIEW_LENGTH_OPTIONS, currencies=SUPPORTED_CURRENCIES,
+                interview_questions=_existing_interview_questions(job),
+            )
         job.title = title
         job.description = description
         job.location = f"{_edit_work_type} - {_edit_city}" if _edit_work_type in ('Hybrid', 'On-site') and _edit_city else _edit_work_type
@@ -1128,7 +1176,11 @@ def update_status(application_id):
                 application.hire_evidence_filename = evidence_filename
 
         status_changed = application.status != new_status
+        previous_status = application.status
         application.status = new_status
+        if status_changed:
+            outcomes.log_event(application, job, 'status_changed',
+                               from_status=previous_status, to_status=new_status)
         db.session.commit()
 
         copy = STATUS_EMAIL_COPY.get(new_status)
@@ -1496,6 +1548,18 @@ def suggested_candidates():
     return jsonify({"suggestions": suggestions})
 
 
+def has_data_products(company):
+    """Entitlement for the paid data products (applicant export, score
+    calibration, benchmarks). Open to everyone until DATA_PRODUCTS_PAID is
+    switched on - and it must not be switched on before a checkout flow that
+    creates EmployerSubscription rows exists, or nobody could pass this."""
+    if not current_app.config.get('DATA_PRODUCTS_PAID'):
+        return True
+    from .models import EmployerSubscription
+    sub = EmployerSubscription.query.filter_by(company_id=company.id).first()
+    return bool(sub and sub.status == 'active' and sub.plan in ('starter', 'pro'))
+
+
 @employer.route('/employer/analytics')
 @login_required
 @employer_required
@@ -1544,7 +1608,69 @@ def analytics():
         "open_jobs": sum(1 for j in jobs if j.status == 'open'),
     }
 
-    return render_template('employer_analytics.html', company=company, stats=stats, top_jobs=top_jobs)
+    entitled = has_data_products(company)
+    data = {}
+    if entitled:
+        data = {
+            "calibration": outcomes.calibration(all_apps),
+            "benchmark": outcomes.platform_benchmark(company.id),
+            "median_days_to_hire": outcomes.median_days_to_hire(company.id),
+            "retention": outcomes.retention_summary(company.id),
+            "checkins_due": outcomes.checkins_due(all_apps, company.id),
+        }
+
+    return render_template(
+        'employer_analytics.html', company=company, stats=stats, top_jobs=top_jobs,
+        entitled=entitled, min_band_size=outcomes.MIN_RELIABLE_BAND_SIZE,
+        min_benchmark_companies=outcomes.MIN_BENCHMARK_COMPANIES, **data,
+    )
+
+
+@employer.route('/employer/export/applicants.csv')
+@login_required
+@employer_required
+@limiter.limit("20 per hour")
+def export_applicants():
+    company = get_owned_company()
+    if not has_data_products(company):
+        flash("Applicant export is part of the Starter and Pro plans.", "error")
+        return redirect(url_for('employer.analytics'))
+
+    jobs = Job.query.filter_by(company_id=company.id).all()
+    jobs_by_id = {j.id: j for j in jobs}
+    applications = (
+        Application.query.filter(Application.job_id.in_(jobs_by_id.keys())).order_by(Application.created_at.desc()).all()
+        if jobs_by_id else []
+    )
+    body = outcomes.applicants_csv(applications, jobs_by_id, blind_mode=company.blind_mode_enabled)
+    return Response(
+        body,
+        mimetype='text/csv',
+        headers={"Content-Disposition": "attachment; filename=applicants.csv"},
+    )
+
+
+@employer.route('/employer/applications/<int:application_id>/retention-checkin', methods=['POST'])
+@login_required
+@employer_required
+def retention_checkin(application_id):
+    company = get_owned_company()
+    application = Application.query.get_or_404(application_id)
+    job = Job.query.get_or_404(application.job_id)
+    if job.company_id != company.id:
+        abort(403)
+    if application.status != 'hired':
+        abort(400)
+
+    recorded = outcomes.record_retention_checkin(
+        application, job, request.form.get('window', ''), request.form.get('result', ''),
+    )
+    if recorded:
+        db.session.commit()
+        flash("Thanks - that makes your hiring analytics more accurate.", "success")
+    else:
+        flash("Could not record that check-in.", "error")
+    return redirect(url_for('employer.analytics'))
 
 
 @employer.route('/employer/applications/<int:application_id>/notes', methods=['POST'])
@@ -1583,6 +1709,7 @@ def save_manual_interview_score(application_id):
         return jsonify({"error": "Score must be between 0 and 100."}), 400
 
     application.manual_interview_score = score
+    outcomes.log_event(application, job, 'manual_score_set')
     db.session.commit()
     return jsonify({"status": "saved", "score": score})
 
@@ -1605,8 +1732,11 @@ def company_settings():
             your_name = request.form.get('your_name', '').strip()
             if your_name:
                 current_user.first_name = your_name
+            hq_problem = locations.place_error(request.form.get('location', ''))
             if not name:
                 flash("Company name is required.", "error")
+            elif hq_problem:
+                flash(hq_problem, "error")
             else:
                 company.name = name
                 company.website = request.form.get('website', '').strip() or None

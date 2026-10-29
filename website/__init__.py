@@ -230,7 +230,7 @@ def create_app():
     os.makedirs(audio_path, exist_ok=True)
     os.makedirs(upload_path, exist_ok=True)
 
-    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission, SavedJob, ContractorProfile, MeetingRoom, Message, EmployerSubscription, MeetingProposal, DataBuyer, Feedback, FeedbackInsight, DeletedJob
+    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission, SavedJob, ContractorProfile, MeetingRoom, Message, EmployerSubscription, MeetingProposal, DataBuyer, Feedback, FeedbackInsight, DeletedJob, ApplicationEvent
 
     with app.app_context():
         db.create_all()

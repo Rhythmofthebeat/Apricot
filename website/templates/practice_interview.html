@@ -235,6 +235,16 @@
                 <button class="btn btn-primary btn-lg px-5" onclick="beginInterview()">
                     <i class="fas fa-play me-2"></i> Start Practice
                 </button>
+                {% if live_enabled %}
+                <div class="mt-3">
+                    <button class="btn btn-outline-primary btn-lg px-4" onclick="beginLiveInterview()">
+                        <i class="fas fa-headset me-2"></i> Talk live with the AI interviewer
+                    </button>
+                    <div class="text-muted mt-2" style="font-size:0.8rem; max-width:380px; margin:0 auto;">
+                        A real-time spoken conversation - the interviewer responds as you talk and you can interrupt. It's an AI, not a person. Uses your microphone.
+                    </div>
+                </div>
+                {% endif %}
                 <div class="mt-3">
                     <button type="button" class="btn btn-link text-decoration-none p-0" style="font-size:0.85rem;" onclick="showSampleQuestions()">
                         <i class="fas fa-list-ul me-1"></i> Just show me sample questions instead
@@ -287,6 +297,17 @@
                             <i class="fas fa-rotate-right me-1"></i> Try again
                         </button>
                     </div>
+                </div>
+
+                <!-- Live conversation controls (only shown in live mode) -->
+                <div id="liveControls" class="text-center" style="display:none; padding:8px 20px 16px;">
+                    <div class="record-status-text" id="liveStatus">Connecting…</div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="liveEndBtn" onclick="endLiveInterview()">
+                        End interview &amp; get feedback
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="liveRetryBtn" style="display:none;" onclick="location.reload()">
+                        Try again
+                    </button>
                 </div>
 
                 <!-- Live transcript (chat bubbles, collapsible on mobile) -->
@@ -466,7 +487,7 @@ async function showSampleQuestions() {
         errorEl.classList.remove('d-none');
     }
 }
-const ESTIMATED_Q = 5;
+const ESTIMATED_Q = {{ estimated_total|default(5) }};
 
 // ── State ──────────────────────────────────────────────────────────────────
 let history      = [];
@@ -749,7 +770,7 @@ function finalizeAnswer(data) {
         showCoachingReport(data.coaching);
     } else {
         addBubble('ai', data.reply);
-        setQuestion(data.reply);
+        setQuestion(data.reply, data.reply_audio_url);
     }
 }
 
@@ -821,21 +842,42 @@ function unlockInput() {
     document.getElementById('wrapUpRow').style.opacity = '';
 }
 
-function setQuestion(text) {
+let currentQuestionAudio = null;
+
+// Open-ended interview: show an estimate of what's left, never an exact %.
+function updateProgressEstimate() {
+    const fill = Math.min(questionNum / ESTIMATED_Q, 0.95);
+    progressBar.style.width = Math.round(fill * 100) + '%';
+    const left = ESTIMATED_Q - questionNum;
+    progressFraction.textContent = `Question ${questionNum}`;
+    progressPct.textContent = left <= 0 ? 'Almost done' : (left === 1 ? '~1 question left' : `~${left} questions left`);
+}
+
+function setQuestion(text, audioUrl) {
     questionNum++;
     qLabel.textContent = `Question ${questionNum}`;
     questionText.textContent = text;
     questionText.style.color = '';
     questionText.style.fontSize = '';
 
-    const pct = Math.min(Math.round(((questionNum - 1) / ESTIMATED_Q) * 100), 90);
-    progressBar.style.width = pct + '%';
-    progressFraction.textContent = `Q${questionNum} of ~${ESTIMATED_Q}`;
-    progressPct.textContent = pct + '%';
+    updateProgressEstimate();
 
-    // Lock input while the question is "presenting" - unlock after 1.5s read time
-    lockInput('Read the question above, then answer…');
-    setTimeout(unlockInput, 1500);
+    // Spoken aloud like the real interview; input unlocks when the question
+    // finishes. Without audio (TTS unavailable, or autoplay blocked) it falls
+    // back to a short read-time delay.
+    if (currentQuestionAudio) { currentQuestionAudio.pause(); currentQuestionAudio = null; }
+    if (audioUrl) {
+        lockInput('Listen to the question, then answer…');
+        const audio = new Audio(audioUrl);
+        currentQuestionAudio = audio;
+        avatar.classList.add('speaking');
+        const done = () => { avatar.classList.remove('speaking'); unlockInput(); };
+        audio.addEventListener('ended', done);
+        audio.play().catch(done);
+    } else {
+        lockInput('Read the question above, then answer…');
+        setTimeout(unlockInput, 1500);
+    }
 }
 
 function addBubble(role, text) {
@@ -902,7 +944,7 @@ async function connectAndStart() {
         document.getElementById('connectError').style.display = 'none';
         document.getElementById('qLabel').innerHTML = '';
 
-        setQuestion(data.reply);
+        setQuestion(data.reply, data.reply_audio_url);
         inputArea.style.display = 'block';
         switchMode('voice');
     } catch (e) {
@@ -923,6 +965,7 @@ function beginInterview() {
 
 // ── Coaching report ────────────────────────────────────────────────────────
 function showCoachingReport(coaching) {
+    if (currentQuestionAudio) { currentQuestionAudio.pause(); currentQuestionAudio = null; }
     document.getElementById('interviewScreen').style.display = 'none';
     document.getElementById('reportScreen').style.display = 'block';
 
@@ -942,6 +985,15 @@ function showCoachingReport(coaching) {
 
     const grid = document.getElementById('coachingGrid');
     let html = '';
+
+    if (coaching.detailed_analysis) {
+        const escaped = String(coaching.detailed_analysis)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        html += `<div class="coaching-block">
+            <div class="coaching-block-title"><i class="fas fa-file-lines me-1" style="color:var(--primary);"></i>Detailed analysis</div>
+            <div style="font-size:0.9rem; line-height:1.6;">${escaped}</div>
+        </div>`;
+    }
 
     if (coaching.strengths?.length) {
         html += `<div class="coaching-block">
@@ -973,5 +1025,248 @@ function showCoachingReport(coaching) {
     grid.innerHTML = html || '<p class="text-muted small text-center">Great effort! Apply now to take the real interview.</p>';
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// ── Live conversation mode (OpenAI Realtime over WebRTC) ───────────────────
+// The browser talks to the model directly with a short-lived key minted by
+// our server; our server never relays the audio. Transcripts are collected
+// from data-channel events and sent back only to produce the feedback report.
+const LIVE_SESSION_URL = "{{ url_for('candidate.practice_live_session', job_id=job.id) }}";
+const LIVE_FINISH_URL  = "{{ url_for('candidate.practice_live_finish', job_id=job.id) }}";
+const REALTIME_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
+
+let livePC = null, liveDC = null, liveStream = null, liveRemoteAudio = null;
+let liveAudioCtx = null, liveRAF = null, liveMaxTimer = null, liveEndTimer = null;
+let liveStarted = false, liveEnding = false, liveFinished = false, liveSpeaking = false;
+const liveEntries = {};      // item_id -> {role, content}
+const liveItemOrder = [];    // item_ids in the order the conversation created them
+
+function setLiveStatus(text) { document.getElementById('liveStatus').textContent = text; }
+
+function showLiveError(msg) {
+    teardownLive();
+    qLabel.textContent = '';
+    questionText.style.color = '';
+    questionText.textContent = msg;
+    setLiveStatus('');
+    document.getElementById('liveEndBtn').style.display = 'none';
+    document.getElementById('liveRetryBtn').style.display = '';
+}
+
+function startLiveAvatarAnimation(stream) {
+    try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        liveAudioCtx = new AC();
+        const source = liveAudioCtx.createMediaStreamSource(stream);
+        const analyser = liveAudioCtx.createAnalyser();
+        analyser.fftSize = 64;
+        source.connect(analyser);
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const img = avatar.querySelector('img');
+        const tick = () => {
+            analyser.getByteFrequencyData(data);
+            const level = data.reduce((a, b) => a + b, 0) / data.length / 255;
+            if (img) img.style.transform = `scale(${1 + level * 0.06})`;
+            liveRAF = requestAnimationFrame(tick);
+        };
+        tick();
+    } catch (_) { /* the pulse ring alone still shows "speaking" */ }
+}
+
+function liveShowQuestion(text) {
+    questionNum++;
+    qLabel.textContent = `Question ${questionNum}`;
+    questionText.style.color = '';
+    questionText.style.fontSize = '';
+    questionText.textContent = text;
+    updateProgressEstimate();
+}
+
+function noteLiveItem(id) {
+    if (id && !liveItemOrder.includes(id)) liveItemOrder.push(id);
+}
+
+function onLiveEvent(msg) {
+    let e;
+    try { e = JSON.parse(msg.data); } catch (_) { return; }
+    switch (e.type) {
+        case 'conversation.item.added':
+        case 'conversation.item.created':
+            noteLiveItem(e.item && e.item.id);
+            break;
+        case 'input_audio_buffer.speech_started':
+            if (!liveEnding) setLiveStatus('Listening…');
+            break;
+        case 'input_audio_buffer.speech_stopped':
+            if (!liveEnding) setLiveStatus('Thinking…');
+            break;
+        case 'output_audio_buffer.started':
+            liveSpeaking = true;
+            avatar.classList.add('speaking');
+            if (!liveEnding) setLiveStatus('Speaking - you can interrupt');
+            break;
+        case 'output_audio_buffer.stopped':
+            liveSpeaking = false;
+            avatar.classList.remove('speaking');
+            if (liveEnding) finishLive();
+            else setLiveStatus('Your turn');
+            break;
+        case 'conversation.item.input_audio_transcription.completed': {
+            const text = (e.transcript || '').trim();
+            if (text) {
+                noteLiveItem(e.item_id);
+                liveEntries[e.item_id] = { role: 'user', content: text };
+                addBubble('user', text);
+            }
+            break;
+        }
+        case 'response.output_audio_transcript.done': {
+            const text = (e.transcript || '').trim();
+            if (text) {
+                noteLiveItem(e.item_id);
+                liveEntries[e.item_id] = { role: 'assistant', content: text };
+                addBubble('ai', text);
+                liveShowQuestion(text);
+            }
+            break;
+        }
+        case 'response.done': {
+            const output = (e.response && e.response.output) || [];
+            if (output.some(o => o.type === 'function_call' && o.name === 'end_interview')) {
+                liveEnding = true;
+                setLiveStatus('Wrapping up…');
+                // Normally the closing line's playback ending triggers finish;
+                // this covers the case where it already ended, or never fires.
+                clearTimeout(liveEndTimer);
+                liveEndTimer = setTimeout(finishLive, liveSpeaking ? 12000 : 1500);
+            }
+            break;
+        }
+        case 'error':
+            console.warn('Realtime error', e);
+            break;
+    }
+}
+
+async function beginLiveInterview() {
+    document.getElementById('tipsScreen').style.display = 'none';
+    document.getElementById('interviewScreen').style.display = 'block';
+    inputArea.style.display = 'none';
+    document.getElementById('liveControls').style.display = 'block';
+    document.getElementById('liveEndBtn').style.display = '';
+    document.getElementById('liveRetryBtn').style.display = 'none';
+    document.getElementById('connectingSpinner').style.display = 'none';
+    qLabel.textContent = '';
+    questionText.style.color = 'var(--text-muted)';
+    questionText.style.fontSize = '1rem';
+    questionText.textContent = 'Connecting you to the interviewer…';
+    setLiveStatus('Connecting…');
+
+    try {
+        const sessRes = await fetch(LIVE_SESSION_URL, { method: 'POST' });
+        const sess = await sessRes.json();
+        if (!sessRes.ok) throw new Error(sess.error || 'Could not start a live session.');
+
+        try {
+            liveStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (e) {
+            throw new Error(describeMediaError(e, 'Microphone'));
+        }
+
+        livePC = new RTCPeerConnection();
+        liveRemoteAudio = new Audio();
+        liveRemoteAudio.autoplay = true;
+        livePC.ontrack = (ev) => {
+            liveRemoteAudio.srcObject = ev.streams[0];
+            startLiveAvatarAnimation(ev.streams[0]);
+        };
+        liveStream.getTracks().forEach(t => livePC.addTrack(t, liveStream));
+
+        liveDC = livePC.createDataChannel('oai-events');
+        liveDC.addEventListener('message', onLiveEvent);
+        liveDC.addEventListener('open', () => {
+            liveStarted = true;
+            setLiveStatus('Connected');
+            // The interviewer speaks first, and says up front that it's an AI.
+            liveDC.send(JSON.stringify({
+                type: 'response.create',
+                response: { instructions: "Greet the candidate in one short sentence, say plainly that you are an AI interviewer, then ask your first question." },
+            }));
+        });
+        livePC.onconnectionstatechange = () => {
+            if (['failed', 'disconnected'].includes(livePC && livePC.connectionState) && !liveFinished && !liveEnding) {
+                showLiveError('The connection dropped. Check your internet and try again.');
+            }
+        };
+
+        const offer = await livePC.createOffer();
+        await livePC.setLocalDescription(offer);
+        const sdpRes = await fetch(REALTIME_CALLS_URL, {
+            method: 'POST',
+            body: offer.sdp,
+            headers: { Authorization: `Bearer ${sess.client_secret}`, 'Content-Type': 'application/sdp' },
+        });
+        if (!sdpRes.ok) throw new Error('The live connection was refused. Please try again.');
+        await livePC.setRemoteDescription({ type: 'answer', sdp: await sdpRes.text() });
+
+        // Hard cap so a forgotten tab can't keep a paid audio session open.
+        liveMaxTimer = setTimeout(() => { liveEnding = true; finishLive(); }, (sess.max_seconds || 1200) * 1000);
+    } catch (e) {
+        showLiveError(e.message || 'Could not start the live interviewer.');
+    }
+}
+
+function teardownLive() {
+    clearTimeout(liveMaxTimer); clearTimeout(liveEndTimer);
+    if (liveRAF) { cancelAnimationFrame(liveRAF); liveRAF = null; }
+    try { if (liveDC) liveDC.close(); } catch (_) {}
+    try { if (livePC) livePC.close(); } catch (_) {}
+    if (liveStream) { liveStream.getTracks().forEach(t => t.stop()); liveStream = null; }
+    if (liveRemoteAudio) { liveRemoteAudio.pause(); liveRemoteAudio.srcObject = null; }
+    if (liveAudioCtx) { try { liveAudioCtx.close(); } catch (_) {} liveAudioCtx = null; }
+    livePC = null; liveDC = null;
+    avatar.classList.remove('speaking');
+}
+
+function liveHistory() {
+    const ordered = liveItemOrder.filter(id => liveEntries[id]).map(id => liveEntries[id]);
+    Object.keys(liveEntries).forEach(id => { if (!liveItemOrder.includes(id)) ordered.push(liveEntries[id]); });
+    return ordered;
+}
+
+function endLiveInterview() {
+    liveEnding = true;
+    finishLive();
+}
+
+async function finishLive() {
+    if (liveFinished) return;
+    liveFinished = true;
+    teardownLive();
+    document.getElementById('liveEndBtn').style.display = 'none';
+    setLiveStatus('Preparing your feedback…');
+    history = liveHistory();
+
+    try {
+        const res = await fetch(LIVE_FINISH_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ history }),
+        });
+        const data = await res.json();
+        if (data.coaching) {
+            showCoachingReport(data.coaching);
+        } else {
+            setLiveStatus(data.message || 'Your feedback report is temporarily unavailable.');
+            document.getElementById('liveRetryBtn').style.display = '';
+            document.getElementById('liveRetryBtn').textContent = 'Practice again';
+        }
+    } catch (e) {
+        setLiveStatus('Could not load your feedback. Please try again.');
+        document.getElementById('liveRetryBtn').style.display = '';
+    }
+}
+
+window.addEventListener('beforeunload', teardownLive);
 </script>
 {% endblock %}

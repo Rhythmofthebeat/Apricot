@@ -455,7 +455,10 @@ const QUESTIONS_URL = "{{ url_for('practice_hub_questions') }}";
 const LOGIN_URL = "{{ url_for('auth.login') }}";
 const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }};
 const DRAFT_KEY = 'practiceHubDraft';
-const ESTIMATED_Q = 5;
+const ESTIMATE_BY_LENGTH = { short: 4, standard: 7, thorough: 10 };
+function estimatedQ() {
+    return ESTIMATE_BY_LENGTH[currentSetup && currentSetup.interview_length] || ESTIMATE_BY_LENGTH.standard;
+}
 
 // ── Setup state ────────────────────────────────────────────────────────────
 let setupMode = 'ai'; // 'ai' | 'manual'
@@ -861,7 +864,7 @@ function finalizeAnswer(data) {
         showCoachingReport(data.coaching);
     } else {
         addBubble('ai', data.reply);
-        setQuestion(data.reply);
+        setQuestion(data.reply, data.reply_audio_url);
     }
 }
 
@@ -928,20 +931,39 @@ function unlockInput() {
     document.getElementById('wrapUpRow').style.opacity = '';
 }
 
-function setQuestion(text) {
+let currentQuestionAudio = null;
+
+function setQuestion(text, audioUrl) {
     questionNum++;
     qLabel.textContent = `Question ${questionNum}`;
     questionText.textContent = text;
     questionText.style.color = '';
     questionText.style.fontSize = '';
 
-    const pct = Math.min(Math.round(((questionNum - 1) / ESTIMATED_Q) * 100), 90);
-    progressBar.style.width = pct + '%';
-    progressFraction.textContent = `Q${questionNum} of ~${ESTIMATED_Q}`;
-    progressPct.textContent = pct + '%';
+    // Open-ended interview: show an estimate of what's left, never an exact %.
+    const ESTIMATED_Q = estimatedQ();
+    const fill = Math.min(questionNum / ESTIMATED_Q, 0.95);
+    progressBar.style.width = Math.round(fill * 100) + '%';
+    const left = ESTIMATED_Q - questionNum;
+    progressFraction.textContent = `Question ${questionNum}`;
+    progressPct.textContent = left <= 0 ? 'Almost done' : (left === 1 ? '~1 question left' : `~${left} questions left`);
 
-    lockInput('Read the question above, then answer…');
-    setTimeout(unlockInput, 1500);
+    // Spoken aloud like the real interview; input unlocks when the question
+    // finishes. Without audio (TTS unavailable, or autoplay blocked) it falls
+    // back to a short read-time delay.
+    if (currentQuestionAudio) { currentQuestionAudio.pause(); currentQuestionAudio = null; }
+    if (audioUrl) {
+        lockInput('Listen to the question, then answer…');
+        const audio = new Audio(audioUrl);
+        currentQuestionAudio = audio;
+        avatar.classList.add('speaking');
+        const done = () => { avatar.classList.remove('speaking'); unlockInput(); };
+        audio.addEventListener('ended', done);
+        audio.play().catch(done);
+    } else {
+        lockInput('Read the question above, then answer…');
+        setTimeout(unlockInput, 1500);
+    }
 }
 
 function addBubble(role, text) {
@@ -1003,7 +1025,7 @@ async function connectAndStart() {
         document.getElementById('connectError').style.display = 'none';
         document.getElementById('qLabel').innerHTML = '';
 
-        setQuestion(data.reply);
+        setQuestion(data.reply, data.reply_audio_url);
         inputArea.style.display = 'block';
         switchMode('voice');
     } catch (e) {
@@ -1025,6 +1047,7 @@ function beginInterview(setup) {
 }
 
 function showCoachingReport(coaching) {
+    if (currentQuestionAudio) { currentQuestionAudio.pause(); currentQuestionAudio = null; }
     document.getElementById('interviewScreen').style.display = 'none';
     document.getElementById('reportScreen').style.display = 'block';
 
@@ -1044,6 +1067,15 @@ function showCoachingReport(coaching) {
 
     const grid = document.getElementById('coachingGrid');
     let html = '';
+
+    if (coaching.detailed_analysis) {
+        const escaped = String(coaching.detailed_analysis)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        html += `<div class="coaching-block">
+            <div class="coaching-block-title"><i class="fas fa-file-lines me-1" style="color:var(--primary);"></i>Detailed analysis</div>
+            <div style="font-size:0.9rem; line-height:1.6;">${escaped}</div>
+        </div>`;
+    }
 
     if (coaching.strengths?.length) {
         html += `<div class="coaching-block">

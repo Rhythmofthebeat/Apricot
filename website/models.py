@@ -312,6 +312,36 @@ class Application(db.Model):
     candidate = db.relationship("User", backref="applications")
 
 
+class ApplicationEvent(db.Model):
+    """Append-only log of hiring decisions, each stamped with the scores that
+    were showing at that moment - the outcome-labelled data behind the
+    calibration and benchmark reports (see outcomes.py).
+
+    Deliberately no ForeignKeys: admin.py / employer.delete_job remove
+    applications with manual bulk deletes, and a hard FK here would make those
+    fail on Postgres. It also holds no names or emails - only ids and scores -
+    so an event that outlives its application is an anonymous data point, not
+    personal data."""
+    id = db.Column(db.Integer, primary_key=True)
+    application_id = db.Column(db.Integer, nullable=False, index=True)
+    job_id = db.Column(db.Integer, nullable=False)
+    company_id = db.Column(db.Integer, nullable=False, index=True)
+    job_category = db.Column(db.String(50))
+    # status_changed | interview_completed | manual_score_set | retention_checkin
+    event_type = db.Column(db.String(30), nullable=False)
+    from_status = db.Column(db.String(20))
+    to_status = db.Column(db.String(20))
+    # Score snapshot at the moment of the event
+    match_score = db.Column(db.Integer)
+    interview_verdict = db.Column(db.String(20))
+    manual_interview_score = db.Column(db.Integer)
+    composite_score = db.Column(db.Integer)
+    # retention_checkin only: "30d" | "90d", and still_employed | left
+    checkin_window = db.Column(db.String(10))
+    detail = db.Column(db.String(30))
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now(), index=True)
+
+
 class SavedJob(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)

@@ -7,7 +7,7 @@ import httpx
 from concurrent.futures import ThreadPoolExecutor
 import uuid
 
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, abort, send_from_directory, Response
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, abort, send_from_directory, Response, current_app
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 from sqlalchemy import or_, func
@@ -15,7 +15,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import getSampleStyleSheet
 
-from . import db, limiter
+from . import db, limiter, outcomes, locations
 from .models import Job, Application, CandidateProfile, Company, CompanyMember, Notification, SavedJob, Message, MeetingRoom, MeetingProposal, User, Feedback, JOB_CATEGORIES, JOB_LOCATIONS, COUNTRIES
 from .matching import keyword_set, overlap_score, NOTIFY_SCORE_THRESHOLD, NOTIFY_MAX_RECIPIENTS
 from email_utils import send_branded_email, external_url
@@ -28,11 +28,13 @@ from ai_services import (
     extract_text_from_file,
     compare_resume_to_job,
     run_interview_turn,
+    build_interview_system_prompt,
     transcribe_audio,
     extract_audio_for_transcription,
     audio_file_extension,
     AudioTooLargeError,
     synthesize_speech,
+    synthesize_speech_data_url,
     generate_resume_from_profile,
     suggest_jobs_for_profile,
     find_similar_jobs,
@@ -49,6 +51,46 @@ logger = logging.getLogger(__name__)
 SUGGESTION_JOB_POOL = 40
 
 AUDIO_BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "audio", "interviews")
+
+
+MAX_INTERVIEW_ANSWERS = 25   # hard stop on a runaway interview; the AI normally ends it far sooner
+
+
+def _interview_application(job_id, application_id, lock=False):
+    """Load an application for its own candidate, and only through the job it
+    actually belongs to. Without the job check, a candidate could run their
+    interview through a different, easier job's URL - the AI would then
+    interview them against that job's description and questions while the
+    result was recorded on the application for the real one."""
+    query = Application.query.filter_by(id=application_id)
+    if lock:
+        # Row lock: two requests for the same interview (a double-click, a
+        # retry) take turns instead of both reading the same stale log.
+        query = query.with_for_update()
+    application = query.first_or_404()
+    if application.candidate_user_id != current_user.id:
+        abort(403)
+    if application.job_id != job_id:
+        abort(404)
+    return application, Job.query.get_or_404(job_id)
+
+
+def _server_history(audio_log):
+    """The conversation so far, rebuilt from the server's own log. The browser
+    used to send this and the server trusted it - so a candidate could edit
+    earlier answers, or the interviewer's questions, before the transcript an
+    employer reads was built from it."""
+    return [
+        {"role": e["role"], "content": (e.get("text") or "").strip()}
+        for e in audio_log
+        if e.get("role") in ("user", "assistant") and (e.get("text") or "").strip()
+    ]
+
+
+def _is_own_answer_path(application_id, path):
+    """Recordings are stored at "<application_id>/<turn>.<ext>" - anything
+    else is some other application's file (or a traversal attempt)."""
+    return bool(re.fullmatch(rf"{int(application_id)}/\d+\.[a-z0-9]{{2,5}}", path or ""))
 
 
 def _audio_dir_for_application(application_id):
@@ -315,6 +357,59 @@ def toggle_save_job(job_id):
     return jsonify({"saved": True})
 
 
+# How many questions an interview of each length typically runs. The AI alone
+# decides when it has enough signal, so this is only ever shown as an estimate.
+ESTIMATED_QUESTIONS = {"short": 4, "standard": 7, "thorough": 10}
+
+
+def estimated_question_count(job):
+    """Best guess at how many questions this job's interview will take: the
+    length setting's typical count, raised when the employer wrote more
+    questions than that, since every one of those gets asked (plus the
+    opening and a follow-up or two)."""
+    base = ESTIMATED_QUESTIONS.get(job.interview_length, ESTIMATED_QUESTIONS["standard"])
+    try:
+        written = len(json.loads(job.interview_questions)) if job.interview_questions else 0
+    except (ValueError, TypeError):
+        written = 0
+    return max(base, written + 1) if written else base
+
+
+def _latest_work_authorization(user_id):
+    """Work authorization from this candidate's most recent application, so a
+    returning candidate can re-affirm it for a new employer in one tap instead
+    of retyping it. Only the stable identity/residence fields come across -
+    the attestation checkboxes and the signature date are given again, and
+    explicitly, on every application."""
+    prior = (
+        Application.query
+        .filter(Application.candidate_user_id == user_id, Application.work_authorization.isnot(None))
+        .order_by(Application.created_at.desc())
+        .first()
+    )
+    if not prior:
+        return None
+    try:
+        data = json.loads(prior.work_authorization)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    fields = ('country', 'state', 'city', 'postal_code', 'signature_full_name', 'signature_text')
+    if not all(isinstance(data.get(f), str) and data[f].strip() for f in fields):
+        return None
+    saved = {f: data[f].strip() for f in fields}
+    # Working from a different country than their residence is a per-employer
+    # statement that needs fresh input, so it never gets the one-tap path.
+    saved['different_country'] = bool(data.get('working_from_different_country'))
+    # Older applications were saved before locations were validated (a country
+    # typed into the city box, a junk postal code). Those still pre-fill the
+    # form, but never get the one-tap re-use - the candidate fixes them first.
+    saved['invalid'] = locations.work_location_error(saved) is not None
+    return saved
+
+
 @candidate.route('/jobs/<int:job_id>/apply', methods=['GET'])
 @login_required
 def apply(job_id):
@@ -330,7 +425,12 @@ def apply(job_id):
     profile = CandidateProfile.query.filter_by(user_id=current_user.id).first()
     saved_resume_text = (profile.resume_text or '').strip() if profile else ''
 
-    return render_template("apply.html", job=job, countries=COUNTRIES, saved_resume_text=saved_resume_text or None)
+    return render_template(
+        "apply.html", job=job, countries=COUNTRIES,
+        saved_resume_text=saved_resume_text or None,
+        saved_work_auth=_latest_work_authorization(current_user.id),
+        location_rules=locations.rules_for_js(),
+    )
 
 
 @candidate.route('/extract-resume-text', methods=['POST'])
@@ -392,6 +492,11 @@ def submit_application(job_id):
     if not resume_text:
         return jsonify({"error": "Add your resume content first."}), 400
 
+    if work_authorization:
+        location_problem = locations.work_location_error(work_authorization)
+        if location_problem:
+            return jsonify({"error": location_problem}), 400
+
     try:
         result = compare_resume_to_job(job.description_text, resume_text)
     except Exception as e:
@@ -424,49 +529,60 @@ def submit_application(job_id):
         db.session.rollback()
         return jsonify({"error": "Could not save your application - please try again."}), 500
 
+    # The interview is required to complete the application, so go straight
+    # into it - its Start button is the one tap the browser needs anyway for
+    # mic/camera permission, which makes a separate "next steps" page pure
+    # friction. The old next-steps page stays routable for existing links.
     return jsonify({
-        "redirect_url": url_for('candidate.apply_next_steps', job_id=job.id, application_id=application.id)
+        "redirect_url": url_for('candidate.interview', job_id=job.id, application_id=application.id)
     })
 
 
 @candidate.route('/jobs/<int:job_id>/apply/<int:application_id>/next')
 @login_required
 def apply_next_steps(job_id, application_id):
-    application = Application.query.get_or_404(application_id)
-    if application.candidate_user_id != current_user.id:
-        abort(403)
-    job = Job.query.get_or_404(job_id)
+    application, job = _interview_application(job_id, application_id)
     return render_template("apply_next_steps.html", job=job, application=application)
 
 
 @candidate.route('/jobs/<int:job_id>/apply/<int:application_id>/interview')
 @login_required
 def interview(job_id, application_id):
-    application = Application.query.get_or_404(application_id)
-    if application.candidate_user_id != current_user.id:
-        abort(403)
-    job = Job.query.get_or_404(job_id)
+    application, job = _interview_application(job_id, application_id)
     already_done = bool(application.interview_transcript)
+
+    if not already_done and (application.withdrawn or application.status in ('hired', 'rejected')):
+        flash("This application is closed, so its interview can't be taken.", "info")
+        return redirect(url_for('candidate.dashboard'))
+
+    # Resume from the server's own record of the conversation, not anything
+    # the browser stored.
     saved_session = None
-    if not already_done and application.interview_saved_session:
+    if not already_done:
         try:
-            saved_session = json.loads(application.interview_saved_session)
+            log = json.loads(application.interview_audio_log) if application.interview_audio_log else []
         except (ValueError, TypeError):
-            pass
+            log = []
+        history = _server_history(log)
+        saved_session = history or None
     return render_template("ai_interview.html", job=job, application=application,
-                           already_done=already_done, saved_session=saved_session)
+                           already_done=already_done, saved_session=saved_session,
+                           estimated_total=estimated_question_count(job))
 
 
 @candidate.route('/jobs/<int:job_id>/apply/<int:application_id>/save-session', methods=['POST'])
 @login_required
 def save_interview_session(job_id, application_id):
-    application = Application.query.get_or_404(application_id)
-    if application.candidate_user_id != current_user.id:
-        abort(403)
-    data = request.get_json() or {}
-    history = data.get('history', [])
-    application.interview_saved_session = json.dumps(history)
-    db.session.commit()
+    """Kept so existing pages keep working, but the server's own log is the
+    saved session now - nothing in the request body is stored."""
+    application, _ = _interview_application(job_id, application_id)
+    if not application.interview_transcript:
+        try:
+            log = json.loads(application.interview_audio_log) if application.interview_audio_log else []
+        except (ValueError, TypeError):
+            log = []
+        application.interview_saved_session = json.dumps(_server_history(log))
+        db.session.commit()
     return jsonify({'status': 'saved'})
 
 
@@ -480,9 +596,9 @@ def interview_answer_upload_url(job_id, application_id):
     avants.ai itself get rejected at the edge well under what a longer
     answer needs - a direct-to-storage upload bypasses that entirely since
     the big transfer never touches this app's domain."""
-    application = Application.query.get_or_404(application_id)
-    if application.candidate_user_id != current_user.id:
-        abort(403)
+    application, _ = _interview_application(job_id, application_id)
+    if application.interview_transcript:
+        return jsonify({"error": "This interview is already complete."}), 409
 
     audio_log = json.loads(application.interview_audio_log) if application.interview_audio_log else []
     turn_number = len(audio_log) + 1
@@ -505,18 +621,50 @@ def interview_answer_upload_url(job_id, application_id):
 @login_required
 @limiter.limit("60 per hour")
 def interview_chat(job_id, application_id):
-    application = Application.query.get_or_404(application_id)
-    if application.candidate_user_id != current_user.id:
-        abort(403)
-    job = Job.query.get_or_404(job_id)
+    application, job = _interview_application(job_id, application_id, lock=True)
 
-    history = json.loads(request.form.get("history", "[]"))
+    # A finished interview is final. Without this a candidate could keep
+    # posting turns after the verdict and re-roll it until they liked it.
+    if application.interview_transcript:
+        return jsonify({"error": "This interview is already complete."}), 409
+    if application.withdrawn or application.status in ('hired', 'rejected'):
+        return jsonify({"error": "This application is closed, so its interview can't be taken."}), 409
+
     wrap_up = request.form.get("wrap_up", "false").lower() == "true"
     video_path_uploaded = request.form.get("video_path") or None
     has_video = request.form.get("has_video", "false").lower() == "true"
 
     audio_log = json.loads(application.interview_audio_log) if application.interview_audio_log else []
     audio_dir = _audio_dir_for_application(application_id)
+
+    # The conversation comes from the server's own log, never from the browser.
+    history = _server_history(audio_log)
+    answers_so_far = sum(1 for e in audio_log if e.get("role") == "user")
+
+    if video_path_uploaded:
+        if not _is_own_answer_path(application_id, video_path_uploaded):
+            return jsonify({"error": "That recording doesn't belong to this interview."}), 400
+        # Same recording submitted twice (double-click, retry after a slow
+        # response): answer from the log instead of running the turn again.
+        for i, entry in enumerate(audio_log):
+            if entry.get("role") == "user" and entry.get("video_path") == video_path_uploaded:
+                nxt = audio_log[i + 1] if i + 1 < len(audio_log) else None
+                if nxt and nxt.get("role") == "assistant":
+                    fname = nxt.get("audio_filename")
+                    return jsonify({
+                        "reply": nxt.get("text") or "",
+                        "reply_audio_url": url_for('candidate.application_audio', application_id=application_id, filename=fname) if fname else None,
+                        "transcribed_answer": entry.get("text") or "",
+                        "concluded": False,
+                    })
+                break
+    elif wrap_up:
+        if answers_so_far < 1:
+            return jsonify({"error": "Answer at least one question before wrapping up."}), 400
+    elif audio_log:
+        # Not the opening call and nothing attached: advancing on an empty
+        # answer would let the interview run - and be graded - on silence.
+        return jsonify({"error": "Record your answer first."}), 400
 
     user_message = ""
     if video_path_uploaded:
@@ -560,15 +708,21 @@ def interview_chat(job_id, application_id):
         if audio_path != tmp_path and os.path.exists(audio_path):
             os.remove(audio_path)
 
+        if not (user_message or "").strip():
+            return jsonify({"error": "We couldn't hear anything in that answer. Check your microphone and try recording it again."}), 400
+
         audio_log.append({
             "role": "user", "text": user_message,
             "video_path": video_path_uploaded, "has_video": has_video,
         })
 
+    # Past the answer cap the interview ends regardless of what the AI wants.
+    force_conclude = wrap_up or (answers_so_far + (1 if user_message else 0)) >= MAX_INTERVIEW_ANSWERS
+
     try:
         interview_questions = json.loads(job.interview_questions) if job.interview_questions else None
         reply = run_interview_turn(
-            job.title, job.description_text, user_message, history, force_conclude=wrap_up,
+            job.title, job.description_text, user_message, history, force_conclude=force_conclude,
             interview_length=job.interview_length, interview_focus=job.interview_focus,
             interview_questions=interview_questions,
         )
@@ -576,9 +730,9 @@ def interview_chat(job_id, application_id):
         return jsonify({"error": "Failed to get a response. Please try again."}), 500
 
     verdict_match = re.search(r"Verdict:\s*(Strong Yes|Yes|No|Strong No)", reply, re.IGNORECASE)
-    should_conclude = bool(verdict_match) or wrap_up
+    should_conclude = bool(verdict_match) or force_conclude
 
-    if wrap_up and not verdict_match:
+    if force_conclude and not verdict_match:
         # The model was told to conclude but didn't return a parseable verdict
         # line - retry once with the same context before falling back to
         # "Pending", so a single off-format reply doesn't permanently strand
@@ -610,18 +764,24 @@ def interview_chat(job_id, application_id):
     application.interview_audio_log = json.dumps(audio_log)
 
     if should_conclude:
-        transcript_lines = [f"{m.get('role')}: {m.get('content')}" for m in history]
+        transcript_lines = [f"{m['role']}: {m['content']}" for m in history]
+        if user_message:
+            # The answer that led to the verdict - it isn't in `history` yet,
+            # and used to be missing from every stored transcript.
+            transcript_lines.append(f"user: {user_message}")
         transcript_lines.append(f"assistant: {reply}")
         application.interview_transcript = "\n".join(transcript_lines)
         application.interview_saved_session = None  # clear saved session on completion
         verdict = verdict_match.group(1).title() if verdict_match else "Pending"
         application.interview_verdict = verdict
-        application.status = 'interviewing'
+        if application.status == 'applied':
+            application.status = 'interviewing'   # never reopen a hired/rejected application
         try:
             ai_result = analyze_ai_likelihood(application.interview_transcript, job.title)
             application.ai_likelihood = json.dumps(ai_result)
         except Exception:
             pass
+        outcomes.log_event(application, job, 'interview_completed', to_status='interviewing')
 
         if current_user.notifications_enabled:
             job = Job.query.get(job_id)
@@ -942,6 +1102,10 @@ def profile():
 def save_profile():
     data = request.get_json() or {}
 
+    location_problem = locations.place_error(data.get('location'))
+    if location_problem:
+        return jsonify({"status": "error", "error": location_problem}), 400
+
     first_name = (data.get('first_name') or '').strip()
     if first_name:
         current_user.first_name = first_name
@@ -1209,7 +1373,9 @@ def practice_interview(job_id):
     if job.status != 'open':
         flash("This job is no longer accepting applications.", "info")
         return redirect(url_for('candidate.browse_jobs'))
-    return render_template('practice_interview.html', job=job)
+    return render_template('practice_interview.html', job=job,
+                           estimated_total=ESTIMATED_QUESTIONS.get(job.interview_length, ESTIMATED_QUESTIONS["standard"]),
+                           live_enabled=bool(current_app.config.get('LIVE_INTERVIEW_ENABLED')))
 
 
 @candidate.route('/jobs/<int:job_id>/practice-chat', methods=['POST'])
@@ -1309,14 +1475,136 @@ def practice_interview_chat(job_id):
             except Exception:
                 coaching = None
 
+    # Spoken like the real interview - but not once it concludes: the reply is
+    # then a verdict write-up, and the coaching report takes over from there.
+    reply_audio_url = None if should_conclude else synthesize_speech_data_url(reply)
+
     return jsonify({
         "reply": reply,
-        "reply_audio_url": None,
+        "reply_audio_url": reply_audio_url,
         "transcribed_answer": user_message,
         "text_answer": text_answer,
         "concluded": should_conclude,
         "coaching": coaching,
     })
+
+
+REALTIME_CLIENT_SECRETS_URL = "https://api.openai.com/v1/realtime/client_secrets"
+
+END_INTERVIEW_TOOL = {
+    "type": "function",
+    "name": "end_interview",
+    "description": (
+        "Call this once, right after you have said your short closing line, when you have enough "
+        "signal to evaluate the candidate. Do not call it before then."
+    ),
+    "parameters": {"type": "object", "properties": {}, "required": []},
+}
+
+
+@candidate.route('/jobs/<int:job_id>/practice-live/session', methods=['POST'])
+@login_required
+@limiter.limit("10 per hour")
+def practice_live_session(job_id):
+    """Mint a short-lived OpenAI Realtime key so the candidate's browser can
+    hold a live voice conversation with the AI interviewer directly (WebRTC).
+    The real API key never leaves the server; the key returned here expires
+    in minutes and only works for the session configured below."""
+    if current_user.role != 'candidate':
+        abort(403)
+    if not current_app.config.get('LIVE_INTERVIEW_ENABLED'):
+        abort(404)
+    job = Job.query.get_or_404(job_id)
+    if job.status != 'open':
+        return jsonify({"error": "This job is no longer accepting applications."}), 400
+
+    api_key = current_app.config.get('OPENAI_API_KEY')
+    if not api_key:
+        return jsonify({"error": "Live interviews aren't configured yet."}), 503
+
+    # Same prompt the recorded interview uses. Practice never receives the
+    # employer's written questions or their private per-question comments.
+    instructions = build_interview_system_prompt(
+        job.title, job.description_text,
+        interview_length=job.interview_length, interview_focus=job.interview_focus,
+        interview_questions=None, practice_mode=True, live=True,
+    )
+    model = current_app.config.get('OPENAI_REALTIME_MODEL')
+    body = {
+        "expires_after": {"anchor": "created_at", "seconds": 600},
+        "session": {
+            "type": "realtime",
+            "model": model,
+            "instructions": instructions,
+            "audio": {
+                "output": {"voice": current_app.config.get('OPENAI_REALTIME_VOICE')},
+                "input": {
+                    "transcription": {"model": "gpt-4o-transcribe", "language": "en"},
+                    # Semantic VAD at low eagerness waits for the candidate to
+                    # actually finish a thought instead of cutting in on a
+                    # pause - long, considered answers are the norm here.
+                    "turn_detection": {
+                        "type": "semantic_vad", "eagerness": "low",
+                        "create_response": True, "interrupt_response": True,
+                    },
+                },
+            },
+            "tools": [END_INTERVIEW_TOOL],
+            "tool_choice": "auto",
+        },
+    }
+    try:
+        resp = httpx.post(
+            REALTIME_CLIENT_SECRETS_URL, json=body, timeout=15,
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        resp.raise_for_status()
+        secret = resp.json().get("value")
+    except Exception:
+        logger.exception("Could not mint a realtime client secret")
+        return jsonify({"error": "Couldn't start the live interviewer right now. Please try again."}), 502
+    if not secret:
+        return jsonify({"error": "Couldn't start the live interviewer right now. Please try again."}), 502
+
+    return jsonify({
+        "client_secret": secret,
+        "max_seconds": current_app.config.get('LIVE_INTERVIEW_MAX_SECONDS'),
+    })
+
+
+@candidate.route('/jobs/<int:job_id>/practice-live/finish', methods=['POST'])
+@login_required
+@limiter.limit("20 per hour")
+def practice_live_finish(job_id):
+    """Coaching report for a finished live practice conversation. The browser
+    assembles the transcript from the realtime events; nothing is stored."""
+    if current_user.role != 'candidate':
+        abort(403)
+    job = Job.query.get_or_404(job_id)
+
+    raw = (request.get_json(silent=True) or {}).get('history')
+    turns = []
+    if isinstance(raw, list):
+        for m in raw[:80]:
+            if isinstance(m, dict) and m.get('role') in ('user', 'assistant') and m.get('content'):
+                turns.append({"role": m['role'], "content": str(m['content'])[:3000]})
+
+    if not any(t['role'] == 'user' for t in turns):
+        return jsonify({"coaching": None,
+                        "message": "You ended before answering anything, so there's nothing to give feedback on yet."})
+
+    transcript = "\n".join(f"{t['role']}: {t['content']}" for t in turns)
+    secs = job.description_sections or {}
+    try:
+        coaching = generate_interview_coaching(
+            transcript=transcript, job_title=job.title,
+            requirements=secs.get('requirements', ''), verdict=None, match_score=None,
+        )
+    except Exception:
+        logger.exception("Live practice coaching failed")
+        coaching = None
+    return jsonify({"coaching": coaching,
+                    "message": None if coaching else "Your feedback report is temporarily unavailable."})
 
 
 @candidate.route('/jobs/<int:job_id>/practice-questions', methods=['POST'])

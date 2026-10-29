@@ -532,8 +532,13 @@ def practice_hub_chat():
             except Exception:
                 coaching = None
 
+    # Spoken like the real interview, except once it concludes (the reply is
+    # then a verdict write-up and the coaching report takes over).
+    reply_audio_url = None if should_conclude else synthesize_speech_data_url(reply)
+
     return jsonify({
         "reply": reply,
+        "reply_audio_url": reply_audio_url,
         "transcribed_answer": user_message,
         "text_answer": text_answer,
         "concluded": should_conclude,

@@ -69,9 +69,16 @@
         <h1 class="h4 fw-bold mb-1">Hiring Analytics</h1>
         <p class="text-muted small mb-0">Pipeline performance across all your jobs</p>
     </div>
-    <a href="{{ url_for('employer.dashboard') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="fas fa-arrow-left me-1"></i> Dashboard
-    </a>
+    <div class="d-flex gap-2">
+        {% if stats and stats.total %}
+        <a href="{{ url_for('employer.export_applicants') }}" class="btn btn-sm btn-outline-primary">
+            <i class="fas fa-download me-1"></i> Export applicants (CSV)
+        </a>
+        {% endif %}
+        <a href="{{ url_for('employer.dashboard') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Dashboard
+        </a>
+    </div>
 </div>
 
 {% if not stats or stats.total == 0 %}
@@ -180,42 +187,95 @@
         </div>
     </div>
 
-    <!-- Benchmark card -->
-    <div class="col-12">
-        <div class="benchmark-note">
-            <strong><i class="fas fa-lightbulb me-2"></i>How you compare to industry averages</strong><br>
-            <div class="row mt-2 g-2">
-                <div class="col-md-4 small">
-                    <strong>Interview completion rate:</strong> Industry avg is ~45%.
-                    {% if stats.interview_rate >= 45 %}
-                        <span class="text-success fw-semibold">You're above average at {{ stats.interview_rate }}%.</span>
-                    {% else %}
-                        <span>You're at {{ stats.interview_rate }}% - consider sharing the interview link more prominently.</span>
-                    {% endif %}
-                </div>
-                <div class="col-md-4 small">
-                    <strong>Hire rate:</strong> Platforms average 2–4%.
-                    {% if stats.hire_rate >= 2 %}
-                        <span class="text-success fw-semibold">You're converting well at {{ stats.hire_rate }}%.</span>
-                    {% else %}
-                        <span>At {{ stats.hire_rate }}%, you may need more applicants or broader requirements.</span>
-                    {% endif %}
-                </div>
-                <div class="col-md-4 small">
-                    <strong>Avg match score:</strong> Top platforms see ~65–70 for quality pipelines.
-                    {% if stats.avg_score %}
-                        {% if stats.avg_score >= 65 %}
-                            <span class="text-success fw-semibold">Your avg of {{ stats.avg_score }} shows strong candidate fit.</span>
-                        {% else %}
-                            <span>Your avg of {{ stats.avg_score }} suggests your job description may need more specificity to attract better-matched candidates.</span>
-                        {% endif %}
-                    {% else %}
-                        <span>No match score data yet.</span>
-                    {% endif %}
-                </div>
+    {% if entitled %}
+    <!-- Score calibration -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header fw-bold"><i class="fas fa-bullseye me-2" style="color:var(--primary);"></i>Does the AI score predict your hires?</div>
+            <div class="card-body p-4">
+                {% if calibration.decided == 0 %}
+                <p class="text-muted small mb-0">Once you've marked applicants hired or rejected, this shows how often each score band ends in a hire.</p>
+                {% else %}
+                <table class="table table-sm mb-3">
+                    <thead><tr><th>Composite score</th><th class="text-end">Decided</th><th class="text-end">Hired</th><th class="text-end">Hire rate</th></tr></thead>
+                    <tbody>
+                    {% for b in calibration.bands %}
+                    <tr {% if not b.reliable %}class="text-muted"{% endif %}>
+                        <td>{{ b.band }}</td>
+                        <td class="text-end">{{ b.decided }}</td>
+                        <td class="text-end">{{ b.hired }}</td>
+                        <td class="text-end">{% if b.hire_rate is not none %}{{ b.hire_rate }}%{% else %}-{% endif %}{% if b.decided and not b.reliable %} *{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% if calibration.predictive is true %}
+                <p class="small mb-1 text-success fw-semibold">Higher scores are converting to hires more often for you.</p>
+                {% elif calibration.predictive is false %}
+                <p class="small mb-1 fw-semibold" style="color:var(--danger, #dc2626);">Higher scores are not out-hiring lower ones in your data yet - treat the score as a screen, not a ranking.</p>
+                {% endif %}
+                <p class="text-muted mb-0" style="font-size:0.72rem;">* Fewer than {{ min_band_size }} decisions in this band - too few to read anything into.</p>
+                {% endif %}
             </div>
         </div>
     </div>
+
+    <!-- Speed + retention -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header fw-bold"><i class="fas fa-user-check me-2" style="color:var(--primary);"></i>Speed and retention</div>
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="small text-muted">Median time to hire</span>
+                    <span class="fw-bold">{% if median_days_to_hire is not none %}{{ median_days_to_hire }} days{% else %}-{% endif %}</span>
+                </div>
+                {% for window, label in [('30d', '30-day'), ('90d', '90-day')] %}
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="small text-muted">{{ label }} retention</span>
+                    <span class="fw-bold">{% if retention[window].rate is not none %}{{ retention[window].rate }}% <span class="text-muted fw-normal small">({{ retention[window].total }} reported)</span>{% else %}-{% endif %}</span>
+                </div>
+                {% endfor %}
+
+                {% if checkins_due %}
+                <hr>
+                <div class="small fw-semibold mb-2">Check-ins due</div>
+                {% for app, window in checkins_due %}
+                <form method="POST" action="{{ url_for('employer.retention_checkin', application_id=app.id) }}" class="d-flex align-items-center gap-2 mb-2">
+                    <input type="hidden" name="window" value="{{ window }}">
+                    <span class="small flex-grow-1 text-truncate">{{ app.candidate.first_name or 'Candidate' }} - {{ window }} check-in</span>
+                    <button name="result" value="still_employed" class="btn btn-sm btn-outline-success">Still there</button>
+                    <button name="result" value="left" class="btn btn-sm btn-outline-secondary">Left</button>
+                </form>
+                {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Platform benchmark -->
+    <div class="col-12">
+        <div class="benchmark-note">
+            <strong><i class="fas fa-lightbulb me-2"></i>How you compare to other Avants employers</strong><br>
+            {% if benchmark %}
+            <div class="row mt-2 g-2">
+                <div class="col-md-4 small"><strong>Interview completion:</strong> you {{ stats.interview_rate }}% vs {{ benchmark.interview_rate }}% platform-wide</div>
+                <div class="col-md-4 small"><strong>Hire rate:</strong> you {{ stats.hire_rate }}% vs {{ benchmark.hire_rate }}%</div>
+                <div class="col-md-4 small"><strong>Avg match score:</strong> you {{ stats.avg_score if stats.avg_score else '-' }} vs {{ benchmark.avg_score if benchmark.avg_score is not none else '-' }}</div>
+            </div>
+            <div class="mt-2" style="font-size:0.72rem;">Based on {{ benchmark.applications }} applications across {{ benchmark.companies }} other companies.</div>
+            {% else %}
+            <div class="small mt-1">Benchmarks appear once at least {{ min_benchmark_companies }} other companies have enough applications - we don't show estimates we can't back up.</div>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="benchmark-note">
+            <strong><i class="fas fa-lock me-2"></i>Score calibration, retention and benchmarks</strong><br>
+            <span class="small">Available on the Starter and Pro plans.</span>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 {% endif %}

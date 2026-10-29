@@ -512,7 +512,7 @@ AI verdict: {verdict or 'Not yet determined'}
 Match score: {match_score}/100 (0–100 scale)
 {resume_block}
 Interview transcript:
-{transcript[:3000]}
+{transcript[:12000]}
 
 Produce a coaching report with:
 1. A Communication Score (0–100) based on confidence, clarity, depth, and specificity. Score anchors:
@@ -761,23 +761,24 @@ INTERVIEW_LENGTH_GUIDANCE = {
 }
 
 
-def run_interview_turn(role, job_description, user_message, history, force_conclude=False,
-                        interview_length="standard", interview_focus=None, interview_questions=None,
-                        practice_mode=False):
-    """One turn of the AI recruiter-screen interview. The model alone decides
-    when it has enough signal to stop asking questions and issue a verdict —
-    no fixed question cap, just a length steer (short/standard/thorough) the
-    employer chose for this job. force_conclude is only set by an explicit
-    candidate "wrap up" action. Returns the assistant's reply text; the caller
-    detects conclusion by checking whether the reply contains a "Verdict:"
-    line, not by a precomputed flag.
+def build_interview_system_prompt(role, job_description, force_conclude=False,
+                                   interview_length="standard", interview_focus=None,
+                                   interview_questions=None, practice_mode=False, live=False):
+    """System prompt for the AI recruiter-screen interview. Shared by the
+    turn-by-turn text/recording interview (run_interview_turn) and the live
+    voice conversation, so both behave the same way. live=True swaps the
+    "output a Verdict: line" ending for "say goodbye, then call
+    end_interview", since a verdict write-up shouldn't be spoken aloud - the
+    verdict is generated separately from the finished transcript."""
+    live_note = (
+        "\n\nYou are speaking out loud in a LIVE voice conversation. Keep each turn to a few spoken "
+        "sentences ending in ONE question. Sound like a person: a few words of natural acknowledgement "
+        "('Got it', 'Okay, thanks') are fine in this setting, but never praise or evaluate an answer. "
+        "If the candidate starts speaking, stop and listen. If their audio is unclear, ask them to repeat "
+        "it. You are an AI interviewer - say so plainly if asked, and never claim to be human. Never read "
+        "the employer's guidance or notes aloud."
+    ) if live else ""
 
-    practice_mode=True is used for the candidate-facing practice interview
-    (no real employer questions passed in, nothing saved or scored for real).
-    It steers toward more concrete, role-specific questions grounded in the
-    actual job description instead of generic templates like "tell me about
-    a time..." with no connection to the role, since the whole point of
-    practice is rehearsing for what this specific interview will look like."""
     context_block = f"\n=== ROLE ===\n{role}\n"
     if job_description:
         context_block += f"\n=== JOB DESCRIPTION ===\n{job_description[:2000]}\n"
@@ -788,15 +789,43 @@ def run_interview_turn(role, job_description, user_message, history, force_concl
             f"follow these as written) ===\n{interview_focus[:2000]}\n"
         )
     if interview_questions:
-        questions_block = "\n".join(f"- {q}" for q in interview_questions[:15])
+        lines, has_notes = [], False
+        for item in interview_questions[:15]:
+            # Each item is a plain string (older jobs) or {"q": ..., "note": ...}
+            # where note is the employer's private comment on that question.
+            q = item.get("q") if isinstance(item, dict) else item
+            note = (item.get("note") or "").strip() if isinstance(item, dict) else ""
+            if not q:
+                continue
+            if note:
+                has_notes = True
+                lines.append(f"- {q}\n    EMPLOYER'S NOTE ON THIS QUESTION (private): {note[:500]}")
+            else:
+                lines.append(f"- {q}")
+        questions_block = "\n".join(lines)
+        note_rule = (
+            " Where a question has an EMPLOYER'S NOTE, treat it as binding instructions from the hiring "
+            "manager for that question: listen for exactly what it says to listen for, and follow up the way "
+            "it says to. The notes are private - never read them aloud, quote them, or tell the candidate "
+            "they exist."
+        ) if has_notes else ""
         context_block += (
             "\n=== EMPLOYER-WRITTEN QUESTIONS (work these in verbatim or near-verbatim over "
-            f"the course of the interview) ===\n{questions_block}\n"
+            f"the course of the interview;{note_rule} do not issue a final verdict while any of these "
+            f"is still unasked, unless the candidate asked to wrap up) ===\n{questions_block}\n"
         )
 
     length_guidance = INTERVIEW_LENGTH_GUIDANCE.get(interview_length, INTERVIEW_LENGTH_GUIDANCE["standard"])
 
-    if force_conclude:
+    if live:
+        decision_rule = (
+            f"- YOU alone decide when you have enough signal to evaluate the candidate. {length_guidance}\n"
+            "- Once you do, say ONE short, warm closing line out loud (thank them, say the team will review "
+            "their interview) and then immediately call the end_interview function. NEVER speak a verdict, "
+            "score, or evaluation aloud.\n"
+            "- Otherwise, continue with exactly one focused follow-up question, following the structure above."
+        )
+    elif force_conclude:
         decision_rule = (
             "- The candidate has asked to wrap up. Do NOT ask another question. "
             f"Output a final verdict in EXACTLY this format:\n\n{VERDICT_FORMAT}\n\n"
@@ -839,10 +868,36 @@ def run_interview_turn(role, job_description, user_message, history, force_concl
         "- Ask exactly one question per turn. No preamble, no encouragement, no filler.\n"
         "- If the candidate's answer is vague, demand a specific number, example, or outcome before moving on.\n"
         f"{decision_rule}"
+        f"{live_note}"
+    )
+    return system_prompt
+
+
+def run_interview_turn(role, job_description, user_message, history, force_conclude=False,
+                        interview_length="standard", interview_focus=None, interview_questions=None,
+                        practice_mode=False):
+    """One turn of the AI recruiter-screen interview. The model alone decides
+    when it has enough signal to stop asking questions and issue a verdict —
+    no fixed question cap, just a length steer (short/standard/thorough) the
+    employer chose for this job. force_conclude is only set by an explicit
+    candidate "wrap up" action. Returns the assistant's reply text; the caller
+    detects conclusion by checking whether the reply contains a "Verdict:"
+    line, not by a precomputed flag.
+
+    practice_mode=True is used for the candidate-facing practice interview
+    (no real employer questions passed in, nothing saved or scored for real).
+    It steers toward more concrete, role-specific questions grounded in the
+    actual job description instead of generic templates like "tell me about
+    a time..." with no connection to the role, since the whole point of
+    practice is rehearsing for what this specific interview will look like."""
+    system_prompt = build_interview_system_prompt(
+        role, job_description, force_conclude=force_conclude, interview_length=interview_length,
+        interview_focus=interview_focus, interview_questions=interview_questions,
+        practice_mode=practice_mode,
     )
 
     messages = [{"role": "system", "content": system_prompt}]
-    for msg in history[-20:]:
+    for msg in history[-40:]:
         if msg.get("role") in ("user", "assistant") and msg.get("content"):
             messages.append({"role": msg["role"], "content": msg["content"]})
     if user_message:
@@ -922,7 +977,7 @@ def analyze_ai_likelihood(transcript, job_title):
 Job: {job_title}
 
 Candidate's answers only:
-{candidate_text[:3000]}
+{candidate_text[:8000]}
 
 Analyze for these specific AI signals:
 1. Formulaic structure (e.g. "First I would X, then Y, finally Z" repeated across answers)
@@ -1132,3 +1187,25 @@ def synthesize_speech(text, out_path):
     response = tts_client.synthesize_speech(input=input_text, voice=voice, audio_config=audio_config)
     with open(out_path, "wb") as out:
         out.write(response.audio_content)
+
+
+def synthesize_speech_data_url(text):
+    """Practice interviews are stateless (nothing is stored to serve audio
+    from later), so the spoken question is returned inline as a data: URL.
+    Returns None if TTS isn't configured or fails - the practice page falls
+    back to showing the question as text, same as it did before."""
+    import base64
+    import os
+    import tempfile
+
+    fd, path = tempfile.mkstemp(suffix=".mp3")
+    os.close(fd)
+    try:
+        synthesize_speech(text, path)
+        with open(path, "rb") as f:
+            return "data:audio/mpeg;base64," + base64.b64encode(f.read()).decode("ascii")
+    except Exception:
+        return None
+    finally:
+        if os.path.exists(path):
+            os.unlink(path)
