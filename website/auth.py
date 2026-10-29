@@ -583,16 +583,17 @@ def verify_email(token):
 
 @auth.route('/login/google')
 def login_google():
+    """Single entry point for "Sign up with Google" and "Log in with Google".
+    Which one it is only matters if there's no account yet: an existing
+    account is simply signed in, whichever button was clicked. A brand-new
+    *candidate* account is created on the spot; a brand-new *employer* account
+    is not - Google gives no chance to collect a company name or verify a work
+    domain, so that still goes through the email/password form (see
+    login_google_finish)."""
     next_url = _safe_next(request.args.get("next"))
 
-    # Employers sign up with their company email/password only - Google gives
-    # no chance to collect a company name or verify a work domain up front,
-    # so a fresh employer account can't be created through this route.
-    if request.args.get("role") == "employer":
-        flash("Employer accounts sign up with a work email and password - Google sign-up is for candidates only.", "error")
-        return redirect(url_for("auth.sign_up", next=next_url) if next_url else url_for("auth.sign_up"))
-
-    session["oauth_role"] = "candidate"
+    session["oauth_role"] = "employer" if request.args.get("role") == "employer" else "candidate"
+    session["oauth_intent"] = "signup" if request.args.get("intent") == "signup" else "login"
     session["oauth_next"] = next_url
 
     # Redirect user to Supabase Google OAuth
@@ -626,33 +627,44 @@ def login_google_finish():
 
         email = (supa_user.email or '').lower()
         name = supa_user.user_metadata.get("full_name", "Google User")
+        if not email:
+            flash("Google didn't share an email address, so we couldn't sign you in.", "error")
+            return redirect(url_for("auth.login"))
+
+        # Pop all three together so a half-finished attempt can't leak its
+        # role/intent into a later, unrelated Google sign-in.
+        requested_role = session.pop("oauth_role", "candidate")
+        intent = session.pop("oauth_intent", "login")
 
         local_user = User.query.filter(db.func.lower(User.email) == email).first()
         is_new_user = local_user is None
 
         if not local_user:
-            role = session.pop("oauth_role", "candidate")
-            email_domain = email.split('@')[-1].lower() if '@' in email else ''
-
-            if role == 'employer' and email_domain in FREE_EMAIL_DOMAINS:
-                # Don't silently create the wrong kind of account - Google only
-                # gave us a personal-domain email, but they asked for employer.
-                # Let them explicitly choose instead of trapping them as a
-                # candidate with no way back.
-                session['oauth_pending_email'] = email
-                session['oauth_pending_name'] = name
-                return redirect(url_for('auth.employer_email_conflict'))
+            if requested_role == 'employer':
+                # No account yet, and employer accounts can't be created from a
+                # Google profile alone (no company name / agreement signature).
+                next_url = _safe_next(session.pop("oauth_next", None))
+                flash(
+                    f"We couldn't find an Avants account for {email}. Employer accounts sign up with a "
+                    "work email and password - Google can sign you in once you have one.",
+                    "error",
+                )
+                return redirect(url_for("auth.sign_up", next=next_url) if next_url else url_for("auth.sign_up"))
 
             local_user = User(
                 email=email,
                 first_name=name,
                 password=None,
-                role=role,
+                role='candidate',
                 email_verified=True,
             )
             db.session.add(local_user)
             db.session.commit()
             _apply_referral(local_user)
+        else:
+            if intent == "signup":
+                role_label = "employer" if local_user.role == 'employer' else "candidate"
+                flash(f"Welcome back - you already have an Avants {role_label} account, so we signed you in.", "success")
 
         joined_hub = _auto_join_matching_hub(local_user)
 

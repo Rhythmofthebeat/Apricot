@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const companyInput = document.getElementById("companyName");
     const googleLink = document.getElementById("googleSignupLink");
     const googleDivider = document.getElementById("googleDivider");
+    const googleHint = document.getElementById("googleEmployerHint");
     const feeBlock = document.getElementById("employerFeeBlock");
     const feeCheck = document.getElementById("employerAgreementCheck");
     const signatureInput = document.getElementById("signatureName");
@@ -24,15 +25,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (feeCheck) feeCheck.required = isEmployer;
         if (signatureInput) signatureInput.required = isEmployer;
         if (googleLink) {
-            // Employers sign up with a company email + password only - Google
-            // gives no chance to collect a company name up front.
-            googleLink.style.display = isEmployer ? "none" : "flex";
-            if (googleDivider) googleDivider.style.display = isEmployer ? "none" : "block";
-            if (!isEmployer) {
-                let href = "/login/google?role=candidate";
-                if (nextParam) href += "&next=" + encodeURIComponent(nextParam);
-                googleLink.href = href;
-            }
+            // Google signs in anyone who already has an account, employer or
+            // candidate. It can only CREATE candidate accounts - a new
+            // employer needs a company name and signed agreement - so for
+            // employers we say that instead of hiding the button.
+            let href = "/login/google?intent=signup&role=" + (isEmployer ? "employer" : "candidate");
+            if (nextParam) href += "&next=" + encodeURIComponent(nextParam);
+            googleLink.href = href;
+            if (googleHint) googleHint.style.display = isEmployer ? "block" : "none";
         }
         if (emailInput) emailInput.placeholder = isEmployer ? "you@company.com" : "your@email.com";
     }
@@ -192,10 +192,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         <div class="divider-line" id="googleDivider">or</div>
 
-        <a id="googleSignupLink" href="/login/google?role=candidate" class="google-btn">
+        <a id="googleSignupLink" href="/login/google?intent=signup&role=candidate" class="google-btn">
             <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" style="width:18px;height:18px;">
             Continue with Google
         </a>
+        <p id="googleEmployerHint" class="text-center text-muted mt-2 mb-0" style="display:none; font-size:0.78rem;">
+            Already have an employer account? Google signs you in. New employer accounts need the work-email form above.
+        </p>
 
         <p class="text-center text-muted mt-4 mb-0" style="font-size:0.85rem;">
             Already have an account? <a href="{{ url_for('auth.login', next=next) if next else url_for('auth.login') }}" class="fw-semibold text-decoration-none">Log in</a>
