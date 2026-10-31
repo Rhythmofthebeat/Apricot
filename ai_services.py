@@ -111,7 +111,7 @@ def generate_summary(text):
     """Generate AI resume summary with retry logic."""
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[
                 {
                     "role": "system",

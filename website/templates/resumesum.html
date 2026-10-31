@@ -670,6 +670,12 @@ document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
 
         const result = await uploadWithRetry(formData);
 
+        if (!result || !result.text_summary) {
+            throw new Error(result && result.error === "File appears empty or unreadable"
+                ? "We couldn't read any text in that file. Try a different PDF, DOCX or TXT."
+                : "The AI summary is unavailable right now. Please try again in a minute.");
+        }
+
         showFullSummary("AI Summary", result.text_summary);
         addHistoryEntry(file.name, result.text_summary);
     } catch (error) {
