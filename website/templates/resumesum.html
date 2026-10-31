@@ -528,7 +528,7 @@ function removeHistoryEntry(filename) {
     localStorage.setItem("resumeHistory", JSON.stringify(updatedHistory));
 }
 
-function showFullSummary(title, content) {
+function showFullSummary(title, content, autoSpeak = false) {
     const summaryElement = document.getElementById("summaryText");
 
     summaryElement.innerHTML = `
@@ -586,11 +586,16 @@ function showFullSummary(title, content) {
 
             if (result.audio_url) {
                 audio = new Audio(result.audio_url);
-                audio.play();
                 isPlaying = true;
                 isPaused = false;
                 playAudioBtn.disabled = false;
                 playAudioBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                // Autoplay can be refused (e.g. Safari); fall back to the speaker button.
+                audio.play().catch(() => {
+                    isPlaying = false;
+                    isPaused = true;
+                    playAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
+                });
 
                 audio.addEventListener("ended", () => {
                     isPlaying = false;
@@ -614,6 +619,10 @@ function showFullSummary(title, content) {
             console.error("Failed to play audio:", error);
         }
     });
+
+    // Read the summary aloud automatically; the form submit that got us here
+    // counts as the user gesture browsers require for playback.
+    if (autoSpeak) playAudioBtn.click();
 }
 
 async function uploadWithRetry(formData, retries = 3) {
@@ -676,7 +685,7 @@ document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
                 : "The AI summary is unavailable right now. Please try again in a minute.");
         }
 
-        showFullSummary("AI Summary", result.text_summary);
+        showFullSummary("AI Summary", result.text_summary, true);
         addHistoryEntry(file.name, result.text_summary);
     } catch (error) {
         console.error("Upload failed:", error);
