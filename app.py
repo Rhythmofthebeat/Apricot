@@ -27,6 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
 from ai_services import (
+    synthesize_speech,
     extract_pdf_text,
     extract_docx_text,
     extract_text_from_file,
@@ -874,65 +875,27 @@ def site_help_chat():
         return jsonify({"error": "Failed to get a response. Please try again."}), 500
 
 
-def _google_tts_credentials():
-    """Explicit credentials built from GOOGLE_CREDENTIALS_JSON (the service
-    account key pasted as a plain env var), if set. Preferred over
-    GOOGLE_APPLICATION_CREDENTIALS's file-path/Secret-File mounting, which
-    has repeatedly failed to actually land the file on disk in production.
-    Returns None to fall back to the default file-based lookup."""
-    raw = os.environ.get("GOOGLE_CREDENTIALS_JSON")
-    if not raw:
-        return None
-    from google.oauth2 import service_account
-    info = json.loads(raw)
-    return service_account.Credentials.from_service_account_info(info)
-
-
 @app.route("/speak", methods=["POST"])
 @login_required
 @limiter.limit("20 per hour")
 def speak_summary():
-    from google.cloud import texttospeech
-    from google.auth.exceptions import DefaultCredentialsError
-    data         = request.get_json()
+    data         = request.get_json() or {}
     summary_text = data.get("text", "").strip()
 
     if not summary_text:
         return jsonify({"error": "No summary text provided"}), 400
 
     try:
-        audio_folder = app.config["AUDIO_FOLDER"]
         filename = f"{uuid.uuid4()}.mp3"
-        filepath = os.path.join(audio_folder, filename)
-
-        credentials = _google_tts_credentials()
-        tts_client = (
-            texttospeech.TextToSpeechClient(credentials=credentials)
-            if credentials else texttospeech.TextToSpeechClient()
+        filepath = os.path.join(app.config["AUDIO_FOLDER"], filename)
+        synthesize_speech(
+            summary_text, filepath,
+            voice=data.get("voice", "en-US-Wavenet-D"),
+            speed=data.get("speed", 1.2),
         )
-        input_text  = texttospeech.SynthesisInput(text=summary_text)
-        voice_name  = data.get("voice", "en-US-Wavenet-D")
-        voice       = texttospeech.VoiceSelectionParams(
-            language_code="en-US",
-            name=voice_name,
-            ssml_gender=texttospeech.SsmlVoiceGender.MALE,
-        )
-        audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3,
-            speaking_rate=float(data.get("speed", 1.2)),
-        )
-        tts_response = tts_client.synthesize_speech(
-            input=input_text, voice=voice, audio_config=audio_config
-        )
-        with open(filepath, "wb") as out:
-            out.write(tts_response.audio_content)
-
         return jsonify({"audio_url": f"/audio/{filename}"})
-    except DefaultCredentialsError as e:
-        logger.error(f"Google TTS credentials not configured: {str(e)}")
-        return jsonify({"error": "Text-to-speech isn't configured on the server (missing Google credentials)."}), 500
     except Exception as e:
-        logger.error(f"Google TTS error: {str(e)}", exc_info=True)
+        logger.error(f"TTS error: {str(e)}", exc_info=True)
         return jsonify({"error": "Audio generation failed. Please try again."}), 500
 
 
