@@ -528,7 +528,17 @@ function removeHistoryEntry(filename) {
     localStorage.setItem("resumeHistory", JSON.stringify(updatedHistory));
 }
 
-function showFullSummary(title, content, autoSpeak = false) {
+// Summary audio is click-to-play only. Anything still playing or being
+// generated from a previous summary is cancelled when a new analysis starts.
+let activeAudio = null;
+let speakAbort = null;
+
+function stopSummaryAudio() {
+    if (speakAbort) { speakAbort.abort(); speakAbort = null; }
+    if (activeAudio) { activeAudio.pause(); activeAudio = null; }
+}
+
+function showFullSummary(title, content) {
     const summaryElement = document.getElementById("summaryText");
 
     summaryElement.innerHTML = `
@@ -576,16 +586,20 @@ function showFullSummary(title, content, autoSpeak = false) {
 
             const selectedVoice = document.getElementById("voiceSelect").value || "en-US-Wavenet-D";
 
+            stopSummaryAudio();
+            speakAbort = new AbortController();
             const response = await fetch("/speak", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ text: content, voice: selectedVoice }),
+                signal: speakAbort.signal,
             });
 
             const result = await response.json();
 
             if (result.audio_url) {
                 audio = new Audio(result.audio_url);
+                activeAudio = audio;
                 isPlaying = true;
                 isPaused = false;
                 playAudioBtn.disabled = false;
@@ -616,13 +630,9 @@ function showFullSummary(title, content, autoSpeak = false) {
         } catch (error) {
             playAudioBtn.disabled = false;
             playAudioBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
-            console.error("Failed to play audio:", error);
+            if (error.name !== "AbortError") console.error("Failed to play audio:", error);
         }
     });
-
-    // Read the summary aloud automatically; the form submit that got us here
-    // counts as the user gesture browsers require for playback.
-    if (autoSpeak) playAudioBtn.click();
 }
 
 async function uploadWithRetry(formData, retries = 3) {
@@ -670,6 +680,7 @@ document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
         return;
     }
 
+    stopSummaryAudio();
     setLoadingState(true);
     summaryText.innerHTML = '<i class="fas fa-spinner"></i> Analyzing resume content...';
 
@@ -685,7 +696,7 @@ document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
                 : "The AI summary is unavailable right now. Please try again in a minute.");
         }
 
-        showFullSummary("AI Summary", result.text_summary, true);
+        showFullSummary("AI Summary", result.text_summary);
         addHistoryEntry(file.name, result.text_summary);
     } catch (error) {
         console.error("Upload failed:", error);

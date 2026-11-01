@@ -1169,24 +1169,27 @@ def audio_file_extension(uploaded_filename):
     return ext if ext in _ALLOWED_AUDIO_EXTENSIONS else ".webm"
 
 
-def synthesize_speech(text, out_path):
-    """Text-to-speech for an AI interview question — mirrors app.py's /speak route."""
-    from google.cloud import texttospeech
+TTS_VOICE_MAP = {
+    "en-US-Wavenet-D": "onyx",
+    "en-US-Wavenet-G": "nova",
+    "en-US-Wavenet-F": "shimmer",
+    "en-US-Wavenet-B": "echo",
+}
+TTS_MAX_CHARS = 4000
 
-    tts_client = texttospeech.TextToSpeechClient()
-    input_text = texttospeech.SynthesisInput(text=text)
-    voice = texttospeech.VoiceSelectionParams(
-        language_code="en-US",
-        name="en-US-Wavenet-D",
-        ssml_gender=texttospeech.SsmlVoiceGender.MALE,
+
+def synthesize_speech(text, out_path, voice="en-US-Wavenet-D", speed=1.0):
+    """Text-to-speech via OpenAI. `voice` accepts the legacy picker values
+    (Wavenet names) or an OpenAI voice name directly."""
+    response = client.audio.speech.create(
+        model="gpt-4o-mini-tts",
+        voice=TTS_VOICE_MAP.get(voice, voice if voice in TTS_VOICE_MAP.values() else "onyx"),
+        input=text[:TTS_MAX_CHARS],
+        response_format="mp3",
+        speed=max(0.25, min(float(speed), 4.0)),
     )
-    audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=1.0,
-    )
-    response = tts_client.synthesize_speech(input=input_text, voice=voice, audio_config=audio_config)
     with open(out_path, "wb") as out:
-        out.write(response.audio_content)
+        out.write(response.content)
 
 
 def synthesize_speech_data_url(text):
