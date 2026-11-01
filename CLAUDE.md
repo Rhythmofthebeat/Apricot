@@ -55,7 +55,7 @@ Blueprints (`website/`):
 
 ## Testing safety — read before running any script against this app
 
-`DATABASE_URL` in `.env` points at the real production Supabase database. There is no separate dev/staging database and no automatic backups/PITR configured.
+`DATABASE_URL` in `.env` points at the real production Supabase database. There is no separate dev/staging database and no Supabase PITR configured. A daily off-site backup to Google Drive runs via `backup_database.py`, but still treat production data as irreplaceable.
 
 Before running any script that imports `app`/`website` and calls anything destructive (`db.drop_all()`, `db.create_all()`, bulk deletes, resetting tables) — **verify which database it's actually about to hit first**: after import, print/check `app.config['SQLALCHEMY_DATABASE_URI']` (or the connection host) and confirm it's local/throwaway before proceeding. Do not assume setting `os.environ['DATABASE_URL']` before importing is enough on its own — verify it after import too.
 
