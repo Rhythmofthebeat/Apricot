@@ -528,6 +528,16 @@ function removeHistoryEntry(filename) {
     localStorage.setItem("resumeHistory", JSON.stringify(updatedHistory));
 }
 
+// Summary audio is click-to-play only. Anything still playing or being
+// generated from a previous summary is cancelled when a new analysis starts.
+let activeAudio = null;
+let speakAbort = null;
+
+function stopSummaryAudio() {
+    if (speakAbort) { speakAbort.abort(); speakAbort = null; }
+    if (activeAudio) { activeAudio.pause(); activeAudio = null; }
+}
+
 function showFullSummary(title, content) {
     const summaryElement = document.getElementById("summaryText");
 
@@ -576,16 +586,20 @@ function showFullSummary(title, content) {
 
             const selectedVoice = document.getElementById("voiceSelect").value || "en-US-Wavenet-D";
 
+            stopSummaryAudio();
+            speakAbort = new AbortController();
             const response = await fetch("/speak", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ text: content, voice: selectedVoice }),
+                signal: speakAbort.signal,
             });
 
             const result = await response.json();
 
             if (result.audio_url) {
                 audio = new Audio(result.audio_url);
+                activeAudio = audio;
                 isPlaying = true;
                 isPaused = false;
                 playAudioBtn.disabled = false;
@@ -616,7 +630,7 @@ function showFullSummary(title, content) {
         } catch (error) {
             playAudioBtn.disabled = false;
             playAudioBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
-            console.error("Failed to play audio:", error);
+            if (error.name !== "AbortError") console.error("Failed to play audio:", error);
         }
     });
 }
@@ -666,6 +680,7 @@ document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
         return;
     }
 
+    stopSummaryAudio();
     setLoadingState(true);
     summaryText.innerHTML = '<i class="fas fa-spinner"></i> Analyzing resume content...';
 
