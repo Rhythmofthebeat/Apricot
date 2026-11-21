@@ -405,6 +405,12 @@ class EarnTask(db.Model):
     required_domains = db.Column(db.Text)   # JSON list; None means open to all domains
     min_responses = db.Column(db.Integer, nullable=False, default=3)  # workers needed before consensus
     consensus_answer = db.Column(db.Text)   # JSON {answer, total, distribution} - set once min_responses hit
+    # Lowest verification tier allowed to work this task: standard | skilled | expert
+    min_tier = db.Column(db.String(20), nullable=False, default='standard')
+    # Calibration ("assessment") tasks have a known-correct answer. They grade a
+    # contractor's accuracy for tier promotion and are excluded from dataset exports.
+    is_assessment = db.Column(db.Boolean, nullable=False, default=False)
+    gold_answer = db.Column(db.String(100))
     # For ranking tasks: two AI responses to compare
     option_a = db.Column(db.Text)
     option_b = db.Column(db.Text)
@@ -439,9 +445,65 @@ class ContractorProfile(db.Model):
     tasks_completed = db.Column(db.Integer, nullable=False, default=0)
     stripe_account_id = db.Column(db.String(100))        # Stripe Connect Express account ID
     payout_enabled = db.Column(db.Boolean, nullable=False, default=False)  # True once Stripe onboarding complete
+    # Skills assessment: accuracy on gold-answer calibration tasks
+    assessment_attempts = db.Column(db.Integer, nullable=False, default=0)
+    assessment_correct = db.Column(db.Integer, nullable=False, default=0)
+    # Contributor licence for using their task responses as AI training data
+    training_consent_at = db.Column(db.DateTime(timezone=True))
+    training_consent_version = db.Column(db.String(10))
+    # Opt-in: show an anonymous profile to data buyers sourcing experts
+    listed_in_directory = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     user = db.relationship("User", backref=db.backref("contractor_profile", uselist=False))
+
+
+class ExpertCredential(db.Model):
+    """A licence, degree or certification a contractor claims, reviewed by an admin.
+    Only 'approved' rows count toward the verified-expert tier."""
+    __tablename__ = "expert_credential"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    domain = db.Column(db.String(100), nullable=False)          # one of EARN_DOMAINS
+    credential_type = db.Column(db.String(20), nullable=False)  # license | degree | certification | employment
+    title = db.Column(db.String(200), nullable=False)           # e.g. "Licensed attorney, State Bar of CA"
+    issuer = db.Column(db.String(200), nullable=False)          # body that issued it
+    license_number = db.Column(db.String(100))
+    verification_url = db.Column(db.String(500))                # public registry page a reviewer can check
+    status = db.Column(db.String(20), nullable=False, default='pending')  # pending | approved | rejected
+    reviewer_note = db.Column(db.Text)
+    reviewed_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    reviewed_at = db.Column(db.DateTime(timezone=True))
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    user = db.relationship("User", foreign_keys=[user_id],
+                           backref=db.backref("expert_credentials", lazy=True))
+    reviewer = db.relationship("User", foreign_keys=[reviewed_by_user_id])
+
+
+class DataRequest(db.Model):
+    """A data buyer's request for a custom labelling project or for sourced experts.
+    The buyer sees an automatic estimate; an admin sets the real quote."""
+    __tablename__ = "data_request"
+    id = db.Column(db.Integer, primary_key=True)
+    buyer_id = db.Column(db.Integer, db.ForeignKey("data_buyer.id"), nullable=False, index=True)
+    requested_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    task_type = db.Column(db.String(30), nullable=False)        # ranking | rating | factcheck | writing
+    domain = db.Column(db.String(100))
+    tier = db.Column(db.String(20), nullable=False, default='skilled')  # minimum contractor tier
+    units = db.Column(db.Integer, nullable=False)
+    responses_per_unit = db.Column(db.Integer, nullable=False, default=3)
+    details = db.Column(db.Text)
+    estimated_cents = db.Column(db.Integer)                     # automatic estimate from pricing.py
+    quoted_cents = db.Column(db.Integer)                        # admin's real quote
+    status = db.Column(db.String(20), nullable=False, default='submitted')
+    # submitted | quoted | accepted | in_progress | delivered | declined
+    admin_notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    buyer = db.relationship("DataBuyer", backref=db.backref("requests", lazy=True))
+    requested_by = db.relationship("User", foreign_keys=[requested_by_user_id])
 
 
 class MeetingProposal(db.Model):

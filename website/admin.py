@@ -1,6 +1,7 @@
 import json
 import io
 import logging
+from datetime import datetime, timezone
 
 import stripe
 from flask import Blueprint, render_template, redirect, url_for, request, flash, abort, Response, current_app
@@ -9,9 +10,11 @@ from . import db
 from .models import (
     EarnTask, TaskSubmission, User, EARN_DOMAINS, ContractorProfile, Company, Job, CompanyMember,
     Application, Feedback, FeedbackInsight, SavedJob, MeetingProposal, MeetingRoom, Message,
-    EmployerSubscription, CompanyInvite, DeletedJob, Referral,
+    EmployerSubscription, CompanyInvite, DeletedJob, Referral, ExpertCredential, DataRequest,
 )
-from .dataset_export import shape_submission
+from .dataset_export import shape_submission, consented_user_ids
+from .expert_verification import TIERS
+from .pricing import TIER_LABELS, suggested_task_pay_cents, format_usd
 from ai_services import analyze_platform_feedback
 from video_storage import delete_interview_videos
 
@@ -450,6 +453,12 @@ def analyze_feedback():
 # ------------------- CREATE TASK ---------------- #
 # ------------------------------------------------ #
 
+def _task_form():
+    return render_template('admin_task_form.html', earn_domains=EARN_DOMAINS, tiers=TIERS,
+                           tier_labels=TIER_LABELS,
+                           pay_hint={t: format_usd(suggested_task_pay_cents('ranking', t)) for t in TIERS})
+
+
 @admin_bp.route('/admin/tasks/new', methods=['GET', 'POST'])
 @login_required
 def create_task():
@@ -462,6 +471,24 @@ def create_task():
             min_responses = max(1, int(request.form.get('min_responses', 3)))
         except (ValueError, TypeError):
             min_responses = 3
+        min_tier = request.form.get('min_tier', 'standard')
+        if min_tier not in TIERS:
+            min_tier = 'standard'
+        is_assessment = bool(request.form.get('is_assessment'))
+        gold_answer = request.form.get('gold_answer', '').strip() or None
+        if is_assessment:
+            valid_gold = {
+                'ranking': {'A', 'B', 'tie'},
+                'rating': {'1', '2', '3', '4', '5'},
+                'factcheck': {'accurate', 'mostly', 'inaccurate'},
+            }.get(task_type)
+            if valid_gold is None or gold_answer not in valid_gold:
+                flash("Assessment tasks need a known-correct answer that matches the task type "
+                      "(ranking: A/B/tie, rating: 1-5, fact-check: accurate/mostly/inaccurate). "
+                      "Writing tasks can't be graded automatically.", "error")
+                return _task_form()
+        else:
+            gold_answer = None
         task = EarnTask(
             title=request.form.get('title', '').strip(),
             description=request.form.get('description', '').strip(),
@@ -474,13 +501,103 @@ def create_task():
             option_a=request.form.get('option_a', '').strip() or None,
             option_b=request.form.get('option_b', '').strip() or None,
             content=request.form.get('content', '').strip() or None,
+            min_tier=min_tier,
+            is_assessment=is_assessment,
+            gold_answer=gold_answer,
             status='open',
         )
         db.session.add(task)
         db.session.commit()
         flash("Task created.", "success")
         return redirect(url_for('admin_bp.dashboard'))
-    return render_template('admin_task_form.html', earn_domains=EARN_DOMAINS)
+    return _task_form()
+
+
+# ------------------------------------------------ #
+# ------------- EXPERT CREDENTIAL REVIEW --------- #
+# ------------------------------------------------ #
+
+@admin_bp.route('/admin/experts')
+@login_required
+def experts():
+    _require_admin()
+    pending = ExpertCredential.query.filter_by(status='pending') \
+        .order_by(ExpertCredential.created_at.asc()).all()
+    recent = ExpertCredential.query.filter(ExpertCredential.status != 'pending') \
+        .order_by(ExpertCredential.reviewed_at.desc()).limit(30).all()
+    return render_template('admin_experts.html', pending=pending, recent=recent)
+
+
+@admin_bp.route('/admin/experts/credentials/<int:credential_id>/review', methods=['POST'])
+@login_required
+def review_credential(credential_id):
+    _require_admin()
+    cred = ExpertCredential.query.get_or_404(credential_id)
+    decision = request.form.get('decision')
+    if decision not in ('approve', 'reject'):
+        abort(400)
+    if cred.user_id == current_user.id:
+        flash("You can't review your own credential.", "error")
+        return redirect(url_for('admin_bp.experts'))
+
+    note = (request.form.get('note') or '').strip()[:1000]
+    if decision == 'reject' and not note:
+        flash("Add a note so the contractor knows why it was rejected.", "error")
+        return redirect(url_for('admin_bp.experts'))
+
+    cred.status = 'approved' if decision == 'approve' else 'rejected'
+    cred.reviewer_note = note or None
+    cred.reviewed_by_user_id = current_user.id
+    cred.reviewed_at = datetime.now(timezone.utc)
+    db.session.commit()
+    flash(f"Credential {cred.status}.", "success")
+    return redirect(url_for('admin_bp.experts'))
+
+
+# ------------------------------------------------ #
+# ----------- BUYER DATA / EXPERT REQUESTS ------- #
+# ------------------------------------------------ #
+
+REQUEST_STATUSES = ('submitted', 'quoted', 'accepted', 'in_progress', 'delivered', 'declined')
+
+
+@admin_bp.route('/admin/data-requests')
+@login_required
+def data_requests():
+    _require_admin()
+    rows = DataRequest.query.order_by(DataRequest.created_at.desc()).all()
+    return render_template('admin_data_requests.html', requests=rows, statuses=REQUEST_STATUSES,
+                           tier_labels=TIER_LABELS)
+
+
+@admin_bp.route('/admin/data-requests/<int:request_id>/update', methods=['POST'])
+@login_required
+def update_data_request(request_id):
+    _require_admin()
+    req = DataRequest.query.get_or_404(request_id)
+    status = request.form.get('status')
+    if status not in REQUEST_STATUSES:
+        abort(400)
+
+    quote_raw = (request.form.get('quoted_dollars') or '').strip()
+    if quote_raw:
+        try:
+            quoted = round(float(quote_raw) * 100)
+            if quoted <= 0:
+                raise ValueError
+        except ValueError:
+            flash("Enter the quote as a positive dollar amount.", "error")
+            return redirect(url_for('admin_bp.data_requests'))
+        req.quoted_cents = quoted
+    if status == 'quoted' and not req.quoted_cents:
+        flash("Set a quote amount before marking a request as quoted.", "error")
+        return redirect(url_for('admin_bp.data_requests'))
+
+    req.status = status
+    req.admin_notes = (request.form.get('admin_notes') or '').strip()[:2000] or None
+    db.session.commit()
+    flash("Request updated.", "success")
+    return redirect(url_for('admin_bp.data_requests'))
 
 
 # ------------------------------------------------ #
@@ -509,8 +626,13 @@ def export_task(task_id):
     task = EarnTask.query.get_or_404(task_id)
     submissions = TaskSubmission.query.filter_by(task_id=task_id).all()
 
+    # Same rule as the buyer marketplace: calibration tasks and non-consenting
+    # contractors' responses are never exported.
+    consented = consented_user_ids()
     lines = []
     for sub in submissions:
+        if task.is_assessment or sub.user_id not in consented:
+            continue
         record = shape_submission(task, sub)
         if record:
             lines.append(json.dumps(record))

@@ -1,13 +1,16 @@
 import json
 import logging
+from collections import defaultdict
 
 import stripe
 from flask import Blueprint, render_template, request, flash, redirect, url_for, Response, abort, current_app
 from flask_login import login_required, current_user
 
 from . import db
-from .models import DataBuyer, EarnTask
+from .models import DataBuyer, EarnTask, DataRequest, ContractorProfile, ExpertCredential, EARN_DOMAINS
 from .dataset_export import build_bulk_export
+from .expert_verification import compute_tier, pseudonym, tier_at_least
+from . import pricing
 
 logger = logging.getLogger(__name__)
 
@@ -159,3 +162,141 @@ def export(task_type):
         mimetype='application/x-ndjson',
         headers={"Content-Disposition": f"attachment; filename={task_type}_dataset.jsonl"},
     )
+
+
+# ------------------------------------------------------------------ #
+#  Pricing (public) with a live quote calculator
+# ------------------------------------------------------------------ #
+
+def _int_arg(name, default):
+    try:
+        return int(request.args.get(name, default))
+    except (TypeError, ValueError):
+        return None
+
+
+@data_market.route('/data/pricing')
+def pricing_page():
+    quote, error = None, None
+    mode = request.args.get('mode')
+    if mode in ('project', 'dataset'):
+        task_type = request.args.get('task_type', 'ranking')
+        tier = request.args.get('tier', 'skilled')
+        try:
+            if mode == 'project':
+                units, responses = _int_arg('units', 1000), _int_arg('responses', 3)
+                if units is None or responses is None:
+                    raise ValueError("Enter whole numbers for items and responses per item.")
+                quote = pricing.quote_custom_project(task_type, tier, units, responses)
+            else:
+                records = _int_arg('records', 10000)
+                if records is None:
+                    raise ValueError("Enter a whole number of records.")
+                quote = pricing.quote_dataset_license(
+                    task_type, records, tier, exclusive=bool(request.args.get('exclusive')))
+        except ValueError as e:
+            error = str(e)
+    return render_template(
+        'data_pricing.html', quote=quote, error=error, mode=mode,
+        form=request.args, task_types=TASK_TYPES, tiers=pricing.TIERS, tier_labels=pricing.TIER_LABELS,
+        examples={t: pricing.quote_custom_project('ranking', t, 1000, 3)['price_cents'] for t in pricing.TIERS},
+        per_record=pricing.DATASET_PER_RECORD_CENTS, tier_mult=pricing.DATASET_TIER_MULTIPLIER,
+        min_project=pricing.MIN_PROJECT_CENTS, exclusive_mult=pricing.EXCLUSIVE_MULTIPLIER,
+        discounts=pricing.VOLUME_DISCOUNTS, usd=pricing.format_usd,
+    )
+
+
+# ------------------------------------------------------------------ #
+#  Verified-expert directory (anonymous)
+# ------------------------------------------------------------------ #
+
+def _directory_entries():
+    """Contractors who opted in and have reached skilled tier or above, with no
+    name/email - just a stable pseudonym plus what a buyer needs to judge fit."""
+    profiles = ContractorProfile.query.filter_by(listed_in_directory=True).all()
+    if not profiles:
+        return []
+    creds = defaultdict(set)
+    for c in ExpertCredential.query.filter(
+            ExpertCredential.user_id.in_([p.user_id for p in profiles]),
+            ExpertCredential.status == 'approved').all():
+        creds[c.user_id].add(c.domain)
+
+    entries = []
+    for p in profiles:
+        tier = compute_tier(
+            assessment_correct=p.assessment_correct, assessment_attempts=p.assessment_attempts,
+            quality_score=p.quality_score, tasks_completed=p.tasks_completed,
+            identity_verified=p.payout_enabled, approved_credential_domains=creds[p.user_id])
+        if tier == 'standard':
+            continue
+        entries.append({
+            "label": pseudonym(p.user_id, current_app.secret_key),
+            "tier": tier,
+            "domains": json.loads(p.domains),
+            "verified_domains": sorted(creds[p.user_id]),
+            "quality_pct": round(p.quality_score * 100),
+            "tasks_completed": p.tasks_completed,
+        })
+    entries.sort(key=lambda e: (e["tier"] != "expert", -e["quality_pct"], -e["tasks_completed"]))
+    return entries
+
+
+@data_market.route('/data/experts')
+@login_required
+def experts():
+    _require_data_buyer_admin()
+    domain = request.args.get('domain', '')
+    tier = request.args.get('tier', '')
+    entries = _directory_entries()
+    if domain in EARN_DOMAINS:
+        entries = [e for e in entries
+                   if domain in e["verified_domains"] or (e["tier"] != "expert" and domain in e["domains"])]
+    if tier in pricing.TIERS:
+        entries = [e for e in entries if tier_at_least(e["tier"], tier)]
+    return render_template('data_experts.html', entries=entries, domains=EARN_DOMAINS,
+                           tiers=pricing.TIERS, tier_labels=pricing.TIER_LABELS,
+                           sel_domain=domain, sel_tier=tier)
+
+
+# ------------------------------------------------------------------ #
+#  Custom data / expert-sourcing requests
+# ------------------------------------------------------------------ #
+
+@data_market.route('/data/requests', methods=['GET', 'POST'])
+@login_required
+def requests_page():
+    _require_data_buyer_admin()
+    buyer = DataBuyer.query.get_or_404(current_user.data_buyer_id)
+
+    if request.method == 'POST':
+        title = (request.form.get('title') or '').strip()[:200]
+        task_type = request.form.get('task_type', '')
+        tier = request.form.get('tier', '')
+        domain = request.form.get('domain', '')
+        details = (request.form.get('details') or '').strip()[:4000]
+        try:
+            units = int(request.form.get('units', ''))
+            responses = int(request.form.get('responses_per_unit', 3))
+            estimate = pricing.quote_custom_project(task_type, tier, units, responses)
+        except (ValueError, TypeError) as e:
+            flash(f"Check the request details: {e}", "error")
+            return redirect(url_for('data_market.requests_page'))
+        if not title:
+            flash("Give the request a title.", "error")
+            return redirect(url_for('data_market.requests_page'))
+
+        db.session.add(DataRequest(
+            buyer_id=buyer.id, requested_by_user_id=current_user.id, title=title,
+            task_type=task_type, tier=tier, domain=domain if domain in EARN_DOMAINS else None,
+            units=units, responses_per_unit=responses, details=details or None,
+            estimated_cents=estimate["price_cents"],
+        ))
+        db.session.commit()
+        flash("Request sent. We'll come back with a firm quote.", "success")
+        return redirect(url_for('data_market.requests_page'))
+
+    rows = DataRequest.query.filter_by(buyer_id=buyer.id).order_by(DataRequest.created_at.desc()).all()
+    return render_template('data_requests.html', buyer=buyer, requests=rows, task_types=TASK_TYPES,
+                           tiers=pricing.TIERS, tier_labels=pricing.TIER_LABELS, domains=EARN_DOMAINS,
+                           usd=pricing.format_usd)
