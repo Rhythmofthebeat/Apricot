@@ -144,6 +144,16 @@ def _run_migrations(db):
         "ALTER TABLE contractor_profile ADD COLUMN training_consent_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE contractor_profile ADD COLUMN training_consent_version VARCHAR(10)",
         "ALTER TABLE contractor_profile ADD COLUMN listed_in_directory BOOLEAN NOT NULL DEFAULT FALSE",
+        # payouts - reservation link + admin hold per submission, freeze per contractor
+        "ALTER TABLE task_submission ADD COLUMN payout_id INTEGER REFERENCES contractor_payout(id)",
+        "ALTER TABLE task_submission ADD COLUMN payout_hold BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE contractor_profile ADD COLUMN payouts_frozen BOOLEAN NOT NULL DEFAULT FALSE",
+        # data_request - milestone billing
+        "ALTER TABLE data_request ADD COLUMN accepted_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE data_request ADD COLUMN deposit_cents INTEGER",
+        "ALTER TABLE data_request ADD COLUMN final_cents INTEGER",
+        "ALTER TABLE data_request ADD COLUMN deposit_paid_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE data_request ADD COLUMN final_paid_at TIMESTAMP WITH TIME ZONE",
     ]
     for stmt in new_columns:
         try:
@@ -240,7 +250,7 @@ def create_app():
     os.makedirs(audio_path, exist_ok=True)
     os.makedirs(upload_path, exist_ok=True)
 
-    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission, SavedJob, ContractorProfile, MeetingRoom, Message, EmployerSubscription, MeetingProposal, DataBuyer, Feedback, FeedbackInsight, DeletedJob, ApplicationEvent, ExpertCredential, DataRequest
+    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission, SavedJob, ContractorProfile, MeetingRoom, Message, EmployerSubscription, MeetingProposal, DataBuyer, Feedback, FeedbackInsight, DeletedJob, ApplicationEvent, ExpertCredential, DataRequest, ContractorPayout, BuyerCreditEntry
 
     with app.app_context():
         db.create_all()

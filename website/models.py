@@ -431,9 +431,49 @@ class TaskSubmission(db.Model):
     agreement_score = db.Column(db.Float)  # 0–1; set when consensus is computed for this task
     earnings_cents = db.Column(db.Integer, nullable=False, default=0)
     paid_out = db.Column(db.Boolean, nullable=False, default=False)
+    # Set when a payout batch reserves this submission (before the transfer is sent),
+    # so it can never be included in two payouts. Cleared again if the transfer fails.
+    payout_id = db.Column(db.Integer, db.ForeignKey('contractor_payout.id'), index=True)
+    payout_hold = db.Column(db.Boolean, nullable=False, default=False)  # admin fraud/QA hold
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     user = db.relationship('User', backref='task_submissions')
+
+
+class ContractorPayout(db.Model):
+    """One Stripe transfer to one contractor, produced by a payout batch."""
+    __tablename__ = "contractor_payout"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    batch_key = db.Column(db.String(40), nullable=False, index=True)
+    amount_cents = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='pending')  # pending | paid | failed
+    idempotency_key = db.Column(db.String(100), nullable=False, unique=True)
+    stripe_transfer_id = db.Column(db.String(100))
+    error = db.Column(db.Text)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+    completed_at = db.Column(db.DateTime(timezone=True))
+
+    user = db.relationship("User", foreign_keys=[user_id])
+    submissions = db.relationship("TaskSubmission", backref="payout", lazy=True)
+
+
+class BuyerCreditEntry(db.Model):
+    """Append-only ledger of a data buyer's prepaid credit. The balance is the
+    sum of amount_cents and is never stored. `reference` is unique, so a Stripe
+    event replay or a double click can't credit or charge the same thing twice."""
+    __tablename__ = "buyer_credit_entry"
+    id = db.Column(db.Integer, primary_key=True)
+    buyer_id = db.Column(db.Integer, db.ForeignKey("data_buyer.id"), nullable=False, index=True)
+    amount_cents = db.Column(db.Integer, nullable=False)   # + top-up/refund, - spend
+    entry_type = db.Column(db.String(20), nullable=False)  # topup | spend | refund | adjustment
+    reference = db.Column(db.String(120), unique=True)     # e.g. "stripe:cs_..." / "request:12:deposit"
+    note = db.Column(db.String(300))
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    buyer = db.relationship("DataBuyer", backref=db.backref("credit_entries", lazy=True))
 
 
 class ContractorProfile(db.Model):
@@ -453,6 +493,7 @@ class ContractorProfile(db.Model):
     training_consent_version = db.Column(db.String(10))
     # Opt-in: show an anonymous profile to data buyers sourcing experts
     listed_in_directory = db.Column(db.Boolean, nullable=False, default=False)
+    payouts_frozen = db.Column(db.Boolean, nullable=False, default=False)  # admin fraud freeze
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     user = db.relationship("User", backref=db.backref("contractor_profile", uselist=False))
@@ -500,6 +541,12 @@ class DataRequest(db.Model):
     status = db.Column(db.String(20), nullable=False, default='submitted')
     # submitted | quoted | accepted | in_progress | delivered | declined
     admin_notes = db.Column(db.Text)
+    # Billing: set when the buyer accepts the quote (the price is locked from then on)
+    accepted_at = db.Column(db.DateTime(timezone=True))
+    deposit_cents = db.Column(db.Integer)
+    final_cents = db.Column(db.Integer)
+    deposit_paid_at = db.Column(db.DateTime(timezone=True))
+    final_paid_at = db.Column(db.DateTime(timezone=True))
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     buyer = db.relationship("DataBuyer", backref=db.backref("requests", lazy=True))

@@ -8,115 +8,128 @@
         padding: 3px 10px; white-space: nowrap;
     }
     .status-ready    { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
-    .status-pending  { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
-    .status-missing  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .status-hold     { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+    .status-blocked  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .status-held     { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
         <a href="{{ url_for('admin_bp.dashboard') }}" class="btn btn-sm btn-outline-secondary mb-2">
             <i class="fas fa-arrow-left me-1"></i> Back
         </a>
         <h1 class="h4 fw-bold mb-0"><i class="fas fa-money-bill-transfer me-2 text-primary"></i>Payouts</h1>
     </div>
+    {% if overview.ready_count %}
+    <form method="POST" action="{{ url_for('admin_bp.run_payouts') }}"
+          data-confirm-title="Pay {{ overview.ready_count }} contractor(s) ${{ '%.2f'|format(overview.ready_total / 100) }}?"
+          data-confirm-message="This sends real Stripe transfers from your platform balance. Make sure the balance covers the total."
+          data-confirm-btn="Run payouts">
+        <button class="btn btn-success fw-bold"><i class="fas fa-paper-plane me-1"></i>Run payouts (${{ '%.2f'|format(overview.ready_total / 100) }})</button>
+    </form>
+    {% endif %}
 </div>
 
-<!-- Summary stats -->
 <div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="card text-center p-3">
-            <div style="font-size:1.8rem;font-weight:800;color:#dc2626;">${{ "%.2f"|format(total_pending / 100) }}</div>
-            <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Total Pending</div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card text-center p-3">
-            <div style="font-size:1.8rem;font-weight:800;">{{ rows|length }}</div>
-            <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Workers Awaiting Payment</div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card text-center p-3">
-            {% set ready = rows | selectattr('1') | selectattr('1.payout_enabled') | list | length %}
-            <div style="font-size:1.8rem;font-weight:800;color:#059669;">{{ ready }}</div>
-            <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Ready to Pay Out</div>
-        </div>
-    </div>
+    <div class="col-md-4"><div class="card text-center p-3">
+        <div style="font-size:1.8rem;font-weight:800;color:#059669;">${{ "%.2f"|format(overview.ready_total / 100) }}</div>
+        <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Ready now ({{ overview.ready_count }} contractors)</div>
+    </div></div>
+    <div class="col-md-4"><div class="card text-center p-3">
+        <div style="font-size:1.8rem;font-weight:800;color:#2563eb;">${{ "%.2f"|format(overview.in_hold_total / 100) }}</div>
+        <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">In {{ hold_days }}-day review hold</div>
+    </div></div>
+    <div class="col-md-4"><div class="card text-center p-3">
+        <div style="font-size:1.8rem;font-weight:800;">{{ pending|length }}</div>
+        <div class="text-muted" style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Transfers needing retry</div>
+    </div></div>
 </div>
 
-{% if not rows %}
-<div class="card">
-    <div class="card-body text-center p-5 text-muted">
-        <i class="fas fa-check-circle mb-3" style="font-size:2rem;color:#059669;opacity:0.5;display:block;"></i>
-        No pending payouts. All workers are paid up.
-    </div>
-</div>
-{% else %}
-<div class="card">
-    <div class="card-header fw-semibold">Pending payouts</div>
+{% if pending %}
+<div class="card mb-4" style="border-color:#fde68a;">
+    <div class="card-header fw-semibold" style="background:#fffbeb;">Unconfirmed transfers - retry</div>
     <div class="card-body p-0">
-        {% for user, contractor, pending_cents in rows %}
+        {% for p in pending %}
         <div class="d-flex align-items-center gap-3 px-4 py-3 flex-wrap" style="border-bottom:1px solid var(--border);">
-            <div class="flex-grow-1">
-                <div class="fw-semibold" style="font-size:0.9rem;">
-                    {{ user.first_name or '-' }}
-                    <span class="text-muted fw-normal">{{ user.email }}</span>
-                </div>
-                <div class="text-muted" style="font-size:0.78rem;">
-                    {% if contractor %}{{ contractor.tasks_completed }} tasks &middot;
-                    quality {{ (contractor.quality_score * 100)|int }}%{% endif %}
-                </div>
-            </div>
-
-            <!-- Payout amount -->
-            <div class="fw-bold" style="color:#059669;font-size:1rem;">
-                ${{ "%.2f"|format(pending_cents / 100) }}
-            </div>
-
-            <!-- Stripe status chip -->
-            {% if not contractor or not contractor.stripe_account_id %}
-            <span class="payout-status-chip status-missing">
-                <i class="fas fa-xmark me-1"></i>No payout account
-            </span>
-            {% elif not contractor.payout_enabled %}
-            <span class="payout-status-chip status-pending">
-                <i class="fas fa-clock me-1"></i>Stripe pending
-            </span>
-            {% else %}
-            <span class="payout-status-chip status-ready">
-                <i class="fas fa-check me-1"></i>Ready
-            </span>
-            {% endif %}
-
-            <!-- Pay button -->
-            {% if contractor and contractor.payout_enabled %}
-            <form method="POST" action="{{ url_for('admin_bp.pay_user', user_id=user.id) }}"
-                  data-confirm-title="Pay ${{ '%.2f'|format(pending_cents / 100) }} to {{ user.first_name or user.email }}?"
-                  data-confirm-message="This will trigger an immediate Stripe transfer. This cannot be undone."
-                  data-confirm-btn="Confirm payout">
-                <button class="btn btn-sm btn-success fw-bold">
-                    <i class="fas fa-paper-plane me-1"></i>Pay now
-                </button>
+            <div class="flex-grow-1" style="font-size:0.88rem;">{{ p.user.email }} <span class="text-muted">&middot; batch {{ p.batch_key }}</span>
+                {% if p.error %}<div class="text-muted" style="font-size:0.75rem;">{{ p.error }}</div>{% endif %}</div>
+            <div class="fw-bold">${{ "%.2f"|format(p.amount_cents / 100) }}</div>
+            <form method="POST" action="{{ url_for('admin_bp.retry_payout_route', payout_id=p.id) }}">
+                <button class="btn btn-sm btn-warning fw-bold">Retry</button>
             </form>
-            {% else %}
-            <button class="btn btn-sm btn-outline-secondary" disabled title="Worker must complete Stripe setup first">
-                Pay now
-            </button>
-            {% endif %}
         </div>
         {% endfor %}
     </div>
 </div>
+{% endif %}
 
-<div class="card mt-3" style="background:var(--bg);">
-    <div class="card-body p-3" style="font-size:0.82rem;color:var(--text-muted);">
-        <i class="fas fa-circle-info me-1"></i>
-        Workers marked "Stripe pending" have started onboarding but haven't finished KYC verification.
-        Workers with "No payout account" need to visit their earnings page and click "Set up payouts" first.
-        Minimum transfer is $0.50.
+<div class="card mb-4">
+    <div class="card-header fw-semibold">Unpaid earnings by contractor</div>
+    <div class="card-body p-0">
+        {% for r in overview.rows %}
+        <div class="d-flex align-items-center gap-3 px-4 py-3 flex-wrap" style="border-bottom:1px solid var(--border);">
+            <div class="flex-grow-1">
+                <div class="fw-semibold" style="font-size:0.9rem;">{{ r.user.first_name or '-' }} <span class="text-muted fw-normal">{{ r.user.email }}</span></div>
+                <div class="text-muted" style="font-size:0.78rem;">
+                    {% if r.profile %}{{ r.profile.tasks_completed }} tasks &middot; quality {{ (r.profile.quality_score * 100)|int }}%{% endif %}
+                    {% if r.in_hold_cents %}&middot; ${{ "%.2f"|format(r.in_hold_cents / 100) }} in hold{% if r.next_release %} (next release {{ r.next_release.strftime('%b %d') }}){% endif %}{% endif %}
+                    {% if r.held_cents %}&middot; ${{ "%.2f"|format(r.held_cents / 100) }} on admin hold{% endif %}
+                </div>
+            </div>
+            <div class="fw-bold" style="font-size:1rem;">${{ "%.2f"|format(r.payable_cents / 100) }}</div>
+            <span class="payout-status-chip status-{{ r.status }}" {% if r.reason %}title="{{ r.reason }}"{% endif %}>
+                {% if r.status == 'ready' %}<i class="fas fa-check me-1"></i>Ready
+                {% elif r.status == 'blocked' %}<i class="fas fa-ban me-1"></i>{{ r.reason }}
+                {% elif r.status == 'held' %}<i class="fas fa-pause me-1"></i>On hold
+                {% else %}<i class="fas fa-clock me-1"></i>In review hold{% endif %}
+            </span>
+            {% if r.status == 'ready' %}
+            <form method="POST" action="{{ url_for('admin_bp.pay_user', user_id=r.user.id) }}"
+                  data-confirm-title="Pay ${{ '%.2f'|format(r.payable_cents / 100) }} to {{ r.user.first_name or r.user.email }}?"
+                  data-confirm-message="This triggers an immediate Stripe transfer. This cannot be undone."
+                  data-confirm-btn="Confirm payout">
+                <button class="btn btn-sm btn-success fw-bold">Pay now</button>
+            </form>
+            {% endif %}
+            {% if r.profile %}
+            <form method="POST" action="{{ url_for('admin_bp.toggle_payout_freeze', user_id=r.user.id) }}">
+                <button class="btn btn-sm btn-outline-{{ 'danger' if not r.profile.payouts_frozen else 'secondary' }}">
+                    {{ 'Unfreeze' if r.profile.payouts_frozen else 'Freeze' }}
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="p-5 text-center text-muted">No unpaid earnings. Everyone is paid up.</div>
+        {% endfor %}
     </div>
 </div>
-{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header fw-semibold">Recent payouts</div>
+    <div class="card-body p-0">
+        {% for p in recent %}
+        <div class="d-flex align-items-center gap-3 px-4 py-2 flex-wrap" style="border-bottom:1px solid var(--border);font-size:0.85rem;">
+            <div class="flex-grow-1">{{ p.user.email }} <span class="text-muted">&middot; {{ p.created_at.strftime('%b %d %H:%M') if p.created_at }}</span>
+                {% if p.status == 'failed' and p.error %}<div class="text-danger" style="font-size:0.75rem;">{{ p.error }}</div>{% endif %}</div>
+            <div class="fw-semibold">${{ "%.2f"|format(p.amount_cents / 100) }}</div>
+            <span class="badge {{ 'bg-success' if p.status == 'paid' else ('bg-danger' if p.status == 'failed' else 'bg-warning text-dark') }}">{{ p.status }}</span>
+        </div>
+        {% else %}
+        <div class="p-4 text-muted">No payouts yet.</div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card" style="background:var(--bg);">
+    <div class="card-body p-3" style="font-size:0.82rem;color:var(--text-muted);">
+        <i class="fas fa-circle-info me-1"></i>
+        Earnings clear a {{ hold_days }}-day review hold before they can be paid. Contractors need at least
+        ${{ "%.0f"|format(overview.min_payout_cents / 100) }} payable (smaller amounts carry over) and a finished Stripe payout setup.
+        Transfers come out of your Stripe <strong>platform balance</strong>, so keep it funded from buyer payments before running a batch.
+        Frozen contractors are never paid.
+    </div>
+</div>
 {% endblock %}

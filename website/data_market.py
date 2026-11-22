@@ -1,13 +1,21 @@
 import json
 import logging
 from collections import defaultdict
+from datetime import datetime, timezone
 
 import stripe
 from flask import Blueprint, render_template, request, flash, redirect, url_for, Response, abort, current_app
 from flask_login import login_required, current_user
 
 from . import db
-from .models import DataBuyer, EarnTask, DataRequest, ContractorProfile, ExpertCredential, EARN_DOMAINS
+from sqlalchemy.exc import IntegrityError
+
+from .models import (DataBuyer, EarnTask, DataRequest, ContractorProfile, ExpertCredential,
+                     BuyerCreditEntry, EARN_DOMAINS)
+from .stripe_compat import sget
+from .buyer_billing import (split_milestones, parse_dollars, credit_balance, milestone_due,
+                            milestone_reference, MIN_TOPUP_CENTS, MAX_TOPUP_CENTS, MILESTONES)
+from email_utils import external_url
 from .dataset_export import build_bulk_export
 from .expert_verification import compute_tier, pseudonym, tier_at_least
 from . import pricing
@@ -116,17 +124,27 @@ def stripe_webhook():
 
     event_type = event['type']
     data_obj = event['data']['object']
+    metadata = sget(data_obj, 'metadata') or {}
+    kind = sget(metadata, 'kind')
 
-    if event_type == 'checkout.session.completed':
-        buyer = DataBuyer.query.get(int(data_obj.get('client_reference_id') or 0))
+    # One-off payments (credit top-ups, project milestones). ACH completes later:
+    # the session finishes unpaid and `async_payment_succeeded` follows, so only
+    # fulfil once payment_status is 'paid'.
+    if event_type in ('checkout.session.completed', 'checkout.session.async_payment_succeeded') \
+            and kind in ('credit_topup', 'request_milestone'):
+        if sget(data_obj, 'payment_status') == 'paid':
+            _fulfil_checkout(kind, data_obj, metadata)
+
+    elif event_type == 'checkout.session.completed':
+        buyer = db.session.get(DataBuyer, int(sget(data_obj, 'client_reference_id') or 0))
         if buyer:
             buyer.subscription_status = 'active'
-            buyer.stripe_customer_id = data_obj.get('customer')
-            buyer.stripe_subscription_id = data_obj.get('subscription')
+            buyer.stripe_customer_id = sget(data_obj, 'customer')
+            buyer.stripe_subscription_id = sget(data_obj, 'subscription')
             db.session.commit()
 
     elif event_type in ('customer.subscription.deleted', 'customer.subscription.canceled'):
-        buyer = DataBuyer.query.filter_by(stripe_subscription_id=data_obj.get('id')).first()
+        buyer = DataBuyer.query.filter_by(stripe_subscription_id=sget(data_obj, 'id')).first()
         if buyer:
             buyer.subscription_status = 'canceled'
             db.session.commit()
@@ -298,5 +316,189 @@ def requests_page():
 
     rows = DataRequest.query.filter_by(buyer_id=buyer.id).order_by(DataRequest.created_at.desc()).all()
     return render_template('data_requests.html', buyer=buyer, requests=rows, task_types=TASK_TYPES,
+                           balance=_balance(buyer.id),
                            tiers=pricing.TIERS, tier_labels=pricing.TIER_LABELS, domains=EARN_DOMAINS,
                            usd=pricing.format_usd)
+
+
+# ------------------------------------------------------------------ #
+#  Billing: prepaid credits and project milestones
+# ------------------------------------------------------------------ #
+
+def _balance(buyer_id):
+    return db.session.query(db.func.coalesce(db.func.sum(BuyerCreditEntry.amount_cents), 0)) \
+        .filter(BuyerCreditEntry.buyer_id == buyer_id).scalar()
+
+
+def _own_request(request_id):
+    return DataRequest.query.filter_by(id=request_id, buyer_id=current_user.data_buyer_id).first_or_404()
+
+
+def _create_checkout(buyer, amount_cents, product_name, metadata, return_endpoint):
+    """One-off Stripe Checkout (card, plus ACH/bank where enabled in the Stripe
+    dashboard). Returns the hosted-page URL."""
+    stripe.api_key = current_app.config.get('STRIPE_SECRET_KEY')
+    if not stripe.api_key:
+        raise RuntimeError("Online payments aren't configured yet - contact us to pay by wire or invoice.")
+    params = dict(
+        mode='payment',
+        line_items=[{"quantity": 1, "price_data": {
+            "currency": "usd", "unit_amount": amount_cents, "product_data": {"name": product_name}}}],
+        metadata=metadata,
+        payment_intent_data={"metadata": metadata},
+        client_reference_id=str(buyer.id),
+        success_url=external_url(return_endpoint),
+        cancel_url=external_url(return_endpoint),
+    )
+    if buyer.stripe_customer_id:
+        params["customer"] = buyer.stripe_customer_id
+    else:
+        params["customer_email"] = buyer.contact_email
+    return stripe.checkout.Session.create(**params).url
+
+
+def _fulfil_checkout(kind, session, metadata):
+    """Apply a paid Checkout session. Idempotent: Stripe retries webhooks and may
+    send both `completed` and `async_payment_succeeded` for the same session."""
+    try:
+        amount = int(sget(session, 'amount_total') or 0)
+        buyer_id = int(sget(metadata, 'buyer_id') or 0)
+    except (TypeError, ValueError):
+        logger.error("Malformed checkout metadata on session %s", sget(session, 'id'))
+        return
+
+    if kind == 'credit_topup':
+        if amount <= 0 or db.session.get(DataBuyer, buyer_id) is None:
+            logger.error("Bad credit top-up session %s", sget(session, 'id'))
+            return
+        db.session.add(BuyerCreditEntry(
+            buyer_id=buyer_id, amount_cents=amount, entry_type='topup',
+            reference=f"stripe:{sget(session, 'id')}", note="Card/ACH top-up"))
+        try:
+            db.session.commit()
+        except IntegrityError:      # already credited
+            db.session.rollback()
+        return
+
+    # request_milestone
+    milestone = sget(metadata, 'milestone')
+    req = db.session.get(DataRequest, int(sget(metadata, 'request_id') or 0))
+    if req is None or req.buyer_id != buyer_id or milestone not in MILESTONES:
+        logger.error("Bad milestone session %s", sget(session, 'id'))
+        return
+    expected = req.deposit_cents if milestone == 'deposit' else req.final_cents
+    if amount != expected:
+        # Never mark work as paid for the wrong amount - flag it for a human.
+        logger.error("Milestone %s on request %s paid %s but expected %s (session %s)",
+                     milestone, req.id, amount, expected, sget(session, 'id'))
+        return
+    _mark_milestone_paid(req, milestone)
+    db.session.commit()
+
+
+def _mark_milestone_paid(req, milestone):
+    now = datetime.now(timezone.utc)
+    if milestone == 'deposit':
+        if req.deposit_paid_at is None:
+            req.deposit_paid_at = now
+            req.status = 'in_progress'
+    elif req.final_paid_at is None:
+        req.final_paid_at = now
+
+
+@data_market.route('/data/billing')
+@login_required
+def billing():
+    _require_data_buyer_admin()
+    buyer = DataBuyer.query.get_or_404(current_user.data_buyer_id)
+    entries = BuyerCreditEntry.query.filter_by(buyer_id=buyer.id) \
+        .order_by(BuyerCreditEntry.created_at.desc(), BuyerCreditEntry.id.desc()).limit(50).all()
+    return render_template('data_billing.html', buyer=buyer, balance=_balance(buyer.id), entries=entries,
+                           min_topup=MIN_TOPUP_CENTS, max_topup=MAX_TOPUP_CENTS, usd=pricing.format_usd)
+
+
+@data_market.route('/data/billing/topup', methods=['POST'])
+@login_required
+def topup():
+    _require_data_buyer_admin()
+    buyer = DataBuyer.query.get_or_404(current_user.data_buyer_id)
+    try:
+        amount = parse_dollars(request.form.get('amount'), MIN_TOPUP_CENTS, MAX_TOPUP_CENTS)
+        url = _create_checkout(
+            buyer, amount, "Avants AI data credits",
+            {"kind": "credit_topup", "buyer_id": str(buyer.id)}, 'data_market.billing')
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for('data_market.billing'))
+    except RuntimeError as e:
+        flash(str(e), "error")
+        return redirect(url_for('data_market.billing'))
+    except stripe.error.StripeError:
+        logger.exception("Credit top-up checkout failed")
+        flash("Could not start checkout. Please try again.", "error")
+        return redirect(url_for('data_market.billing'))
+    return redirect(url, code=303)
+
+
+@data_market.route('/data/requests/<int:request_id>/accept', methods=['POST'])
+@login_required
+def accept_request(request_id):
+    _require_data_buyer_admin()
+    req = _own_request(request_id)
+    if req.status != 'quoted' or not req.quoted_cents:
+        flash("This request doesn't have an open quote to accept.", "error")
+        return redirect(url_for('data_market.requests_page'))
+    req.deposit_cents, req.final_cents = split_milestones(req.quoted_cents)
+    req.accepted_at = datetime.now(timezone.utc)
+    req.status = 'accepted'
+    db.session.commit()
+    flash("Quote accepted. Pay the deposit to start the work.", "success")
+    return redirect(url_for('data_market.requests_page'))
+
+
+@data_market.route('/data/requests/<int:request_id>/pay/<milestone>', methods=['POST'])
+@login_required
+def pay_milestone(request_id, milestone):
+    _require_data_buyer_admin()
+    req = _own_request(request_id)
+    ok, reason = milestone_due(milestone, req.status, bool(req.deposit_paid_at), bool(req.final_paid_at))
+    if not ok:
+        flash(reason, "error")
+        return redirect(url_for('data_market.requests_page'))
+    amount = req.deposit_cents if milestone == 'deposit' else req.final_cents
+    buyer = DataBuyer.query.get_or_404(req.buyer_id)
+
+    if request.form.get('method') == 'credits':
+        if _balance(buyer.id) < amount:
+            flash("Not enough credit - top up first, or pay by card.", "error")
+            return redirect(url_for('data_market.requests_page'))
+        # The ledger entry and the paid flag commit together; the unique reference
+        # means a double click or replay can't charge the same milestone twice.
+        db.session.add(BuyerCreditEntry(
+            buyer_id=buyer.id, amount_cents=-amount, entry_type='spend',
+            reference=milestone_reference(req.id, milestone),
+            note=f"{milestone.capitalize()} for \"{req.title[:80]}\"",
+            created_by_user_id=current_user.id))
+        _mark_milestone_paid(req, milestone)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash("That payment was already made.", "info")
+            return redirect(url_for('data_market.requests_page'))
+        flash(f"{milestone.capitalize()} paid from your credit balance.", "success")
+        return redirect(url_for('data_market.requests_page'))
+
+    try:
+        url = _create_checkout(
+            buyer, amount, f"{milestone.capitalize()} - {req.title[:80]}",
+            {"kind": "request_milestone", "buyer_id": str(buyer.id),
+             "request_id": str(req.id), "milestone": milestone}, 'data_market.requests_page')
+    except RuntimeError as e:
+        flash(str(e), "error")
+        return redirect(url_for('data_market.requests_page'))
+    except stripe.error.StripeError:
+        logger.exception("Milestone checkout failed")
+        flash("Could not start checkout. Please try again.", "error")
+        return redirect(url_for('data_market.requests_page'))
+    return redirect(url, code=303)

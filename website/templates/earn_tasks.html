@@ -213,7 +213,7 @@
             <div class="text-muted" style="font-size:0.82rem;">Your Stripe account needs more information before we can send payments.</div>
             {% else %}
             <div class="fw-bold" style="font-size:0.9rem;color:#92400e;">Set up payouts to get paid</div>
-            <div class="text-muted" style="font-size:0.82rem;">Connect your bank account via Stripe to receive your earnings monthly.</div>
+            <div class="text-muted" style="font-size:0.82rem;">Connect your bank account via Stripe to receive your earnings. Payouts go out weekly once earnings clear a 7-day review hold.</div>
             {% endif %}
         </div>
         <a href="{{ url_for('earn.payout_setup') }}" class="btn btn-sm btn-warning fw-bold flex-shrink-0">
@@ -224,7 +224,7 @@
 </div>
 {% else %}
 <div class="d-flex align-items-center gap-2 mb-4 text-success" style="font-size:0.85rem;font-weight:600;">
-    <i class="fas fa-circle-check"></i> Payouts enabled - earnings sent to your bank monthly
+    <i class="fas fa-circle-check"></i> Payouts enabled - earnings sent to your bank weekly after a 7-day review hold
 </div>
 {% endif %}
 
@@ -245,7 +245,7 @@
             <div class="col-4">
                 <div style="font-size:1.4rem;margin-bottom:6px;" class="text-primary"><i class="fas fa-sack-dollar"></i></div>
                 <div class="fw-bold" style="font-size:0.85rem;">Get paid</div>
-                <div class="text-muted" style="font-size:0.78rem;">Earnings accumulate, paid out monthly</div>
+                <div class="text-muted" style="font-size:0.78rem;">Earnings clear a 7-day review, then paid weekly (min. $20)</div>
             </div>
         </div>
     </div>
