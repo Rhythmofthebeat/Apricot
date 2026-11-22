@@ -148,6 +148,8 @@ def _run_migrations(db):
         "ALTER TABLE task_submission ADD COLUMN payout_id INTEGER REFERENCES contractor_payout(id)",
         "ALTER TABLE task_submission ADD COLUMN payout_hold BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE contractor_profile ADD COLUMN payouts_frozen BOOLEAN NOT NULL DEFAULT FALSE",
+        # expert_credential - optional uploaded document (private bucket path)
+        "ALTER TABLE expert_credential ADD COLUMN evidence_path VARCHAR(300)",
         # data_request - milestone billing
         "ALTER TABLE data_request ADD COLUMN accepted_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE data_request ADD COLUMN deposit_cents INTEGER",

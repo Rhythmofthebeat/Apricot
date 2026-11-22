@@ -51,7 +51,7 @@
         </div>
         {% endfor %}
 
-        <form method="POST" action="{{ url_for('earn.add_credential') }}" class="mt-3 pt-3" style="border-top:1px solid var(--border);">
+        <form method="POST" action="{{ url_for('earn.add_credential') }}" enctype="multipart/form-data" class="mt-3 pt-3" style="border-top:1px solid var(--border);">
             <div class="row g-2">
                 <div class="col-md-4">
                     <select name="domain" class="form-select form-select-sm" required>
@@ -68,6 +68,11 @@
                 <div class="col-12"><input name="title" class="form-control form-control-sm" placeholder="Title (e.g. Licensed attorney)" maxlength="200" required></div>
                 <div class="col-md-5"><input name="license_number" class="form-control form-control-sm" placeholder="Licence / certificate number" maxlength="100"></div>
                 <div class="col-md-7"><input name="verification_url" class="form-control form-control-sm" placeholder="Public verification link (https://…)" maxlength="500"></div>
+                <div class="col-12">
+                    <label class="form-label small mb-1">Or upload a document <span class="text-muted">(PDF, JPG or PNG, up to 5 MB - optional)</span></label>
+                    <input type="file" name="evidence" class="form-control form-control-sm" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+                    <div class="form-text">Stored privately, seen only by a reviewer, and deleted as soon as the review is done. Cover anything you don't want shared (e.g. home address, ID numbers).</div>
+                </div>
             </div>
             <button class="btn btn-sm btn-primary mt-2"><i class="fas fa-plus me-1"></i>Submit credential</button>
         </form>

@@ -11,9 +11,10 @@ from .models import EarnTask, TaskSubmission, ContractorProfile, ExpertCredentia
 from .expert_verification import (
     CREDENTIAL_TYPES, TRAINING_CONSENT_VERSION, ASSESSMENT_MIN_ATTEMPTS, ASSESSMENT_PASS_ACCURACY,
     SKILLED_MIN_TASKS, SKILLED_MIN_QUALITY, compute_tier, can_access_task, grade_gold,
-    assessment_passed,
+    assessment_passed, detect_document_type, MAX_DOCUMENT_BYTES,
 )
 from email_utils import external_url
+import credential_storage
 
 logger = logging.getLogger(__name__)
 
@@ -415,17 +416,49 @@ def add_credential():
     if ExpertCredential.query.filter_by(user_id=current_user.id).count() >= MAX_CREDENTIALS_PER_USER:
         flash("You've reached the credential limit. Remove one before adding another.", "error")
         return redirect(url_for('earn.verification'))
-    if not license_number and not verification_url:
-        flash("Add a licence/certificate number or a public verification link so a reviewer can check it.", "error")
+
+    # Optional document. Validate by content (never the filename/Content-Type)
+    # before anything is stored.
+    document = None
+    upload = request.files.get('evidence')
+    if upload and upload.filename:
+        data = upload.read(MAX_DOCUMENT_BYTES + 1)
+        if len(data) > MAX_DOCUMENT_BYTES:
+            flash(f"That file is too large - the limit is {MAX_DOCUMENT_BYTES // (1024 * 1024)} MB.", "error")
+            return redirect(url_for('earn.verification'))
+        document = detect_document_type(data)
+        if document is None:
+            flash("Upload a PDF, JPG or PNG.", "error")
+            return redirect(url_for('earn.verification'))
+        document = (data,) + document
+
+    if not license_number and not verification_url and document is None:
+        flash("Add a licence/certificate number, a public verification link, or a document so a reviewer can check it.", "error")
         return redirect(url_for('earn.verification'))
 
-    db.session.add(ExpertCredential(
-        user_id=current_user.id, domain=domain, credential_type=credential_type,
-        title=title, issuer=issuer, license_number=license_number or None,
-        verification_url=verification_url or None,
-    ))
-    db.session.commit()
-    flash("Credential submitted. A reviewer will check it - you'll see the result here.", "success")
+    evidence_path = None
+    if document:
+        try:
+            evidence_path = credential_storage.upload_credential_file(current_user.id, *document)
+        except Exception:
+            logger.exception("Credential document upload failed")
+            flash("We couldn't upload your document. Please try again.", "error")
+            return redirect(url_for('earn.verification'))
+
+    try:
+        db.session.add(ExpertCredential(
+            user_id=current_user.id, domain=domain, credential_type=credential_type,
+            title=title, issuer=issuer, license_number=license_number or None,
+            verification_url=verification_url or None, evidence_path=evidence_path,
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        if evidence_path:      # don't leave an orphaned sensitive file behind
+            credential_storage.delete_credential_file(evidence_path)
+        raise
+    flash("Credential submitted. A reviewer will check it - you'll see the result here. "
+          "Any document you uploaded is deleted as soon as the review is done.", "success")
     return redirect(url_for('earn.verification'))
 
 
@@ -436,6 +469,7 @@ def delete_credential(credential_id):
     if cred.status == 'approved':
         flash("An approved credential can't be removed here - contact support if it's wrong.", "error")
     else:
+        credential_storage.delete_credential_file(cred.evidence_path)
         db.session.delete(cred)
         db.session.commit()
         flash("Credential removed.", "success")

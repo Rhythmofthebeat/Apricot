@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import stripe
 from flask import Blueprint, render_template, redirect, url_for, request, flash, abort, Response, current_app
 from flask_login import login_required, current_user
+import credential_storage
 from . import db
 from .models import (
     EarnTask, TaskSubmission, User, EARN_DOMAINS, ContractorProfile, Company, Job, CompanyMember,
@@ -553,9 +554,34 @@ def review_credential(credential_id):
     cred.reviewer_note = note or None
     cred.reviewed_by_user_id = current_user.id
     cred.reviewed_at = datetime.now(timezone.utc)
+    # Data minimisation: the document has served its purpose. Only forget the
+    # path once the delete actually succeeded, so a failure can be retried.
+    if cred.evidence_path and credential_storage.delete_credential_file(cred.evidence_path):
+        cred.evidence_path = None
     db.session.commit()
     flash(f"Credential {cred.status}.", "success")
     return redirect(url_for('admin_bp.experts'))
+
+
+@admin_bp.route('/admin/experts/credentials/<int:credential_id>/document')
+@login_required
+def credential_document(credential_id):
+    """Short-lived signed link to a pending credential's document. Sensitive,
+    so each view is logged and nothing is cached or stored."""
+    _require_admin()
+    cred = ExpertCredential.query.get_or_404(credential_id)
+    if not cred.evidence_path:
+        abort(404)
+    try:
+        url = credential_storage.signed_credential_url(cred.evidence_path, expires_in=120)
+    except Exception:
+        logger.exception("Could not sign credential document %s", credential_id)
+        flash("Couldn't open that document.", "error")
+        return redirect(url_for('admin_bp.experts'))
+    logger.info("Admin %s viewed credential document %s", current_user.id, credential_id)
+    response = redirect(url)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 # ------------------------------------------------ #

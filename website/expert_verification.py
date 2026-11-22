@@ -88,3 +88,23 @@ def pseudonym(user_id, secret):
     in a request without us revealing who they are."""
     digest = hmac.new(str(secret).encode(), f"expert:{user_id}".encode(), hashlib.sha256).hexdigest()
     return "EX-" + digest[:8].upper()
+
+
+# ---- credential documents ----------------------------------------------------
+MAX_DOCUMENT_BYTES = 5 * 1024 * 1024
+DOCUMENT_MIME_TYPES = ("application/pdf", "image/jpeg", "image/png")
+
+
+def detect_document_type(data):
+    """(extension, mime) from the file's own bytes, or None if it isn't a PDF,
+    JPEG or PNG. The client-supplied filename and Content-Type are never
+    trusted: a renamed .exe or HTML file must not be stored as a 'document'."""
+    if not data:
+        return None
+    if data.startswith(b"%PDF-"):
+        return "pdf", "application/pdf"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "jpg", "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png", "image/png"
+    return None

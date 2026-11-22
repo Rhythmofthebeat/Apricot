@@ -511,6 +511,10 @@ class ExpertCredential(db.Model):
     issuer = db.Column(db.String(200), nullable=False)          # body that issued it
     license_number = db.Column(db.String(100))
     verification_url = db.Column(db.String(500))                # public registry page a reviewer can check
+    # Private-bucket path of an uploaded document. Cleared (and the file deleted)
+    # once a reviewer decides, when the contractor removes the credential, or
+    # when they delete their account.
+    evidence_path = db.Column(db.String(300))
     status = db.Column(db.String(20), nullable=False, default='pending')  # pending | approved | rejected
     reviewer_note = db.Column(db.Text)
     reviewed_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))

@@ -21,6 +21,11 @@ from website.models import (User, ContractorProfile, EarnTask, TaskSubmission, E
 from website.earn import earn
 from website.admin import admin_bp
 from website.data_market import data_market
+from website.candidate import candidate
+from website.views import views
+import io
+from unittest import mock
+import credential_storage
 
 URI = "sqlite:///:memory:"
 app = Flask(__name__, template_folder=REPO + "/website/templates")
@@ -32,7 +37,7 @@ app.jinja_loader = jinja2.ChoiceLoader([
 db.init_app(app)
 lm = LoginManager(app)
 lm.user_loader(lambda uid: db.session.get(User, int(uid)))
-for bp in (earn, admin_bp, data_market):
+for bp in (earn, admin_bp, data_market, candidate, views):
     app.register_blueprint(bp)
 
 assert str(app.config["SQLALCHEMY_DATABASE_URI"]) == URI
@@ -169,6 +174,110 @@ c.post(f"/admin/data-requests/{rid}/update", data={"status": "quoted", "quoted_d
 with app.app_context():
     check("admin quotes request (and refuses a quote with no amount)",
           DataRequest.query.get(rid).quoted_cents == 1250050)
+
+
+# ---- credential document uploads (storage is faked; no Supabase call is made) ----
+store = {}
+deleted = []
+
+
+def fake_upload(user_id, data, ext, mime):
+    path = f"{user_id}/doc{len(store)}.{ext}"
+    store[path] = (data, mime)
+    return path
+
+
+def fake_delete(path):
+    deleted.append(path)
+    store.pop(path, None)
+    return True
+
+
+PDF = b"%PDF-1.4 fake licence"
+form = {"domain": "Finance", "credential_type": "certification", "title": "CFA charterholder", "issuer": "CFA Institute"}
+login(c, w2id)
+with mock.patch.object(credential_storage, "upload_credential_file", side_effect=fake_upload) as up, \
+        mock.patch.object(credential_storage, "delete_credential_file", side_effect=fake_delete), \
+        mock.patch.object(credential_storage, "signed_credential_url", return_value="https://signed.test/x?t=1"):
+    with app.app_context():
+        n0 = ExpertCredential.query.count()
+    c.post("/earn/verification/credential", data=dict(form, evidence=(io.BytesIO(b"<html><script>x</script>"), "licence.pdf")),
+           content_type="multipart/form-data")
+    with app.app_context():
+        check("HTML disguised as .pdf rejected, nothing stored", ExpertCredential.query.count() == n0 and not store)
+    c.post("/earn/verification/credential", data=dict(form, evidence=(io.BytesIO(PDF + b"0" * (5 * 1024 * 1024)), "big.pdf")),
+           content_type="multipart/form-data")
+    with app.app_context():
+        check("oversized document rejected", ExpertCredential.query.count() == n0 and not store)
+    c.post("/earn/verification/credential", data=form)
+    with app.app_context():
+        check("no number/link/document still rejected", ExpertCredential.query.count() == n0)
+
+    r = c.post("/earn/verification/credential", data=dict(form, evidence=(io.BytesIO(PDF), "x.pdf")),
+               content_type="multipart/form-data")
+    with app.app_context():
+        cred = ExpertCredential.query.filter_by(user_id=w2id).one()
+        check("document alone is enough; stored privately by content type",
+              cred.evidence_path and len(store) == 1 and up.call_args.args[2:] == ("pdf", "application/pdf"), up.call_args)
+        doc_cred_id, doc_path = cred.id, cred.evidence_path
+    check("evidence path is per-user, unguessable", doc_path.startswith(f"{w2id}/") and doc_path.endswith(".pdf"))
+
+    with mock.patch.object(credential_storage, "upload_credential_file", side_effect=RuntimeError("storage down")):
+        c.post("/earn/verification/credential", data=dict(form, title="Other", evidence=(io.BytesIO(PDF), "y.pdf")),
+               content_type="multipart/form-data")
+    with app.app_context():
+        check("storage failure creates no credential row", ExpertCredential.query.filter_by(title="Other").count() == 0)
+
+    check("non-admin cannot open documents", c.get(f"/admin/experts/credentials/{doc_cred_id}/document").status_code == 403)
+    login(c, aid)
+    r = c.get(f"/admin/experts/credentials/{doc_cred_id}/document")
+    check("admin gets a signed redirect, not cached",
+          r.status_code == 302 and r.headers["Location"].startswith("https://signed.test/") and "no-store" in r.headers["Cache-Control"])
+    check("pending page offers the document link", b"view document" in c.get("/admin/experts").data)
+    with app.app_context():
+        nodoc = ExpertCredential(user_id=w2id, domain="Legal", credential_type="license", title="n", issuer="i",
+                                 license_number="9")
+        db.session.add(nodoc); db.session.commit(); nodoc_id = nodoc.id
+    check("credential with no document has none to open", c.get(f"/admin/experts/credentials/{nodoc_id}/document").status_code == 404)
+
+    c.post(f"/admin/experts/credentials/{doc_cred_id}/review", data={"decision": "approve", "note": "verified"})
+    with app.app_context():
+        cred = db.session.get(ExpertCredential, doc_cred_id)
+        check("document deleted once reviewed", cred.evidence_path is None and doc_path in deleted and not store)
+
+    # If the delete fails the path must be kept so it can be retried
+    login(c, w2id)
+    c.post("/earn/verification/credential", data=dict(form, title="Again", evidence=(io.BytesIO(PDF), "z.pdf")),
+           content_type="multipart/form-data")
+    with app.app_context():
+        again = ExpertCredential.query.filter_by(title="Again").one(); again_id, again_path = again.id, again.evidence_path
+    login(c, aid)
+    with mock.patch.object(credential_storage, "delete_credential_file", return_value=False):
+        c.post(f"/admin/experts/credentials/{again_id}/review", data={"decision": "reject", "note": "illegible"})
+    with app.app_context():
+        check("failed delete keeps the path for retry", db.session.get(ExpertCredential, again_id).evidence_path == again_path)
+
+    # contractor removing a pending credential deletes its file
+    login(c, w2id)
+    c.post("/earn/verification/credential", data=dict(form, title="Removable", evidence=(io.BytesIO(PDF), "r.pdf")),
+           content_type="multipart/form-data")
+    with app.app_context():
+        rem = ExpertCredential.query.filter_by(title="Removable").one(); rem_id, rem_path = rem.id, rem.evidence_path
+    c.post(f"/earn/verification/credential/{rem_id}/delete")
+    check("removing a credential deletes its file", rem_path in deleted)
+
+    # account deletion purges credentials + files and unlists the contractor
+    with app.app_context():
+        u = db.session.get(User, w2id); u.role = "candidate"
+        pr = ContractorProfile.query.filter_by(user_id=w2id).first(); pr.listed_in_directory = True
+        keep = ExpertCredential(user_id=w2id, domain="Legal", credential_type="license", title="k", issuer="i",
+                                evidence_path=f"{w2id}/keep.pdf")
+        db.session.add(keep); db.session.commit()
+    r = c.post("/account/delete", data={"confirm": "delete my account"})
+    with app.app_context():
+        check("account deletion removes credentials", ExpertCredential.query.filter_by(user_id=w2id).count() == 0)
+        check("account deletion unlists from directory", not ContractorProfile.query.filter_by(user_id=w2id).first().listed_in_directory)
+    check("account deletion deletes stored documents", f"{w2id}/keep.pdf" in deleted)
 
 print(f"\n{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

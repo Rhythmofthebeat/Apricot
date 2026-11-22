@@ -148,6 +148,18 @@ class GoldGradingTest(unittest.TestCase):
         self.assertIsNone(ev.grade_gold("ranking", "", "A"))
 
 
+class DocumentTypeTest(unittest.TestCase):
+    def test_detects_by_content(self):
+        self.assertEqual(ev.detect_document_type(b"%PDF-1.7 ..."), ("pdf", "application/pdf"))
+        self.assertEqual(ev.detect_document_type(b"\xff\xd8\xff\xe0abc"), ("jpg", "image/jpeg"))
+        self.assertEqual(ev.detect_document_type(b"\x89PNG\r\n\x1a\nabc"), ("png", "image/png"))
+
+    def test_rejects_everything_else(self):
+        for data in (b"", None, b"<html><script>alert(1)</script>", b"MZ\x90\x00 exe", b"GIF89a", b"PK\x03\x04 zip",
+                     b"  %PDF-1.4 leading space"):
+            self.assertIsNone(ev.detect_document_type(data))
+
+
 class PseudonymTest(unittest.TestCase):
     def test_stable_and_secret_dependent(self):
         self.assertEqual(ev.pseudonym(7, "s1"), ev.pseudonym(7, "s1"))
