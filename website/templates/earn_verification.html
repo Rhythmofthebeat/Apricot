@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Get Verified - Earn{% endblock %}
+
+{% block content %}
+{% set tier_names = {'standard': 'Standard', 'skilled': 'Skilled', 'expert': 'Verified expert'} %}
+<div style="max-width:820px;margin:0 auto 80px;">
+    <a href="{{ url_for('earn.tasks') }}" class="btn btn-sm btn-outline-secondary mb-3"><i class="fas fa-arrow-left me-1"></i> Tasks</a>
+
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-1">
+        <h1 class="h4 fw-bold mb-0">Get verified, unlock higher-paying work</h1>
+        <span class="badge {{ 'bg-success' if tier == 'expert' else ('bg-primary' if tier == 'skilled' else 'bg-secondary') }}"
+              style="font-size:0.8rem;">Your level: {{ tier_names[tier] }}</span>
+    </div>
+    <p class="text-muted mb-4">Customers pay more for work checked by people with proven expertise, and so do we. Verified experts get matched to tasks in their specialty.</p>
+
+    <!-- Step 1: identity -->
+    <div class="card mb-3"><div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <div class="fw-semibold">1. Identity <i class="fas fa-circle-check ms-1 {{ 'text-success' if contractor.payout_enabled else 'text-muted' }}"></i></div>
+            <div class="text-muted" style="font-size:0.85rem;">Verified through our payments partner when you set up payouts (Stripe collects and checks your ID). We never see your documents.</div>
+        </div>
+        {% if contractor.payout_enabled %}
+            <span class="badge bg-success">Verified</span>
+        {% else %}
+            <a href="{{ url_for('earn.payout_setup') }}" class="btn btn-sm btn-primary">Verify &amp; set up payouts</a>
+        {% endif %}
+    </div></div>
+
+    <!-- Step 2: credentials -->
+    <div class="card mb-3"><div class="card-body p-4">
+        <div class="fw-semibold mb-1">2. Credentials <i class="fas fa-circle-check ms-1 {{ 'text-success' if cred_domains else 'text-muted' }}"></i></div>
+        <div class="text-muted mb-3" style="font-size:0.85rem;">Add a licence, degree or certification. A reviewer checks it against the public registry or issuer - so include a licence number or a link where it can be verified. Expert-level tasks only unlock for domains with an <em>approved</em> credential.</div>
+
+        {% for c in credentials %}
+        <div class="d-flex justify-content-between align-items-start gap-2 py-2" style="border-top:1px solid var(--border);">
+            <div style="font-size:0.88rem;">
+                <strong>{{ c.title }}</strong> <span class="text-muted">- {{ c.issuer }}</span><br>
+                <span class="text-muted" style="font-size:0.78rem;">{{ c.domain }} &middot; {{ c.credential_type|capitalize }}</span>
+                {% if c.status == 'rejected' and c.reviewer_note %}
+                <div class="text-danger" style="font-size:0.78rem;">Reason: {{ c.reviewer_note }}</div>
+                {% endif %}
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge {{ 'bg-success' if c.status == 'approved' else ('bg-danger' if c.status == 'rejected' else 'bg-warning text-dark') }}">{{ c.status|capitalize }}</span>
+                {% if c.status != 'approved' %}
+                <form method="POST" action="{{ url_for('earn.delete_credential', credential_id=c.id) }}">
+                    <button class="btn btn-sm btn-outline-secondary" title="Remove"><i class="fas fa-trash"></i></button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <form method="POST" action="{{ url_for('earn.add_credential') }}" enctype="multipart/form-data" class="mt-3 pt-3" style="border-top:1px solid var(--border);">
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <select name="domain" class="form-select form-select-sm" required>
+                        <option value="">Domain…</option>
+                        {% for d in domains %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <select name="credential_type" class="form-select form-select-sm" required>
+                        {% for t in credential_types %}<option value="{{ t }}">{{ t|capitalize }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4"><input name="issuer" class="form-control form-control-sm" placeholder="Issued by (e.g. State Bar of CA)" maxlength="200" required></div>
+                <div class="col-12"><input name="title" class="form-control form-control-sm" placeholder="Title (e.g. Licensed attorney)" maxlength="200" required></div>
+                <div class="col-md-5"><input name="license_number" class="form-control form-control-sm" placeholder="Licence / certificate number" maxlength="100"></div>
+                <div class="col-md-7"><input name="verification_url" class="form-control form-control-sm" placeholder="Public verification link (https://…)" maxlength="500"></div>
+                <div class="col-12">
+                    <label class="form-label small mb-1">Or upload a document <span class="text-muted">(PDF, JPG or PNG, up to 5 MB - optional)</span></label>
+                    <input type="file" name="evidence" class="form-control form-control-sm" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+                    <div class="form-text">Stored privately, seen only by a reviewer, and deleted as soon as the review is done. Cover anything you don't want shared (e.g. home address, ID numbers).</div>
+                </div>
+            </div>
+            <button class="btn btn-sm btn-primary mt-2"><i class="fas fa-plus me-1"></i>Submit credential</button>
+        </form>
+    </div></div>
+
+    <!-- Step 3: assessment -->
+    <div class="card mb-3"><div class="card-body p-4">
+        <div class="fw-semibold mb-1">3. Skills assessment <i class="fas fa-circle-check ms-1 {{ 'text-success' if assessment_passed else 'text-muted' }}"></i></div>
+        <div class="text-muted mb-2" style="font-size:0.85rem;">
+            Complete at least {{ assessment_min_attempts }} calibration tasks and get {{ assessment_pass_pct }}% right. They look like normal tasks (marked "Assessment") but have a known answer.
+        </div>
+        <div style="font-size:0.9rem;">
+            Your record: <strong>{{ contractor.assessment_correct }} / {{ contractor.assessment_attempts }}</strong> correct
+            {% if assessment_passed %}<span class="badge bg-success ms-1">Passed</span>{% endif %}
+        </div>
+        <div class="text-muted mt-1" style="font-size:0.8rem;">
+            {% if open_assessments %}{{ open_assessments }} assessment task{{ 's' if open_assessments != 1 }} currently open - find them on the tasks page.{% else %}No assessment tasks are open right now - check back soon.{% endif %}
+            Alternatively, {{ skilled_min_tasks }}+ completed tasks at {{ (skilled_min_quality * 100)|int }}%+ agreement also reaches Skilled.
+        </div>
+    </div></div>
+
+    <!-- Directory -->
+    <div class="card"><div class="card-body p-4">
+        <div class="fw-semibold mb-1">Project work</div>
+        <div class="text-muted mb-2" style="font-size:0.85rem;">Customers sometimes need a team of verified experts for a dedicated project. Opt in to be listed <strong>anonymously</strong> (a code, your domains and quality score - never your name or contact details). Only Skilled and Verified experts are shown.</div>
+        <form method="POST" action="{{ url_for('earn.toggle_listing') }}" class="d-flex align-items-center gap-3">
+            <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="listed" value="1" id="listed" {{ 'checked' if contractor.listed_in_directory }}>
+                <label class="form-check-label" for="listed">List me for project work</label>
+            </div>
+            <button class="btn btn-sm btn-outline-primary">Save</button>
+        </form>
+    </div></div>
+</div>
+{% endblock %}

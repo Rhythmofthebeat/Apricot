@@ -1,17 +1,25 @@
 import json
 import io
 import logging
+from datetime import datetime, timezone
 
 import stripe
 from flask import Blueprint, render_template, redirect, url_for, request, flash, abort, Response, current_app
 from flask_login import login_required, current_user
+import credential_storage
 from . import db
 from .models import (
     EarnTask, TaskSubmission, User, EARN_DOMAINS, ContractorProfile, Company, Job, CompanyMember,
     Application, Feedback, FeedbackInsight, SavedJob, MeetingProposal, MeetingRoom, Message,
-    EmployerSubscription, CompanyInvite, DeletedJob, Referral,
+    EmployerSubscription, CompanyInvite, DeletedJob, Referral, ExpertCredential, DataRequest,
+    ContractorPayout, BuyerCreditEntry, DataBuyer,
 )
-from .dataset_export import shape_submission
+from .dataset_export import shape_submission, consented_user_ids
+from .expert_verification import TIERS
+from .pricing import TIER_LABELS, suggested_task_pay_cents, format_usd
+from .payout_runner import build_overview, run_payout_batch, retry_payout, PayoutError
+from .payouts import HOLD_DAYS
+from .buyer_billing import parse_dollars, credit_balance
 from ai_services import analyze_platform_feedback
 from video_storage import delete_interview_videos
 
@@ -450,6 +458,12 @@ def analyze_feedback():
 # ------------------- CREATE TASK ---------------- #
 # ------------------------------------------------ #
 
+def _task_form():
+    return render_template('admin_task_form.html', earn_domains=EARN_DOMAINS, tiers=TIERS,
+                           tier_labels=TIER_LABELS,
+                           pay_hint={t: format_usd(suggested_task_pay_cents('ranking', t)) for t in TIERS})
+
+
 @admin_bp.route('/admin/tasks/new', methods=['GET', 'POST'])
 @login_required
 def create_task():
@@ -462,6 +476,24 @@ def create_task():
             min_responses = max(1, int(request.form.get('min_responses', 3)))
         except (ValueError, TypeError):
             min_responses = 3
+        min_tier = request.form.get('min_tier', 'standard')
+        if min_tier not in TIERS:
+            min_tier = 'standard'
+        is_assessment = bool(request.form.get('is_assessment'))
+        gold_answer = request.form.get('gold_answer', '').strip() or None
+        if is_assessment:
+            valid_gold = {
+                'ranking': {'A', 'B', 'tie'},
+                'rating': {'1', '2', '3', '4', '5'},
+                'factcheck': {'accurate', 'mostly', 'inaccurate'},
+            }.get(task_type)
+            if valid_gold is None or gold_answer not in valid_gold:
+                flash("Assessment tasks need a known-correct answer that matches the task type "
+                      "(ranking: A/B/tie, rating: 1-5, fact-check: accurate/mostly/inaccurate). "
+                      "Writing tasks can't be graded automatically.", "error")
+                return _task_form()
+        else:
+            gold_answer = None
         task = EarnTask(
             title=request.form.get('title', '').strip(),
             description=request.form.get('description', '').strip(),
@@ -474,13 +506,188 @@ def create_task():
             option_a=request.form.get('option_a', '').strip() or None,
             option_b=request.form.get('option_b', '').strip() or None,
             content=request.form.get('content', '').strip() or None,
+            min_tier=min_tier,
+            is_assessment=is_assessment,
+            gold_answer=gold_answer,
             status='open',
         )
         db.session.add(task)
         db.session.commit()
         flash("Task created.", "success")
         return redirect(url_for('admin_bp.dashboard'))
-    return render_template('admin_task_form.html', earn_domains=EARN_DOMAINS)
+    return _task_form()
+
+
+# ------------------------------------------------ #
+# ------------- EXPERT CREDENTIAL REVIEW --------- #
+# ------------------------------------------------ #
+
+@admin_bp.route('/admin/experts')
+@login_required
+def experts():
+    _require_admin()
+    pending = ExpertCredential.query.filter_by(status='pending') \
+        .order_by(ExpertCredential.created_at.asc()).all()
+    recent = ExpertCredential.query.filter(ExpertCredential.status != 'pending') \
+        .order_by(ExpertCredential.reviewed_at.desc()).limit(30).all()
+    return render_template('admin_experts.html', pending=pending, recent=recent)
+
+
+@admin_bp.route('/admin/experts/credentials/<int:credential_id>/review', methods=['POST'])
+@login_required
+def review_credential(credential_id):
+    _require_admin()
+    cred = ExpertCredential.query.get_or_404(credential_id)
+    decision = request.form.get('decision')
+    if decision not in ('approve', 'reject'):
+        abort(400)
+    if cred.user_id == current_user.id:
+        flash("You can't review your own credential.", "error")
+        return redirect(url_for('admin_bp.experts'))
+
+    note = (request.form.get('note') or '').strip()[:1000]
+    if decision == 'reject' and not note:
+        flash("Add a note so the contractor knows why it was rejected.", "error")
+        return redirect(url_for('admin_bp.experts'))
+
+    cred.status = 'approved' if decision == 'approve' else 'rejected'
+    cred.reviewer_note = note or None
+    cred.reviewed_by_user_id = current_user.id
+    cred.reviewed_at = datetime.now(timezone.utc)
+    # Data minimisation: the document has served its purpose. Only forget the
+    # path once the delete actually succeeded, so a failure can be retried.
+    if cred.evidence_path and credential_storage.delete_credential_file(cred.evidence_path):
+        cred.evidence_path = None
+    db.session.commit()
+    flash(f"Credential {cred.status}.", "success")
+    return redirect(url_for('admin_bp.experts'))
+
+
+@admin_bp.route('/admin/experts/credentials/<int:credential_id>/document')
+@login_required
+def credential_document(credential_id):
+    """Short-lived signed link to a pending credential's document. Sensitive,
+    so each view is logged and nothing is cached or stored."""
+    _require_admin()
+    cred = ExpertCredential.query.get_or_404(credential_id)
+    if not cred.evidence_path:
+        abort(404)
+    try:
+        url = credential_storage.signed_credential_url(cred.evidence_path, expires_in=120)
+    except Exception:
+        logger.exception("Could not sign credential document %s", credential_id)
+        flash("Couldn't open that document.", "error")
+        return redirect(url_for('admin_bp.experts'))
+    logger.info("Admin %s viewed credential document %s", current_user.id, credential_id)
+    response = redirect(url)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+# ------------------------------------------------ #
+# ----------- BUYER DATA / EXPERT REQUESTS ------- #
+# ------------------------------------------------ #
+
+REQUEST_STATUSES = ('submitted', 'quoted', 'accepted', 'in_progress', 'delivered', 'declined')
+
+
+@admin_bp.route('/admin/data-requests')
+@login_required
+def data_requests():
+    _require_admin()
+    rows = DataRequest.query.order_by(DataRequest.created_at.desc()).all()
+    buyers = DataBuyer.query.order_by(DataBuyer.name).all()
+    balances = {b.id: credit_balance(b.credit_entries) for b in buyers}
+    return render_template('admin_data_requests.html', requests=rows, statuses=REQUEST_STATUSES,
+                           tier_labels=TIER_LABELS, buyers=buyers, balances=balances)
+
+
+@admin_bp.route('/admin/data-requests/<int:request_id>/update', methods=['POST'])
+@login_required
+def update_data_request(request_id):
+    _require_admin()
+    req = DataRequest.query.get_or_404(request_id)
+    status = request.form.get('status')
+    if status not in REQUEST_STATUSES:
+        abort(400)
+
+    quote_raw = (request.form.get('quoted_dollars') or '').strip()
+    if req.accepted_at:
+        # The buyer accepted this price and the milestones were computed from it.
+        if quote_raw:
+            try:
+                changed = parse_dollars(quote_raw) != req.quoted_cents
+            except ValueError:
+                changed = True
+            if changed:
+                flash("The buyer already accepted this quote, so the price is locked.", "error")
+                return redirect(url_for('admin_bp.data_requests'))
+        if status in ('submitted', 'quoted'):
+            flash("The buyer already accepted this quote - it can't go back to an earlier stage.", "error")
+            return redirect(url_for('admin_bp.data_requests'))
+    elif status in ('accepted', 'in_progress', 'delivered'):
+        flash("The buyer has to accept the quote first - that step is theirs, not yours.", "error")
+        return redirect(url_for('admin_bp.data_requests'))
+    if status in ('in_progress', 'delivered') and not req.deposit_paid_at:
+        flash("Work can't start until the deposit is paid. If they wired it, record the wire as credit below - they can then pay the deposit from their balance.", "error")
+        return redirect(url_for('admin_bp.data_requests'))
+    if quote_raw:
+        try:
+            quoted = round(float(quote_raw) * 100)
+            if quoted <= 0:
+                raise ValueError
+        except ValueError:
+            flash("Enter the quote as a positive dollar amount.", "error")
+            return redirect(url_for('admin_bp.data_requests'))
+        req.quoted_cents = quoted
+    if status == 'quoted' and not req.quoted_cents:
+        flash("Set a quote amount before marking a request as quoted.", "error")
+        return redirect(url_for('admin_bp.data_requests'))
+
+    req.status = status
+    req.admin_notes = (request.form.get('admin_notes') or '').strip()[:2000] or None
+    db.session.commit()
+    flash("Request updated.", "success")
+    if status == 'declined' and req.deposit_paid_at:
+        flash("A deposit was already paid on this request - refund it by recording a refund credit for the buyer.", "info")
+    return redirect(url_for('admin_bp.data_requests'))
+
+
+@admin_bp.route('/admin/buyers/credit', methods=['POST'])
+@login_required
+def record_buyer_credit():
+    """Record money that moved outside Stripe Checkout (a wire/ACH received, a
+    refund back to credits, or a correction). Goes into the same append-only
+    ledger the buyer's balance is computed from."""
+    _require_admin()
+    try:
+        buyer_id = int(request.form.get('buyer', ''))
+    except ValueError:
+        abort(400)
+    buyer = DataBuyer.query.get_or_404(buyer_id)
+    kind = request.form.get('kind')
+    note = (request.form.get('note') or '').strip()[:300]
+    if kind not in ('wire', 'refund', 'debit') or not note:
+        flash("Choose a type and add a note describing the payment (e.g. the wire reference).", "error")
+        return redirect(url_for('admin_bp.data_requests'))
+    try:
+        cents = parse_dollars(request.form.get('amount'), 1, 100_000_000)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for('admin_bp.data_requests'))
+
+    if kind == 'debit':
+        if credit_balance(buyer.credit_entries) < cents:
+            flash("That would take the buyer's balance below zero.", "error")
+            return redirect(url_for('admin_bp.data_requests'))
+        entry_type, signed = 'adjustment', -cents
+    else:
+        entry_type, signed = ('topup' if kind == 'wire' else 'refund'), cents
+    db.session.add(BuyerCreditEntry(buyer_id=buyer.id, amount_cents=signed, entry_type=entry_type,
+                                    note=note, created_by_user_id=current_user.id))
+    db.session.commit()
+    flash(f"Recorded {format_usd(cents)} ({entry_type}) for {buyer.name}.", "success")
+    return redirect(url_for('admin_bp.data_requests'))
 
 
 # ------------------------------------------------ #
@@ -509,8 +716,13 @@ def export_task(task_id):
     task = EarnTask.query.get_or_404(task_id)
     submissions = TaskSubmission.query.filter_by(task_id=task_id).all()
 
+    # Same rule as the buyer marketplace: calibration tasks and non-consenting
+    # contractors' responses are never exported.
+    consented = consented_user_ids()
     lines = []
     for sub in submissions:
+        if task.is_assessment or sub.user_id not in consented:
+            continue
         record = shape_submission(task, sub)
         if record:
             lines.append(json.dumps(record))
@@ -548,57 +760,78 @@ def task_submissions(task_id):
 @login_required
 def payouts():
     _require_admin()
-    rows = (
-        db.session.query(User, ContractorProfile,
-                         db.func.sum(TaskSubmission.earnings_cents).label('pending_cents'))
-        .join(TaskSubmission, TaskSubmission.user_id == User.id)
-        .outerjoin(ContractorProfile, ContractorProfile.user_id == User.id)
-        .filter(TaskSubmission.paid_out == False)
-        .group_by(User.id, ContractorProfile.id)
-        .having(db.func.sum(TaskSubmission.earnings_cents) > 0)
-        .all()
-    )
-    total_pending = sum(r.pending_cents for r in rows)
-    return render_template('admin_payouts.html', rows=rows, total_pending=total_pending)
+    overview = build_overview()
+    recent = ContractorPayout.query.order_by(ContractorPayout.created_at.desc()).limit(40).all()
+    pending = [p for p in recent if p.status == 'pending']
+    return render_template('admin_payouts.html', overview=overview, recent=recent, pending=pending,
+                           hold_days=HOLD_DAYS)
+
+
+def _report_batch(result):
+    paid = sum(r["amount_cents"] for r in result["paid"])
+    if result["paid"]:
+        flash(f"Paid {len(result['paid'])} contractor(s), ${paid / 100:,.2f} total.", "success")
+    if result["pending"]:
+        flash(f"{len(result['pending'])} transfer(s) have an unknown outcome and are pending - "
+              "retry them below (same idempotency key, so no double pay).", "error")
+    if result["failed"]:
+        flash(f"{len(result['failed'])} transfer(s) were rejected by Stripe (see Recent payouts); "
+              "the earnings were released to the next batch.", "error")
+    if not (result["paid"] or result["pending"] or result["failed"]):
+        flash("Nothing was ready to pay.", "info")
+
+
+@admin_bp.route('/admin/payouts/run', methods=['POST'])
+@login_required
+def run_payouts():
+    """Pay every contractor whose earnings have cleared the review hold."""
+    _require_admin()
+    try:
+        _report_batch(run_payout_batch(current_user.id))
+    except PayoutError as e:
+        flash(str(e), "error")
+    return redirect(url_for('admin_bp.payouts'))
 
 
 @admin_bp.route('/admin/payouts/pay/<int:user_id>', methods=['POST'])
 @login_required
 def pay_user(user_id):
+    """Pay one contractor now. Same rules as the batch (hold period, minimum,
+    verified account, not frozen) - there is deliberately no way to skip them."""
     _require_admin()
-    stripe.api_key = current_app.config.get('STRIPE_SECRET_KEY')
-    if not stripe.api_key:
-        flash("Stripe is not configured.", "error")
-        return redirect(url_for('admin_bp.payouts'))
-
-    contractor = ContractorProfile.query.filter_by(user_id=user_id).first_or_404()
-    if not contractor.stripe_account_id or not contractor.payout_enabled:
-        flash("This worker hasn't completed Stripe payout setup.", "error")
-        return redirect(url_for('admin_bp.payouts'))
-
-    unpaid = TaskSubmission.query.filter_by(user_id=user_id, paid_out=False).all()
-    amount = sum(s.earnings_cents for s in unpaid)
-
-    if amount < 50:   # Stripe minimum is $0.50
-        flash("Pending amount is below the $0.50 minimum transfer threshold.", "error")
-        return redirect(url_for('admin_bp.payouts'))
-
     try:
-        stripe.Transfer.create(
-            amount=amount,
-            currency='usd',
-            destination=contractor.stripe_account_id,
-            idempotency_key=f"payout_user_{user_id}_batch_{sum(s.id for s in unpaid)}",
-        )
-        for sub in unpaid:
-            sub.paid_out = True
-        db.session.commit()
-        worker_name = contractor.user.first_name or contractor.user.email
-        flash(f"Paid ${amount / 100:.2f} to {worker_name}.", "success")
-    except stripe.error.StripeError as e:
-        logger.exception("Stripe transfer failed for user %s", user_id)
-        flash(f"Transfer failed: {e.user_message}", "error")
+        result = run_payout_batch(current_user.id, only_user_id=user_id)
+        _report_batch(result)
+        for s in result["skipped"]:
+            flash(f"Not paid: {s['reason']}.", "info")
+    except PayoutError as e:
+        flash(str(e), "error")
+    return redirect(url_for('admin_bp.payouts'))
 
+
+@admin_bp.route('/admin/payouts/<int:payout_id>/retry', methods=['POST'])
+@login_required
+def retry_payout_route(payout_id):
+    _require_admin()
+    try:
+        outcome = retry_payout(payout_id)
+        flash({"paid": "Payout sent.", "failed": "Stripe rejected the payout; earnings were released.",
+               "pending": "Still no confirmation from Stripe - try again shortly."}[outcome],
+              "success" if outcome == "paid" else "error")
+    except PayoutError as e:
+        flash(str(e), "error")
+    return redirect(url_for('admin_bp.payouts'))
+
+
+@admin_bp.route('/admin/contractors/<int:user_id>/freeze', methods=['POST'])
+@login_required
+def toggle_payout_freeze(user_id):
+    """Fraud/QA freeze: no payouts to this contractor until unfrozen."""
+    _require_admin()
+    contractor = ContractorProfile.query.filter_by(user_id=user_id).first_or_404()
+    contractor.payouts_frozen = not contractor.payouts_frozen
+    db.session.commit()
+    flash("Payouts frozen." if contractor.payouts_frozen else "Payouts unfrozen.", "success")
     return redirect(url_for('admin_bp.payouts'))
 
 

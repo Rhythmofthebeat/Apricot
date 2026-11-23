@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Admin - Expert credentials{% endblock %}
+
+{% block content %}
+<a href="{{ url_for('admin_bp.dashboard') }}" class="btn btn-sm btn-outline-secondary mb-3"><i class="fas fa-arrow-left me-1"></i> Back</a>
+<h1 class="h4 fw-bold mb-1">Expert credential review</h1>
+<p class="text-muted mb-4" style="font-size:0.88rem;">Check each claim against the public registry or issuer before approving (e.g. state bar lookup, NPI registry, university verification). Approval is what unlocks expert-tier tasks and pricing.</p>
+
+<div class="card mb-4">
+    <div class="card-header fw-semibold">Pending ({{ pending|length }})</div>
+    <div class="card-body p-0">
+        {% for c in pending %}
+        <div class="px-4 py-3" style="border-bottom:1px solid var(--border);">
+            <div class="fw-semibold">{{ c.title }} <span class="text-muted fw-normal">- {{ c.issuer }}</span></div>
+            <div class="text-muted" style="font-size:0.8rem;">
+                {{ c.user.email }} &middot; {{ c.domain }} &middot; {{ c.credential_type|capitalize }}
+                {% if c.license_number %}&middot; No. <strong>{{ c.license_number }}</strong>{% endif %}
+                {% if c.verification_url %}&middot; <a href="{{ c.verification_url }}" target="_blank" rel="noopener noreferrer nofollow">verification link <i class="fas fa-arrow-up-right-from-square" style="font-size:0.65rem;"></i></a>{% endif %}
+                {% if c.evidence_path %}&middot; <a href="{{ url_for('admin_bp.credential_document', credential_id=c.id) }}" target="_blank" rel="noopener noreferrer"><i class="fas fa-file-shield" style="font-size:0.7rem;"></i> view document</a> <span class="text-muted">(deleted when you decide)</span>{% endif %}
+            </div>
+            <form method="POST" action="{{ url_for('admin_bp.review_credential', credential_id=c.id) }}" class="d-flex gap-2 mt-2 flex-wrap">
+                <input name="note" class="form-control form-control-sm" style="max-width:340px;" placeholder="Note (required to reject)" maxlength="1000">
+                <button name="decision" value="approve" class="btn btn-sm btn-success">Approve</button>
+                <button name="decision" value="reject" class="btn btn-sm btn-outline-danger">Reject</button>
+            </form>
+        </div>
+        {% else %}
+        <div class="px-4 py-4 text-muted">Nothing waiting for review.</div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header fw-semibold">Recently reviewed</div>
+    <div class="card-body p-0">
+        {% for c in recent %}
+        <div class="d-flex justify-content-between px-4 py-2" style="border-bottom:1px solid var(--border);font-size:0.85rem;">
+            <span>{{ c.user.email }} - {{ c.title }} ({{ c.domain }})</span>
+            <span class="badge {{ 'bg-success' if c.status == 'approved' else 'bg-danger' }}">{{ c.status }}</span>
+        </div>
+        {% else %}
+        <div class="px-4 py-3 text-muted">None yet.</div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

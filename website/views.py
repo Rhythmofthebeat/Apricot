@@ -6,6 +6,7 @@ from sqlalchemy.sql import func
 
 from . import db
 from .models import Application, Job, User, Company, MeetingRoom, Referral, Notification
+from .stripe_compat import sget
 from .employer import _placement_fee_basis
 from .candidate import _company_recipients
 from email_utils import send_branded_email, external_url
@@ -107,7 +108,7 @@ def stripe_webhook():
                 # Hourly hires check out in subscription mode - capture the
                 # subscription id so employer.end_hourly_engagement can
                 # cancel it later when the engagement actually ends.
-                subscription_id = session.get("subscription")
+                subscription_id = sget(session, "subscription")
                 if subscription_id and not application.hire_billing_subscription_id:
                     application.hire_billing_subscription_id = subscription_id
                 db.session.commit()
@@ -117,7 +118,7 @@ def stripe_webhook():
         # "End Engagement" button), so the app's state doesn't drift out of
         # sync with what's actually being billed.
         subscription = event["data"]["object"]
-        sub_id = subscription.get("id")
+        sub_id = sget(subscription, "id")
         if sub_id:
             application = Application.query.filter_by(hire_billing_subscription_id=sub_id).first()
             if application and not application.hire_engagement_ended_at:

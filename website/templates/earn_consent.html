@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Data licence - Earn{% endblock %}
+
+{% block content %}
+<div style="max-width:640px;margin:40px auto 80px;">
+    <h1 class="h4 fw-bold mb-2">One quick update before you continue</h1>
+    <p class="text-muted mb-4">We're making it explicit how task responses are used. Please review and accept to keep earning.</p>
+    <form method="POST">
+        {% include "_earn_training_licence.html" %}
+        <button type="submit" class="btn btn-primary w-100" style="padding:12px;font-weight:700;">Accept and continue</button>
+    </form>
+</div>
+{% endblock %}

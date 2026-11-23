@@ -134,6 +134,28 @@ def _run_migrations(db):
         "ALTER TABLE job ADD COLUMN camera_required BOOLEAN NOT NULL DEFAULT FALSE",
         # application - employer's own 0-100 rating after a live/manual interview
         "ALTER TABLE application ADD COLUMN manual_interview_score INTEGER",
+        # earn_task - verification tier floor + gold-answer calibration (skills assessment) tasks
+        "ALTER TABLE earn_task ADD COLUMN min_tier VARCHAR(20) NOT NULL DEFAULT 'standard'",
+        "ALTER TABLE earn_task ADD COLUMN is_assessment BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE earn_task ADD COLUMN gold_answer VARCHAR(100)",
+        # contractor_profile - assessment stats, training-data consent, directory opt-in
+        "ALTER TABLE contractor_profile ADD COLUMN assessment_attempts INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE contractor_profile ADD COLUMN assessment_correct INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE contractor_profile ADD COLUMN training_consent_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE contractor_profile ADD COLUMN training_consent_version VARCHAR(10)",
+        "ALTER TABLE contractor_profile ADD COLUMN listed_in_directory BOOLEAN NOT NULL DEFAULT FALSE",
+        # payouts - reservation link + admin hold per submission, freeze per contractor
+        "ALTER TABLE task_submission ADD COLUMN payout_id INTEGER REFERENCES contractor_payout(id)",
+        "ALTER TABLE task_submission ADD COLUMN payout_hold BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE contractor_profile ADD COLUMN payouts_frozen BOOLEAN NOT NULL DEFAULT FALSE",
+        # expert_credential - optional uploaded document (private bucket path)
+        "ALTER TABLE expert_credential ADD COLUMN evidence_path VARCHAR(300)",
+        # data_request - milestone billing
+        "ALTER TABLE data_request ADD COLUMN accepted_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE data_request ADD COLUMN deposit_cents INTEGER",
+        "ALTER TABLE data_request ADD COLUMN final_cents INTEGER",
+        "ALTER TABLE data_request ADD COLUMN deposit_paid_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE data_request ADD COLUMN final_paid_at TIMESTAMP WITH TIME ZONE",
     ]
     for stmt in new_columns:
         try:
@@ -230,7 +252,7 @@ def create_app():
     os.makedirs(audio_path, exist_ok=True)
     os.makedirs(upload_path, exist_ok=True)
 
-    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission, SavedJob, ContractorProfile, MeetingRoom, Message, EmployerSubscription, MeetingProposal, DataBuyer, Feedback, FeedbackInsight, DeletedJob, ApplicationEvent
+    from .models import User, Company, Job, CandidateProfile, Application, CompanyMember, CompanyInvite, EarnTask, TaskSubmission, SavedJob, ContractorProfile, MeetingRoom, Message, EmployerSubscription, MeetingProposal, DataBuyer, Feedback, FeedbackInsight, DeletedJob, ApplicationEvent, ExpertCredential, DataRequest, ContractorPayout, BuyerCreditEntry
 
     with app.app_context():
         db.create_all()

@@ -1881,6 +1881,18 @@ def delete_account():
         if profile:
             db.session.delete(profile)
 
+        # Earn network: credentials hold licence numbers and possibly uploaded
+        # documents, so they go entirely; and the contractor is unlisted from the
+        # buyer directory. Payout/earnings records are kept (tax and accounting).
+        from .models import ExpertCredential, ContractorProfile
+        import credential_storage
+        for cred in ExpertCredential.query.filter_by(user_id=user.id).all():
+            credential_storage.delete_credential_file(cred.evidence_path)
+            db.session.delete(cred)
+        contractor = ContractorProfile.query.filter_by(user_id=user.id).first()
+        if contractor:
+            contractor.listed_in_directory = False
+
         # Delete notifications, saved jobs, messages
         Notification.query.filter_by(user_id=user.id).delete()
         SavedJob.query.filter_by(user_id=user.id).delete()

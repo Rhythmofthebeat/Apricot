@@ -405,6 +405,12 @@ class EarnTask(db.Model):
     required_domains = db.Column(db.Text)   # JSON list; None means open to all domains
     min_responses = db.Column(db.Integer, nullable=False, default=3)  # workers needed before consensus
     consensus_answer = db.Column(db.Text)   # JSON {answer, total, distribution} - set once min_responses hit
+    # Lowest verification tier allowed to work this task: standard | skilled | expert
+    min_tier = db.Column(db.String(20), nullable=False, default='standard')
+    # Calibration ("assessment") tasks have a known-correct answer. They grade a
+    # contractor's accuracy for tier promotion and are excluded from dataset exports.
+    is_assessment = db.Column(db.Boolean, nullable=False, default=False)
+    gold_answer = db.Column(db.String(100))
     # For ranking tasks: two AI responses to compare
     option_a = db.Column(db.Text)
     option_b = db.Column(db.Text)
@@ -425,9 +431,49 @@ class TaskSubmission(db.Model):
     agreement_score = db.Column(db.Float)  # 0–1; set when consensus is computed for this task
     earnings_cents = db.Column(db.Integer, nullable=False, default=0)
     paid_out = db.Column(db.Boolean, nullable=False, default=False)
+    # Set when a payout batch reserves this submission (before the transfer is sent),
+    # so it can never be included in two payouts. Cleared again if the transfer fails.
+    payout_id = db.Column(db.Integer, db.ForeignKey('contractor_payout.id'), index=True)
+    payout_hold = db.Column(db.Boolean, nullable=False, default=False)  # admin fraud/QA hold
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     user = db.relationship('User', backref='task_submissions')
+
+
+class ContractorPayout(db.Model):
+    """One Stripe transfer to one contractor, produced by a payout batch."""
+    __tablename__ = "contractor_payout"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    batch_key = db.Column(db.String(40), nullable=False, index=True)
+    amount_cents = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='pending')  # pending | paid | failed
+    idempotency_key = db.Column(db.String(100), nullable=False, unique=True)
+    stripe_transfer_id = db.Column(db.String(100))
+    error = db.Column(db.Text)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+    completed_at = db.Column(db.DateTime(timezone=True))
+
+    user = db.relationship("User", foreign_keys=[user_id])
+    submissions = db.relationship("TaskSubmission", backref="payout", lazy=True)
+
+
+class BuyerCreditEntry(db.Model):
+    """Append-only ledger of a data buyer's prepaid credit. The balance is the
+    sum of amount_cents and is never stored. `reference` is unique, so a Stripe
+    event replay or a double click can't credit or charge the same thing twice."""
+    __tablename__ = "buyer_credit_entry"
+    id = db.Column(db.Integer, primary_key=True)
+    buyer_id = db.Column(db.Integer, db.ForeignKey("data_buyer.id"), nullable=False, index=True)
+    amount_cents = db.Column(db.Integer, nullable=False)   # + top-up/refund, - spend
+    entry_type = db.Column(db.String(20), nullable=False)  # topup | spend | refund | adjustment
+    reference = db.Column(db.String(120), unique=True)     # e.g. "stripe:cs_..." / "request:12:deposit"
+    note = db.Column(db.String(300))
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    buyer = db.relationship("DataBuyer", backref=db.backref("credit_entries", lazy=True))
 
 
 class ContractorProfile(db.Model):
@@ -439,9 +485,76 @@ class ContractorProfile(db.Model):
     tasks_completed = db.Column(db.Integer, nullable=False, default=0)
     stripe_account_id = db.Column(db.String(100))        # Stripe Connect Express account ID
     payout_enabled = db.Column(db.Boolean, nullable=False, default=False)  # True once Stripe onboarding complete
+    # Skills assessment: accuracy on gold-answer calibration tasks
+    assessment_attempts = db.Column(db.Integer, nullable=False, default=0)
+    assessment_correct = db.Column(db.Integer, nullable=False, default=0)
+    # Contributor licence for using their task responses as AI training data
+    training_consent_at = db.Column(db.DateTime(timezone=True))
+    training_consent_version = db.Column(db.String(10))
+    # Opt-in: show an anonymous profile to data buyers sourcing experts
+    listed_in_directory = db.Column(db.Boolean, nullable=False, default=False)
+    payouts_frozen = db.Column(db.Boolean, nullable=False, default=False)  # admin fraud freeze
     created_at = db.Column(db.DateTime(timezone=True), default=func.now())
 
     user = db.relationship("User", backref=db.backref("contractor_profile", uselist=False))
+
+
+class ExpertCredential(db.Model):
+    """A licence, degree or certification a contractor claims, reviewed by an admin.
+    Only 'approved' rows count toward the verified-expert tier."""
+    __tablename__ = "expert_credential"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    domain = db.Column(db.String(100), nullable=False)          # one of EARN_DOMAINS
+    credential_type = db.Column(db.String(20), nullable=False)  # license | degree | certification | employment
+    title = db.Column(db.String(200), nullable=False)           # e.g. "Licensed attorney, State Bar of CA"
+    issuer = db.Column(db.String(200), nullable=False)          # body that issued it
+    license_number = db.Column(db.String(100))
+    verification_url = db.Column(db.String(500))                # public registry page a reviewer can check
+    # Private-bucket path of an uploaded document. Cleared (and the file deleted)
+    # once a reviewer decides, when the contractor removes the credential, or
+    # when they delete their account.
+    evidence_path = db.Column(db.String(300))
+    status = db.Column(db.String(20), nullable=False, default='pending')  # pending | approved | rejected
+    reviewer_note = db.Column(db.Text)
+    reviewed_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    reviewed_at = db.Column(db.DateTime(timezone=True))
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    user = db.relationship("User", foreign_keys=[user_id],
+                           backref=db.backref("expert_credentials", lazy=True))
+    reviewer = db.relationship("User", foreign_keys=[reviewed_by_user_id])
+
+
+class DataRequest(db.Model):
+    """A data buyer's request for a custom labelling project or for sourced experts.
+    The buyer sees an automatic estimate; an admin sets the real quote."""
+    __tablename__ = "data_request"
+    id = db.Column(db.Integer, primary_key=True)
+    buyer_id = db.Column(db.Integer, db.ForeignKey("data_buyer.id"), nullable=False, index=True)
+    requested_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    task_type = db.Column(db.String(30), nullable=False)        # ranking | rating | factcheck | writing
+    domain = db.Column(db.String(100))
+    tier = db.Column(db.String(20), nullable=False, default='skilled')  # minimum contractor tier
+    units = db.Column(db.Integer, nullable=False)
+    responses_per_unit = db.Column(db.Integer, nullable=False, default=3)
+    details = db.Column(db.Text)
+    estimated_cents = db.Column(db.Integer)                     # automatic estimate from pricing.py
+    quoted_cents = db.Column(db.Integer)                        # admin's real quote
+    status = db.Column(db.String(20), nullable=False, default='submitted')
+    # submitted | quoted | accepted | in_progress | delivered | declined
+    admin_notes = db.Column(db.Text)
+    # Billing: set when the buyer accepts the quote (the price is locked from then on)
+    accepted_at = db.Column(db.DateTime(timezone=True))
+    deposit_cents = db.Column(db.Integer)
+    final_cents = db.Column(db.Integer)
+    deposit_paid_at = db.Column(db.DateTime(timezone=True))
+    final_paid_at = db.Column(db.DateTime(timezone=True))
+    created_at = db.Column(db.DateTime(timezone=True), default=func.now())
+
+    buyer = db.relationship("DataBuyer", backref=db.backref("requests", lazy=True))
+    requested_by = db.relationship("User", foreign_keys=[requested_by_user_id])
 
 
 class MeetingProposal(db.Model):

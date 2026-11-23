@@ -1,0 +1,17 @@
+<div class="card mb-3" style="background:var(--surface);">
+    <div class="card-body p-3" style="font-size:0.85rem;line-height:1.6;">
+        <p class="fw-bold mb-2"><i class="fas fa-database me-1 text-primary"></i> How your work is used</p>
+        <ul class="mb-2 ps-3">
+            <li>The rankings, ratings, fact-checks and written responses you submit are used to <strong>train and evaluate AI models</strong>, and are licensed to Avants AI's customers as datasets.</li>
+            <li>Datasets contain your responses only - <strong>never your name, email, resume or profile</strong>. Don't put personal information (yours or anyone else's) in written responses.</li>
+            <li>You're paid per task regardless. You can stop at any time, and we won't include responses from contributors who haven't accepted this licence.</li>
+            <li>Data already delivered to a customer can't be recalled, but it stops being included in future datasets once you stop contributing.</li>
+        </ul>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="training_consent" id="training_consent" value="1" required>
+            <label class="form-check-label fw-semibold" for="training_consent">
+                I agree to this data licence (version {{ consent_version }}).
+            </label>
+        </div>
+    </div>
+</div>
